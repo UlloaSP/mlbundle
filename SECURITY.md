@@ -1,15 +1,14 @@
 # Security policy
 
-mlbundle is pre-alpha. Phases 1–4a implement strict manifest validation,
+mlbundle is pre-alpha. Phases 1–4b implement strict manifest validation,
 contract helpers, secure container reading/writing, metadata-only `inspect`,
-public export/load and the sklearn and XGBoost adapters.
+public export/load and the sklearn, XGBoost and ONNX adapters.
 The container validates ZIP/ZIP64 layout, bounds sources and actual decompression,
 checks CRC and member integrity, and rejects unsafe members and polyglot wrappers.
 The writer publishes complete validated files atomically where hard links work;
 the exclusive-creation fallback cleans up on failure but exposes the destination
 while copying and cannot guarantee crash-atomic publication. The version 1 contract
-is defined in [docs/format.md](docs/format.md). ONNX loading remains
-unimplemented; its security requirements remain obligations for a later phase.
+is defined in [docs/format.md](docs/format.md).
 
 ## Threat model
 
@@ -115,6 +114,40 @@ use. Native tree dump generation also allocates inside XGBoost before mlbundle
 can inspect its returned byte size. Server consumers must isolate loading and
 prediction and enforce process resource limits. See the exact support and
 resource boundaries in [docs/format.md](docs/format.md).
+
+## Implemented ONNX dependency boundary
+
+Original self-contained ONNX bytes are parsed and loaded in memory. Before any
+ONNX Runtime session, a descriptor-driven protobuf scan bounds nesting and field
+counts, validates lengths and rejects unknown/duplicate singular fields. A full
+message traversal rejects every external tensor reference, including initializers,
+attributes, sparse tensors, nested graphs and functions; checker and runtime never
+receive external-data models. Tensor dimensions/storage and graph ranks/nodes are
+bounded, and stored data must agree with declared element counts. Local functions,
+training/device configuration, node overloads, overridable initializers and
+`ort_config` metadata are rejected. Operators are confined to standard ONNX and
+ONNX-ML domains and must pass the checker and CPU runtime. No custom op library
+is registered. See [the normative ONNX rules](docs/format-onnx.md) for exact limits.
+
+Sessions use CPU only, sequential execution, one thread per pool and disabled
+optimization/prepacking, profiling, file output, arena and memory patterns.
+Model-provided session configuration is disabled. The host must not enable
+`ORT_LOAD_CONFIG_FROM_MODEL=1`; the pinned runtime rejects that combination.
+All native exceptions exposed through the API become bounded mlbundle errors.
+No model file is converted, rewritten, extracted or used to select a disk path.
+Graph signatures, metadata, kind/counts, model dtypes, producer/opsets/IR and native
+labels are recomputed and canonically compared. A label-free graph's original
+class mapping remains an author declaration, checked only against native counts.
+ONNX structure is null; an added visualization member is a claim mismatch.
+
+The protobuf parser, ONNX checker and ONNX Runtime execute native code. Resource
+checks reduce malformed inputs; they do not establish memory safety or cap native
+allocations, constant processing, runtime-computed shapes or control-flow execution.
+Consumers must isolate loading/prediction and enforce memory, CPU and row limits,
+and maintain their native dependencies. Optional extras retain this dependency
+boundary: importing mlbundle or inspecting any bundle imports no model library.
+The native result contains the exact bytes and CPU session needed for inference;
+mutating a session invalidates its verified relationship with metadata.
 
 ## Limits of these guarantees
 

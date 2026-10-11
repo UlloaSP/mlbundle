@@ -5,11 +5,11 @@ a trained model, a rich manifest, a locally inferred schema and model structure
 in one compressed `.mlbundle` file. It owns both writing and validated reading
 so that the format is defined once.
 
-Phases 1–4a implement the version 1 format contract, strict manifest models,
+Phases 1–4b implement the version 1 format contract, strict manifest models,
 canonical JSON, integrity helpers, environment capture, adapter/result contracts,
 secure container reading/writing, public metadata-only `inspect`, export/load,
-and the scikit-learn and XGBoost adapters. The ONNX adapter, schema inference and
-the CLI remain unimplemented.
+and the scikit-learn, XGBoost and ONNX adapters. Schema inference and the CLI
+remain unimplemented.
 Rules for later phases must not be described as implemented until code and tests
 prove them. `docs/format.md` owns the wire contract.
 
@@ -212,6 +212,13 @@ class labels supplied through output-major `class_labels=` are bound to a native
 copy through an mlbundle-owned booster attribute and verified on load. Omitted
 labels use encoded indices; sklearn rejects this option because it owns classes_.
 Schema inference is future work; export currently includes no training rows.
+ONNX preserves path/bytes unchanged (ModelProto is serialized once), rejects
+external tensors, custom domains, functions and training/runtime configuration
+before a CPU session, and verifies graph signatures, metadata and environment
+claims. `native_model` is an OnnxModel with original bytes and a CPU session.
+Kind is inferred from supported outputs; native labels are verified, absent
+labels use count-checked declarations. Structure is null. See the normative
+ONNX section linked from `docs/format.md` for exact layouts and resource bounds.
 The closed member list is: required `manifest.json`, exactly
 one of `model.skops`, `model.ubj` or `model.onnx`, optional `schema.json`, and
 `structure.json` when the supported model has extractable structure. Optional
@@ -258,13 +265,14 @@ needs no library-specific shared pipeline edit.
 - `src/mlbundle/model_io.py` — library-independent public export/load, manifest construction and round-trip verification.
 - `src/mlbundle/_sklearn/` — skops trust/loading, parameter and claim extraction, native structure, nested payload bounds and validated prediction.
 - `src/mlbundle/_xgboost/` — closed wrappers/objectives, native UBJSON preflight/loading, label binding, recoverable config, complete tree structure and validated prediction.
+- `src/mlbundle/_onnx/` — bounded protobuf/graph validation, unchanged bytes, native signatures/labels, CPU sessions and tabular prediction.
 - `src/mlbundle/declarations.py` — export-time class labels and resolution for native models without labels.
 - `src/mlbundle/claims.py` — shared extracted claims and exact claim/structure comparison.
 - `src/mlbundle/manifest.py` — manifest sections, cross-field validation and JSON boundaries.
 - `src/mlbundle/integrity.py` — member SHA-256/size records and verification.
 - `src/mlbundle/environment.py` — training declarations and distribution metadata capture.
 - `src/mlbundle/adapters.py` — adapter/predictor protocols and prediction output types.
-- `src/mlbundle/registry.py` — closed lazy adapter resolution and recognition; `_sklearn` and `_xgboost` are implemented, `_onnx` remains a future module.
+- `src/mlbundle/registry.py` — closed lazy resolution of implemented `_sklearn`, `_xgboost` and `_onnx` adapters.
 - `src/mlbundle/results.py` — metadata-only and loaded reader result types.
 - `src/mlbundle/_container_rules.py` — shared source type, closed member sets/order and ceilings.
 - `src/mlbundle/_zip_directory.py` — bounded ZIP/ZIP64 directory and extra-field validation.
@@ -272,7 +280,7 @@ needs no library-specific shared pipeline edit.
 - `src/mlbundle/container.py` — source bounds, validated in-memory reading and integrity checks.
 - `src/mlbundle/writing.py` — integrity ownership, deterministic ZIP and atomic publication.
 - `src/mlbundle/inspection.py` — public metadata-only inspection without adapter resolution.
-- `docs/format.md` — version 1 wire specification and implemented sklearn mapping/trust rules.
+- `docs/format.md` — version 1 wire specification, with normative container, adapter/structure and ONNX sections in linked files.
 - `tests/` — one file per feature, with success and error cases together.
 - `pyproject.toml` and `uv.lock` — package metadata, tool configuration and lock.
 - `.github/workflows/ci.yml` — lint, types and cross-platform tests.
