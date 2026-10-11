@@ -5,9 +5,11 @@ a trained model, a rich manifest, a locally inferred schema and model structure
 in one compressed `.mlbundle` file. It owns both writing and validated reading
 so that the format is defined once.
 
-Phase 0 is a package and tooling bootstrap. No bundle API, reader, writer or CLI
-exists yet. The format is not final. The rules below constrain later phases;
-they must not be described as implemented until code and tests prove them.
+Phase 1 defines the version 1 format contract, strict manifest models, canonical
+JSON, integrity helpers, environment capture and adapter/result contracts.
+No bundle API, archive reader, writer, model adapter or CLI exists yet. The rules
+below constrain later phases; they must not be described as implemented until
+code and tests prove them. `docs/format.md` owns the wire contract.
 
 ## What makes mlbundle special?
 
@@ -41,7 +43,7 @@ Version 0.1 supports three libraries: scikit-learn via `skops.io.dump` and
 `skops.io.load`, XGBoost via native `save_model("model.ubj")`, and the user's ONNX
 file unchanged. Do not convert models. Adapters import their library lazily;
 their dependencies belong in the optional extras `mlbundle[sklearn]`,
-`mlbundle[xgboost]` and `mlbundle[onnx]`, to be declared in Phase 1.
+`mlbundle[xgboost]` and `mlbundle[onnx]`, declared in Phase 1.
 
 The design takes ideas from MLflow's versioned manifest and native model
 storage, not its code. MLflow is Apache-2.0; mlbundle is MIT.
@@ -62,7 +64,9 @@ still preserve validation, security and reproducibility.
 - **adapter** — mlbundle-owned code for one supported model library, including
   serialization, loading and shared extraction of model-derived claims.
 - **claim** — information asserted by the bundle's author; model-derived claims
-  require comparison with the loaded model.
+  require comparison with the loaded model using canonical JSON byte equality.
+- **predictor** — the adapter's uniform probability/regression interface; the
+  native model remains available separately for runtime explanations.
 - **schema** — locally inferred mlschema fields plus report definitions.
 - **structure** — model internals for visualisation, tied to the actual model.
 - **trusted types** — the mlbundle-owned allowlist used for skops loading.
@@ -81,7 +85,7 @@ still preserve validation, security and reproducibility.
 
 ## Hit every affected layer
 
-- **Format.** Manifest validation, allowed members, version handling and later
+- **Format.** Manifest validation, allowed members, version handling and
   `docs/format.md` must agree. Reject unknown versions instead of guessing.
 - **Writer.** Compute the schema locally, record the environment and fail early
   for unsupported model types. Samples require explicit user intent.
@@ -119,8 +123,8 @@ still preserve validation, security and reproducibility.
 ### Repository rules
 
 - No source file may exceed 300 lines. Split by responsibility before the limit.
-- Add no runtime dependency without a concrete reason. Phase 0 has none;
-  Phase 1 must explain each dependency it adds.
+- Add no runtime dependency without a concrete reason. The sole core dependency
+  is Pydantic v2 for strict manifest validation; model libraries belong in extras.
 - Keep a feature's tests in one file covering its success case and every error
   case. Test observable behavior and supported contracts.
 - Avoid Python 3.14-only syntax; widening the Python range should be a metadata
@@ -145,12 +149,13 @@ mlschema 0.2.1 supports that version. Keep `uv_build` as the build backend.
 
 ```shell
 uv python install 3.14
-uv sync --locked
+uv sync --locked --all-extras
 uv run pre-commit install
 ```
 
 After changing dependency metadata, use `uv sync` to regenerate `uv.lock` and
-commit the lockfile. CI uses `uv sync --locked --group dev` on Python 3.14.
+commit the lockfile. CI uses `uv sync --locked --group dev --all-extras` on Python 3.14.
+The default dev group installs `mlbundle[all]`; base users can omit the dev group.
 Ruff handles lint and formatting; Pyright uses the family's basic mode.
 
 ## Verifying
@@ -180,8 +185,7 @@ environment or behavior was verified when it was not.
 
 - `README.md` owns purpose, honest implementation status and development setup.
 - `SECURITY.md` owns the threat model, guarantees, limits and private reporting.
-- `docs/format.md` will own the format specification in Phase 1; do not create
-  that specification during bootstrap.
+- `docs/format.md` owns the version 1 wire specification and verification rules.
 - Rewrite stale guidance instead of appending competing accounts.
 
 Keep agent policy in this root file. Do not add nested `AGENTS.md` files.
@@ -196,8 +200,9 @@ The conversation, issues, code, tests and final diff are the work record.
 After training, the planned writer will infer the schema locally, extract the
 model's claims and structure, serialize the model in its native supported format
 and produce a zip with a closed member list: required `manifest.json`, exactly
-one of `model.skops`, `model.ubj` or `model.onnx`, plus `schema.json` and
-`structure.json`. No additional archive members are allowed.
+one of `model.skops`, `model.ubj` or `model.onnx`, optional `schema.json`, and
+`structure.json` when the supported model has extractable structure. Optional
+`samples.json` requires explicit user intent. No other members are allowed.
 
 The manifest must record format name/version, bundle id, UTC creation time and
 writer version; model library, estimator class, classifier/regressor kind,
@@ -206,6 +211,10 @@ and origin; original class labels and target name; training Python, OS,
 architecture and package versions; member SHA-256 hashes and sizes; and
 free-form user metadata. Sample rows are allowed only on explicit request.
 All of this is untrusted input, and model-derived fields must be verified.
+Class counts and original labels are output-major arrays, including for a single
+output. Model-exposed dtypes are verified separately from declared training dtypes.
+The writer must test serialization/reloading and reject claims or structure that
+cannot survive the native round trip. Default safety ceilings may only be lowered.
 
 MLSuite will receive the file. The reader will validate the archive and
 manifest, check integrity, load through its closed adapter and recompute claims
@@ -214,7 +223,19 @@ model; it cannot attest that model-derived claims match the model.
 
 ## Where code lives
 
-- `src/mlbundle/` — the typed Python package; currently only `__version__`.
+- `src/mlbundle/__init__.py` — public contract models, enums, errors and package version.
+- `src/mlbundle/_base.py` — strict frozen model configuration and string bounds.
+- `src/mlbundle/contract.py` — closed identifiers and native member/format pairing.
+- `src/mlbundle/limits.py` — shared archive ceilings and specific member caps.
+- `src/mlbundle/canonical.py` — deterministic JSON encoding and bounded strict decoding.
+- `src/mlbundle/claims.py` — shared extracted claims and exact claim/structure comparison.
+- `src/mlbundle/manifest.py` — manifest sections, cross-field validation and JSON boundaries.
+- `src/mlbundle/integrity.py` — member SHA-256/size records and verification.
+- `src/mlbundle/environment.py` — training declarations and distribution metadata capture.
+- `src/mlbundle/adapters.py` — adapter/predictor protocols and prediction output types.
+- `src/mlbundle/registry.py` — closed lazy imports of future `_sklearn`, `_xgboost`, `_onnx` modules; each provides an `Adapter` class.
+- `src/mlbundle/results.py` — metadata-only and loaded reader result types.
+- `docs/format.md` — version 1 format specification; container/adapters remain unimplemented.
 - `tests/` — one file per feature, with success and error cases together.
 - `pyproject.toml` and `uv.lock` — package metadata, tool configuration and lock.
 - `.github/workflows/ci.yml` — lint, types and cross-platform tests.

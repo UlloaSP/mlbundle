@@ -1,8 +1,10 @@
 # Security policy
 
-mlbundle is pre-alpha. This bootstrap has no bundle reader or writer, and its
-format is not final. The requirements below define the security boundary later
-implementation must enforce; they are not guarantees provided by today's code.
+mlbundle is pre-alpha. Phase 1 implements strict manifest validation and contract
+helpers; it has no archive reader, writer or model adapters. The version 1
+contract is defined in [docs/format.md](docs/format.md). The requirements below
+define the security boundary later implementation must enforce; they are not
+reader guarantees provided by today's code.
 
 ## Threat model
 

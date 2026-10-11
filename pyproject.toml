@@ -33,7 +33,17 @@ classifiers = [
     "Typing :: Typed",
 ]
 requires-python = ">=3.14"
-dependencies = []
+dependencies = ["pydantic>=2.13.4,<3"]
+
+[project.optional-dependencies]
+# sklearn's floor matches skops; other floors match the target runtime baseline.
+sklearn = ["scikit-learn>=1.2", "skops>=0.16.0"]
+xgboost = ["xgboost>=3.4.1", "scikit-learn>=1.2"]
+onnx = ["onnx>=1.23.0", "onnxruntime>=1.30.0"]
+all = [
+    "scikit-learn>=1.2", "skops>=0.16.0", "xgboost>=3.4.1",
+    "onnx>=1.23.0", "onnxruntime>=1.30.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/UlloaSP/mlbundle"
@@ -47,6 +57,8 @@ dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
     "pre-commit>=4.6.0",
+    # Install every adapter in the default development environment.
+    "mlbundle[all]",
 ]
 
 [build-system]
@@ -101,7 +113,8 @@ directory = "htmlcov"
 
 [tool.ruff]
 line-length = 88
-target-version = "py314"
+# Keep source syntax portable while package metadata requires Python 3.14.
+target-version = "py313"
 src = ["src", "tests"]
 extend-exclude = [".git", ".venv", "__pycache__", "build", "dist", "*.egg-info"]
 
