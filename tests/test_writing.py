@@ -157,13 +157,37 @@ def test_chunked_model_and_empty_model(manifest_data):
         assert read_container(bundle)[1][MemberName.SKOPS] == data
 
 
-def test_fixed_archive_bytes_on_both_platforms(manifest_data):
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        (
+            b"native model bytes",
+            "9ecfa6843fd40cb5e1f0e7dfa045990843916f5d46120a35e71f329eb02bb4bc",
+        ),
+        (
+            random.Random(0).randbytes(200_000),
+            "70dce8cf3fde079a3b8afe2de31d45ed94d16d9b0f8f1069d42a46ced962d45b",
+        ),
+        (
+            b"hello world " * 10_000,
+            "86ff212d87c2fbe73f06768ccf0ea02feb2bc183f03f076d844a8e63ec2a9d42",
+        ),
+        (
+            bytes(range(256)) * 500,
+            "35c93d469d64d6e25a9d0f0283a4f2cef5e54f84b07a6b294d7cdfae96d66d8b",
+        ),
+        (
+            b"0" * 1000,
+            "60e744b7d243af13e980de7b083715d638318d090c63f2a0290fe9ee366b9d52",
+        ),
+    ],
+    ids=["native", "noise", "text", "uniform", "runs"],
+)
+def test_fixed_archive_bytes_on_both_platforms(manifest_data, data, expected):
     manifest_data["writer_version"] = "0.1.0"
     manifest_data["environment"]["packages"]["mlbundle"] = "0.1.0"
-    bundle = write_container(manifest_data, {MemberName.SKOPS: b"native model bytes"})
-    assert hashlib.sha256(bundle).hexdigest() == (
-        "5f06d4d7533fe1148abdfe07c6a99179ad3c97c1afa27dbb5ad2292143c60391"
-    )
+    bundle = write_container(manifest_data, {MemberName.SKOPS: data})
+    assert hashlib.sha256(bundle).hexdigest() == expected
 
 
 @pytest.mark.parametrize("name", ["schema", "structure", "samples"])
@@ -182,3 +206,23 @@ def test_writer_optional_member_errors(manifest_data, name):
     manifest_data["references"][name] = None
     with pytest.raises(InvalidManifestError):
         write_container(manifest_data, {MemberName.SKOPS: b"model", member: b"{}"})
+
+
+def test_remaining_compression_budget(manifest_data, monkeypatch):
+    from mlbundle import writing
+
+    original = writing._compress
+    caps = []
+
+    def observed(data, cap):
+        caps.append(cap)
+        return original(data, cap)
+
+    monkeypatch.setattr(writing, "_compress", observed)
+    with pytest.raises(LimitExceededError):
+        write_container(
+            manifest_data,
+            {MemberName.SKOPS: random.Random(0).randbytes(2000)},
+            limits=ArchiveLimits(max_archive_bytes=2048, max_compressed_bytes=1000),
+        )
+    assert len(caps) == 2 and 0 < caps[1] < caps[0] == 1000

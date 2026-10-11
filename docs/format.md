@@ -77,7 +77,7 @@ The effective member cap is the smaller of its specific cap and the general
 member cap. Check the ratio as `uncompressed_size <= 200 * compressed_size`;
 an empty member with both sizes zero is exempt, a nonempty member with compressed
 size zero is invalid. This applies to stored members too. The mlbundle writer
-always uses deflate level 6 and rejects inputs exceeding the ratio ceiling;
+always uses deflate level 6 with the RLE strategy and rejects inputs exceeding the ratio ceiling;
 the reader also accepts stored entries from other tools. These limits admit
 forests whose native model is tens of MiB and whose JSON tree arrays are larger.
 Callers may lower archive limits, never raise the ceilings in version 1.
@@ -104,11 +104,16 @@ Metadata inspection does not infer whether a model requires structure.
 The writer emits manifest, model, schema, structure, samples in that fixed order,
 omitting absent members. ZIP timestamps are 1980-01-01 00:00:00, the creating
 platform is Unix, permissions are regular-file 0600, compression is deflate
-level 6, and extra fields/comments are empty. It creates no descriptors or ZIP64
+level 6 with the RLE strategy, memory level 8 and 64 KiB input chunks, and
+extra fields/comments are empty. RLE avoids the different general match-search
+algorithms used by zlib and zlib-ng across platforms; it compresses repeated-byte
+runs and uses Huffman coding for other bytes. It creates no descriptors or ZIP64
 records within the version 1 ceilings. Identical inputs produce identical bytes
 on Windows and Linux; the compression implementation is the standard zlib
 provided by Python (byte identity across different future zlib implementations
 is not a format requirement).
+Compression output is bounded by the remaining archive and aggregate compressed
+budgets, reserving the fixed header/directory overhead before compression.
 
 Writing returns bytes and optionally publishes them to a path after validating
 the complete archive through the reader. Publication uses a flushed temporary

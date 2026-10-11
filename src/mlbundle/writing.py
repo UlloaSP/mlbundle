@@ -3,19 +3,21 @@
 import os
 import stat
 import tempfile
-import zipfile
+import zlib
 from collections.abc import Mapping
 from io import BytesIO
 from os import PathLike
 from pathlib import Path
 
 from ._container_rules import (
+    CHUNK_BYTES,
     MEMBER_ORDER,
     check_members,
     check_sizes,
     effective_limits,
     member_name,
 )
+from ._zip_directory import CENTRAL, END, LOCAL
 from .canonical import canonical_dumps
 from .container import read_container
 from .contract import MemberName
@@ -72,25 +74,92 @@ def _atomic_write(destination: Path, data: bytes, overwrite: bool) -> None:
             temporary.unlink(missing_ok=True)
 
 
+def _compress(data: bytes, cap: int) -> bytes:
+    # RLE avoids the platform-specific match searches of zlib versus zlib-ng.
+    encoder = zlib.compressobj(6, zlib.DEFLATED, -15, 8, zlib.Z_RLE)
+    with _BoundedBuffer(cap) as packed:
+        for offset in range(0, len(data), CHUNK_BYTES):
+            packed.write(
+                encoder.compress(memoryview(data)[offset : offset + CHUNK_BYTES])
+            )
+        packed.write(encoder.flush())
+        return packed.getvalue()
+
+
 def _archive_bytes(content: dict[MemberName, bytes], limits: ArchiveLimits) -> bytes:
+    central = bytearray()
+    sizes = []
+    overhead = END.size + sum(
+        LOCAL.size + CENTRAL.size + 2 * len(name.value) for name in content
+    )
+    remaining = min(limits.max_archive_bytes - overhead, limits.max_compressed_bytes)
     with _BoundedBuffer(limits.max_archive_bytes) as buffer:
-        with zipfile.ZipFile(
-            buffer, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6
-        ) as archive:
-            for name in MEMBER_ORDER:
-                if name in content:
-                    entry = zipfile.ZipInfo(name.value, date_time=(1980, 1, 1, 0, 0, 0))
-                    entry.create_system = 3
-                    entry.external_attr = (stat.S_IFREG | 0o600) << 16
-                    entry.compress_type = zipfile.ZIP_DEFLATED
-                    archive.writestr(entry, content[name], compresslevel=6)
-                    check_sizes(
-                        (
-                            (MemberName(e.filename), e.compress_size, e.file_size)
-                            for e in archive.infolist()
-                        ),
-                        limits,
-                    )
+        for name in MEMBER_ORDER:
+            if name not in content:
+                continue
+            data = content[name]
+            if remaining <= 0:
+                raise LimitExceededError("Container byte limit exceeded.")
+            packed = _compress(data, remaining)
+            remaining -= len(packed)
+            sizes.append((name, len(packed), len(data)))
+            check_sizes(sizes, limits)
+            raw_name = name.value.encode("ascii")
+            crc = zlib.crc32(data)
+            offset = buffer.tell()
+            buffer.write(
+                LOCAL.pack(
+                    b"PK\x03\x04",
+                    20,
+                    0,
+                    8,
+                    0,
+                    33,
+                    crc,
+                    len(packed),
+                    len(data),
+                    len(raw_name),
+                    0,
+                )
+                + raw_name
+            )
+            buffer.write(packed)
+            central.extend(
+                CENTRAL.pack(
+                    b"PK\x01\x02",
+                    (3 << 8) | 20,
+                    20,
+                    0,
+                    8,
+                    0,
+                    33,
+                    crc,
+                    len(packed),
+                    len(data),
+                    len(raw_name),
+                    0,
+                    0,
+                    0,
+                    0,
+                    (stat.S_IFREG | 0o600) << 16,
+                    offset,
+                )
+                + raw_name
+            )
+        directory_offset = buffer.tell()
+        buffer.write(bytes(central))
+        buffer.write(
+            END.pack(
+                b"PK\x05\x06",
+                0,
+                0,
+                len(sizes),
+                len(sizes),
+                len(central),
+                directory_offset,
+                0,
+            )
+        )
         return buffer.getvalue()
 
 
