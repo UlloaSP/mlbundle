@@ -1,13 +1,15 @@
 # Security policy
 
-mlbundle is pre-alpha. Phases 1 and 2 implement strict manifest validation,
-contract helpers, secure container reading/writing and metadata-only `inspect`.
+mlbundle is pre-alpha. Phases 1–3 implement strict manifest validation,
+contract helpers, secure container reading/writing, metadata-only `inspect`,
+public export/load and the sklearn adapter.
 The container validates ZIP/ZIP64 layout, bounds sources and actual decompression,
 checks CRC and member integrity, and rejects unsafe members and polyglot wrappers.
-The writer publishes complete validated files atomically. The version 1 contract
-is defined in [docs/format.md](docs/format.md). Model adapters and public
-export/load are not implemented: requirements involving model loading, trusted
-types and claim recomputation below remain obligations for later phases.
+The writer publishes complete validated files atomically where hard links work;
+the exclusive-creation fallback cleans up on failure but exposes the destination
+while copying and cannot guarantee crash-atomic publication. The version 1 contract
+is defined in [docs/format.md](docs/format.md). XGBoost and ONNX loading remain
+unimplemented; their security requirements remain obligations for later phases.
 
 ## Threat model
 
@@ -51,6 +53,38 @@ make a received file trustworthy.
 The supported storage formats are skops for scikit-learn, native UBJSON for
 XGBoost and the user's original ONNX file. There is no conversion or fallback
 serialization path. Adapters must use lazy imports for optional dependencies.
+
+## Implemented sklearn trust boundary
+
+Export and load call skops' `get_untrusted_types` and reject all types outside
+the fixed supplemental list `["sklearn.tree._tree.Tree"]`. Load passes exactly
+that list to `skops.io.loads`, alongside skops' built-in trusted defaults. This
+entry is native numeric tree storage required by DecisionTree, RandomForest,
+ExtraTrees and GradientBoosting. It does not add arbitrary functions or I/O
+constructors. The bundle cannot provide additional trusted types.
+
+Skops 0.16.0 deliberately distrusts tree storage because unchecked child and
+feature indices can crash native inference. mlbundle checks loaded tree dimensions,
+indices, reachability and depth before computing importances or predicting.
+It also bounds the inner skops ZIP and validates numeric array header sizes
+before skops reads them; object arrays never use pickle loading. Malformed native
+payloads are wrapped in bounded `InvalidModelError` messages. These checks do not
+make the native parser a sandbox.
+
+The installed skops load path builds nodes, audits them and only then constructs
+objects; NumPy buffers use `allow_pickle=False`. No pickle/joblib loading fallback
+is used. Skops imports `pickle` only to recognize an unrelated save-side exception;
+this does not deserialize pickle bytes. Custom estimators/functions and XGBoost
+estimators inside sklearn pipelines are rejected. HistGradientBoosting's separate
+`TreePredictor` storage is also excluded. Broadening the supplemental list requires
+source review and hostile-payload tests, never author approval or bundle metadata.
+
+Both export and load recompute the same model claims and structures and compare
+canonical bytes, preserving class-label types and order. Export additionally
+compares the original and reloaded native models before publication. Loaded results
+contain the native model for runtime explanations; mutating it invalidates the
+relationship to the verified metadata. Pipeline structure is null because v1
+does not describe its input transformations.
 
 ## Limits of these guarantees
 

@@ -5,10 +5,11 @@ a trained model, a rich manifest, a locally inferred schema and model structure
 in one compressed `.mlbundle` file. It owns both writing and validated reading
 so that the format is defined once.
 
-Phases 1 and 2 implement the version 1 format contract, strict manifest models,
+Phases 1–3 implement the version 1 format contract, strict manifest models,
 canonical JSON, integrity helpers, environment capture, adapter/result contracts,
-secure container reading/writing and public metadata-only `inspect`.
-No public export/load API, model adapter, schema inference or CLI exists yet.
+secure container reading/writing, public metadata-only `inspect`, export/load,
+and the scikit-learn adapter. XGBoost and ONNX adapters, schema inference and
+the CLI remain unimplemented.
 Rules for later phases must not be described as implemented until code and tests
 prove them. `docs/format.md` owns the wire contract.
 
@@ -201,8 +202,11 @@ The conversation, issues, code, tests and final diff are the work record.
 The container writer accepts serialized member bytes and a manifest or its
 JSON-ready parts, computes integrity records and produces a deterministic ZIP.
 It enforces the same limits and validation as the container reader and publishes
-paths atomically, requiring explicit overwrite. Future model export will infer
-schema locally, extract claims/structure and serialize through native adapters.
+paths atomically on hard-link filesystems, requiring explicit overwrite. The
+exclusive-creation fallback removes partial destinations on failure but exposes
+the file during copying. Public sklearn export extracts claims/structure,
+serializes with skops and verifies a native round trip before publication.
+Schema inference is future work; export currently includes no training rows.
 The closed member list is: required `manifest.json`, exactly
 one of `model.skops`, `model.ubj` or `model.onnx`, optional `schema.json`, and
 `structure.json` when the supported model has extractable structure. Optional
@@ -223,8 +227,16 @@ cannot survive the native round trip. Default safety ceilings may only be lowere
 The container reader validates the archive, manifest, JSON bounds and integrity
 without loading a model. `inspect` exposes validated metadata and a member list
 without importing model libraries; it cannot attest that model-derived claims
-match the model. Future full loading for MLSuite must use a closed adapter and
-recompute claims before model use.
+match the model. Public `load` uses a closed adapter and recomputes claims and
+structure before returning the native model and validated predictor.
+
+An adapter module provides `Adapter` with the library and model-member identity,
+recognition, serialization/deserialization, `ModelClaims`, structure extraction
+and a `Predictor`. Extraction uses only the native model, shared by export/load;
+ONNX graph fields belong in `ModelClaims.onnx`. Missing names are null claims;
+the shared pipeline owns supplied/generated names and environment declarations.
+Native errors must become bounded `MLBundleError` subclasses. Follow the unchanged
+protocols in `adapters.py`; adding `_xgboost` or `_onnx` needs no shared pipeline edit.
 
 ## Where code lives
 
@@ -233,12 +245,14 @@ recompute claims before model use.
 - `src/mlbundle/contract.py` — closed identifiers and native member/format pairing.
 - `src/mlbundle/limits.py` — shared archive ceilings and specific member caps.
 - `src/mlbundle/canonical.py` — deterministic JSON encoding and bounded strict decoding.
+- `src/mlbundle/model_io.py` — library-independent public export/load, manifest construction and round-trip verification.
+- `src/mlbundle/_sklearn/` — skops trust/loading, parameter and claim extraction, native structure, nested payload bounds and validated prediction.
 - `src/mlbundle/claims.py` — shared extracted claims and exact claim/structure comparison.
 - `src/mlbundle/manifest.py` — manifest sections, cross-field validation and JSON boundaries.
 - `src/mlbundle/integrity.py` — member SHA-256/size records and verification.
 - `src/mlbundle/environment.py` — training declarations and distribution metadata capture.
 - `src/mlbundle/adapters.py` — adapter/predictor protocols and prediction output types.
-- `src/mlbundle/registry.py` — closed lazy imports of future `_sklearn`, `_xgboost`, `_onnx` modules; each provides an `Adapter` class.
+- `src/mlbundle/registry.py` — closed lazy adapter resolution and recognition; `_sklearn` is implemented, `_xgboost` and `_onnx` remain future modules.
 - `src/mlbundle/results.py` — metadata-only and loaded reader result types.
 - `src/mlbundle/_container_rules.py` — shared source type, closed member sets/order and ceilings.
 - `src/mlbundle/_zip_directory.py` — bounded ZIP/ZIP64 directory and extra-field validation.
@@ -246,7 +260,7 @@ recompute claims before model use.
 - `src/mlbundle/container.py` — source bounds, validated in-memory reading and integrity checks.
 - `src/mlbundle/writing.py` — integrity ownership, deterministic ZIP and atomic publication.
 - `src/mlbundle/inspection.py` — public metadata-only inspection without adapter resolution.
-- `docs/format.md` — version 1 wire specification; model adapters remain unimplemented.
+- `docs/format.md` — version 1 wire specification and implemented sklearn mapping/trust rules.
 - `tests/` — one file per feature, with success and error cases together.
 - `pyproject.toml` and `uv.lock` — package metadata, tool configuration and lock.
 - `.github/workflows/ci.yml` — lint, types and cross-platform tests.

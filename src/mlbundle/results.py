@@ -1,4 +1,4 @@
-"""Stable metadata-only and loaded result contracts for future readers."""
+"""Metadata-only and fully validated native-model result contracts."""
 
 from dataclasses import dataclass, field
 

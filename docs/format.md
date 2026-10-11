@@ -2,10 +2,10 @@
 
 This document defines the wire contract for `format_name = "mlbundle"` and
 `format_version = "1"`. Format versions are independent of package versions.
-“Must” denotes a compatibility or security requirement. Phases 1 and 2 implement
-the manifest, encoding, limits, adapter contracts, secure container reading and
-writing, and public metadata-only inspection. Model adapters, public export/load
-and schema inference are implemented in later phases.
+“Must” denotes a compatibility or security requirement. Phases 1–3 implement
+the manifest, encoding, limits, secure container, metadata-only inspection,
+public export/load and the scikit-learn adapter. XGBoost and ONNX adapters,
+schema inference and the CLI remain unimplemented.
 
 ## Container and resource limits
 
@@ -119,8 +119,11 @@ Writing returns bytes and optionally publishes them to a path after validating
 the complete archive through the reader. Publication uses a flushed temporary
 file in the destination directory: atomic replacement when overwrite is true,
 or atomic hard-link creation otherwise, followed by temporary-file cleanup.
-Hard-link publication requires a filesystem supporting hard links; otherwise
-the filesystem error is raised and no partial destination is left. Existing
+When hard links are unsupported, publication uses exclusive destination creation,
+flush and fsync, removing its own destination on failure. This fallback prevents
+overwrites and leaves no partial file after a reported failure, but the destination
+is visible while copying; it is not an atomic visibility guarantee or crash-safe
+publication. Other filesystem errors propagate. Existing
 destinations raise `FileExistsError` unless overwrite is explicitly requested;
 the no-overwrite decision also holds if another writer wins a race.
 
@@ -128,8 +131,8 @@ Public `mlbundle.inspect(source, *, limits=None)` returns `MetadataView` with
 the manifest and fixed-order member listing. It validates ZIP records, limits,
 manifest, member hashes and JSON syntax without importing model libraries.
 It cannot attest that model-derived claims or structure match the model; only
-a future full validating load can do that. Samples must still be explicitly
-requested by the caller of the future export API.
+the full validating `load` can do that. The current export API includes neither
+schema nor samples; future sample export must require explicit user intent.
 
 Container/layout/CRC inconsistencies raise `InvalidContainerError`; resource
 ceilings raise `LimitExceededError`. Invalid manifest JSON or typed fields raise
@@ -197,7 +200,7 @@ Identity fields are declarations, not proof of provenance.
 | `serialization` | `"skops"`, `"ubjson"`, `"onnx"` | Must pair respectively with the three libraries and model members above. |
 | `estimator_class` | nonempty string, at most 256 characters | Verified class name (not a Python import path); ONNX uses the adapter's fixed `"ONNX"` identity. Never instantiate from this field. |
 | `kind` | `"classifier"`, `"regressor"` | Verified prediction kind. |
-| `hyperparameters` | object, at most 4,096 top-level keys | Verified JSON projection of the supported estimator's `get_params(deep=False)`; native models without `get_params` use their recoverable native parameter representation. ONNX uses `{}`. At most 1 MiB canonical bytes and depth 16. |
+| `hyperparameters` | object, at most 4,096 top-level keys | Verified JSON projection of the supported estimator's parameters. Sklearn uses `get_params(deep=True)`; other adapters use their recoverable native parameter representation. ONNX uses `{}`. At most 1 MiB canonical bytes and depth 16. |
 | `n_features` | integer 1–100,000 | Verified ordered input width. |
 | `n_classes` | null or array of integers 1–100,000 | Verified per-output class counts; classifier array length equals `n_outputs`, regressor value is null. |
 | `n_outputs` | integer 1–1,024 | Verified target output count. Probability columns are classes, not separate target outputs. |
@@ -206,13 +209,27 @@ Hyperparameter values preserve JSON scalars, nested containers and numeric tags.
 Do not stringify unsupported objects or call `repr` as a fallback. If an adapter
 supports nested estimators in parameters, their representation is an object
 `{"$estimator":{"class":CLASS_NAME,"params":PARAMETER_OBJECT}}`, recursively,
-with classes drawn from its own closed allowlist. This is a comparison record,
+with types admitted by the adapter's trust boundary. This is a comparison record,
 never an instruction to import or construct a class. Unsupported callable,
 custom-object or otherwise unrecoverable parameters must fail export.
 The writer must serialize, reload and compare extracted claims and structure
 before emitting a bundle. Native formats may omit training-time parameters:
 export must fail when the chosen claims cannot survive that round trip; the
 manifest must never restore missing parameters into a reader's model.
+
+Sklearn parameters preserve `None`, JSON booleans, strings, integers and floats;
+non-finite floats use the canonical tags. NumPy scalars/arrays use the canonical
+conversion below; tuples become arrays, and dictionaries require string keys.
+Nested sklearn estimators use the `$estimator` record with their class name and
+recursively projected deep parameters. Deep keys such as `classifier__C` are
+retained alongside the estimator record. A NumPy `RandomState` becomes
+`{"$random_state":[ALGORITHM,STATE_ARRAY,POSITION,HAS_GAUSSIAN,CACHED_GAUSSIAN]}`
+from its current `get_state()`, after training. No initial seed is guessed.
+Callables (including built-in functions, NumPy functions, lambdas and partials),
+types, cyclic containers, byte strings, complex/datetime values and other custom
+objects are rejected. There is no `repr`, identity/address or stringification
+fallback. A skops-trusted object can still be rejected if its parameters have no
+faithful projection. The round-trip comparison checks all these records.
 
 ### `features`
 
@@ -221,12 +238,14 @@ manifest must never restore missing parameters into a reader's model.
 | `names` | array of 1–100,000 unique nonempty strings, each at most 1,024 characters | Effective input names, in prediction order; length equals `n_features`. |
 | `dtypes` | equally sized array of null or nonempty strings of at most 256 characters | Training DataFrame dtype declarations in feature order; null means unknown. They do not prove model input types. |
 | `model_dtypes` | optional equally sized array of nonempty strings of at most 256 characters | Verified dtypes exposed by the native model, or null if it exposes none; separate from training dtypes. ONNX uses normalized NumPy dtype names such as `float32`, `float64`, `int32`, `int64`. |
-| `origin` | `"model"`, `"dataframe"`, `"generated"` | Source of the effective names. |
+| `origin` | `"model"`, `"dataframe"`, `"generated"` | Model names, declared training-input names, or generated names. |
 
 If a model exposes feature names, origin must be `model` and names must equal
 its extracted names in order. Otherwise `dataframe` names are author declarations
-from the locally supplied frame; the reader verifies their count, not their
-historical truth. With no model names or frame names, origin is `generated` and
+of training-input column names: currently supplied through `feature_names=`,
+and later also through a locally supplied training frame. This identifier does
+not prove that a DataFrame was used. The reader verifies their count, not their
+historical truth. With no model or declared names, origin is `generated` and
 names must be `feature_1` through `feature_N`. Claim extraction represents missing
 model feature names as null, so falsely declaring a named model's origin as
 `dataframe` or `generated` also fails comparison. Model dtype extraction is
@@ -383,6 +402,15 @@ ensemble. Unsupported or oversized mandatory structure fails export rather than
 being silently omitted. ONNX graph visualizations and additional structure
 families require a deliberate future contract change.
 
+Sklearn `Pipeline` returns null structure in version 1. Its final estimator
+operates on transformed features; version 1 has no input transformation mapping,
+so no final-step tree or coefficient member is emitted. Claims, names and
+predictions still describe the complete pipeline. Standalone DecisionTree,
+RandomForest, ExtraTrees, GradientBoosting, LogisticRegression, LinearRegression
+and Ridge retain their native structures as specified above. HistGradientBoosting
+is currently rejected: its `TreePredictor` storage is not on mlbundle's trust
+allowlist. No approximate trees are emitted for it.
+
 ## Adapter and result contracts
 
 The internal `Adapter` protocol in `mlbundle.adapters` owns recognition,
@@ -390,8 +418,40 @@ serialization, loading, claim extraction, structure extraction and a `Predictor`
 The registry imports only the three constant mlbundle module paths `_sklearn`,
 `_xgboost`, `_onnx`, and constructs their module's `Adapter` class. Library
 imports must be lazy, with dependency failures naming the extra to install.
-Missing adapter modules currently raise `AdapterNotImplementedError`. Public
-`inspect` is implemented; there are no public export/load placeholders.
+Missing adapter modules raise `AdapterNotImplementedError` on load; export skips
+unimplemented adapters while looking for one that recognizes its input. A missing
+optional dependency reports `pip install "mlbundle[EXTRA]"`. An unrecognized
+object raises `UnsupportedModelError`.
+
+`export(model, destination, *, feature_names=None, target_name=None, metadata=None,
+overwrite=False, limits=None)` returns a small `MetadataView` of the written
+bundle. It serializes, extracts, reloads and compares both claims and structure
+before writing. Model-exposed names take precedence over supplied names. It
+captures distribution metadata, including `claims.onnx` in the environment for
+the future ONNX adapter. No unimplemented schema/data parameters are accepted.
+`load(source, *, limits=None)` validates the container, resolves its closed enum,
+deserializes, recomputes claims/structure and compares canonical bytes before
+constructing a `LoadedBundle`. `ClaimMismatchError` identifies the claim without
+echoing values; absent/present structure disagreements are checked separately,
+including a present JSON null. Malformed native payloads raise `InvalidModelError`,
+an `MLBundleError` subclass, without native exception text.
+
+The sklearn adapter uses only `skops.io.dumps/loads`. Its fixed supplemental
+trusted list is exactly `["sklearn.tree._tree.Tree"]`, for numeric node storage
+in the supported tree families; it adds no callable, arbitrary class or I/O type.
+Skops' own defaults remain part of the dependency trust boundary. Dumped bytes
+are audited with `get_untrusted_types`; every type outside the list is rejected
+at export and independently at load. XGBoost estimators inside sklearn pipelines
+are rejected (`xgboost.core.Booster`, `xgboost.sklearn.XGBClassifier` are untrusted).
+The native XGBoost adapter must own their loading in the next phase.
+The nested skops archive is bounded before parsing; numeric array headers must
+match the stored byte sizes and cannot use object-array loading. Loaded tree
+dimensions, child/feature indices, reachability and depth are checked before
+native feature-importance traversal or prediction. Every loaded root object is
+checked again for classifier/regressor identity, fitted state and probability
+support. Multilabel classifiers with independent positive-class columns and
+classifier chains are rejected because their probabilities cannot satisfy the
+output-major contract; ordinary multi-output probability-matrix lists are supported.
 
 Predictors accept adapter-supported tabular objects without a core pandas/numpy
 dependency. Regressors return `list[float]` for a single output or row-major
@@ -409,8 +469,8 @@ properties for kind, library, class name, ordered feature names and origin, and
 output-major original class labels. Calling the prediction method for the wrong
 kind raises a bounded `ValueError`. Result records and typed models prevent field
 reassignment, but nested JSON values and the native model are not deeply frozen.
-Construction itself performs no model validation; only a future validating reader
-can supply the loaded-result guarantee. Consumers must not mutate a validated
+Construction itself performs no model validation; `load` supplies the loaded-result
+guarantee. Consumers must not mutate a validated
 model and continue treating its original metadata as verified.
 
 ## Versioning and integrity

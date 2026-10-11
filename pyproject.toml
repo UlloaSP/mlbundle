@@ -59,6 +59,7 @@ dev = [
     "pre-commit>=4.6.0",
     # Install every adapter in the default development environment.
     "mlbundle[all]",
+    "pandas>=3.0.6",
 ]
 
 [build-system]
