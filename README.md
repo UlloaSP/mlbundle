@@ -5,11 +5,11 @@ its internal structure in one compressed `.mlbundle` file. The same package
 writes bundles on the training machine and reads them with validation in a runtime.
 Local schema inference will be added in a later phase.
 
-**Status: pre-alpha, Phase 3.** The [version 1 format contract](docs/format.md),
+**Status: pre-alpha, Phase 4a.** The [version 1 format contract](docs/format.md),
 strict manifest models, canonical JSON, integrity helpers, environment capture,
 adapter/result contracts, secure container reading/writing and public `inspect`
-and public sklearn `export`/`load` are implemented and tested. XGBoost and ONNX
-adapters, schema inference and the CLI are still missing. Nothing has been
+and public sklearn/XGBoost `export`/`load` are implemented and tested. The ONNX
+adapter, schema inference and the CLI are still missing. Nothing has been
 published to PyPI.
 
 ## Why it exists
@@ -45,7 +45,7 @@ operation works without deserializing the model or importing model libraries.
 
 Hashes detect corruption; they do not authenticate the author or prevent
 deliberate tampering. Signing is outside the project's scope. These guarantees
-cover container validation and sklearn claim recomputation; native parsers and
+cover container validation and sklearn/XGBoost claim recomputation; native parsers and
 prediction still require a consuming runtime's isolation and resource limits.
 See [SECURITY.md](SECURITY.md) for the threat model and vulnerability reporting.
 
@@ -83,6 +83,39 @@ structure is null because v1 does not map transformed features. Custom types,
 user functions, HistGradientBoosting and XGBoost steps inside sklearn pipelines
 are rejected. Export currently includes no training DataFrame, schema or samples.
 
+XGBoost supports fitted `XGBClassifier` and `XGBRegressor` tree wrappers, with
+native UBJSON stored and loaded entirely in memory. Train classifiers on encoded
+indices and supply original labels in probability-column order:
+
+```python
+from xgboost import XGBClassifier
+from mlbundle import export, load
+
+rows = [[0.0, 1.0], [1.0, 0.0], [0.1, 0.9], [0.9, 0.1]]
+model = XGBClassifier(n_estimators=3, max_depth=2, n_jobs=1).fit(rows, [0, 1, 0, 1])
+export(
+    model,
+    "xgboost.mlbundle",
+    feature_names=["temperature", "humidity"],
+    class_labels=[["cold", "warm"]],
+)
+bundle = load("xgboost.mlbundle")
+assert isinstance(bundle.native_model, XGBClassifier)
+assert bundle.native_model.predict(rows).tolist() == model.predict(rows).tolist()
+assert bundle.predict_proba(rows) == model.predict_proba(rows).tolist()
+assert bundle.class_labels == [["cold", "warm"]]
+```
+
+`class_labels=` is output-major even for one target. XGBoost binds it to a native
+copy and load verifies the manifest against that binding; omitted labels are the
+model's `0..N-1` integers. Native `predict` retains those encoded indices. Sklearn
+and regressors reject this option. XGBoost keeps the recoverable native config
+projection, not lost training parameters such as max depth or learning rate.
+Binary logistic and multiclass softprob classifiers and the closed regression
+objectives in [docs/format.md](docs/format.md) are covered. Native gbtree/dropout
+is supported; gblinear, RF wrappers, raw boosters, ranking, survival, custom
+objectives and multi-target models are rejected.
+
 ## Development
 
 Use Python 3.14 and [uv](https://docs.astral.sh/uv/). The Python minimum follows
@@ -106,7 +139,7 @@ The default dev group installs all model extras. Base consumers can use
 `uv sync --no-dev` without installing model libraries. The committed `uv.lock`
 fixes the development versions of scikit-learn, skops, XGBoost, ONNX and ONNX
 Runtime to the target MLSuite runtime baseline; this is not yet evidence of
-compatibility for the future adapters; sklearn compatibility is exercised by
+compatibility for the future ONNX adapter; sklearn/XGBoost compatibility is exercised by
 the round-trip tests. Pandas is a development dependency for DataFrame tests,
 not a core runtime dependency. `uv run pytest`
 produces terminal and XML coverage reports and enforces an 80% minimum. CI runs

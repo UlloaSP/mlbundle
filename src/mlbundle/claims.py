@@ -77,7 +77,9 @@ class ModelClaims(EstimatorInfo):
 
     @model_validator(mode="after")
     def consistent_claims(self) -> ModelClaims:
-        validate_labels(self, self.class_labels)
+        # A classifier with no native labels leaves their declaration to the pipeline.
+        if self.class_labels is not None or self.kind == ModelKind.REGRESSOR:
+            validate_labels(self, self.class_labels)
         if self.feature_names is not None and (
             len(self.feature_names) != self.n_features
             or len(set(self.feature_names)) != len(self.feature_names)
