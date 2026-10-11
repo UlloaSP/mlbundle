@@ -13,6 +13,8 @@ import mlbundle
         ("UnsupportedFormatVersionError", ()),
         ("InvalidManifestError", ()),
         ("InvalidModelError", ("Invalid native model.",)),
+        ("InvalidSchemaError", ("Invalid schema.",)),
+        ("InvalidSamplesError", ("Invalid samples.",)),
         ("InvalidJSONError", ()),
         ("IntegrityMismatchError", ("model.ubj",)),
         ("ClaimMismatchError", ("n_features",)),

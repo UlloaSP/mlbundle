@@ -66,11 +66,19 @@ class InvalidModelError(MLBundleError):
     """Native model content is malformed or violates the adapter contract."""
 
 
+class InvalidSchemaError(MLBundleError):
+    """Training inputs or schema declarations violate the schema contract."""
+
+
+class InvalidSamplesError(MLBundleError):
+    """Sample selection or row declarations violate the samples contract."""
+
+
 class MissingOptionalDependencyError(MLBundleError):
     def __init__(self, extra: str) -> None:
         self.extra = _identifier(extra)
         super().__init__(
-            f'Install this adapter with pip install "mlbundle[{self.extra}]".'
+            f'Install this feature with pip install "mlbundle[{self.extra}]".'
         )
 
 

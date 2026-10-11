@@ -126,8 +126,9 @@ Public `mlbundle.inspect(source, *, limits=None)` returns `MetadataView` with
 the manifest and fixed-order member listing. It validates ZIP records, limits,
 manifest, member hashes and JSON syntax without importing model libraries.
 It cannot attest that model-derived claims or structure match the model; only
-the full validating `load` can do that. The current export API includes neither
-schema nor samples; future sample export must require explicit user intent.
+the full validating `load` can do that. Inspection additionally validates and
+exposes schema and samples under [their declaration contract](format-schema.md),
+without pandas or mlschema. Export requires explicit `sample_rows=` for real rows.
 
 Container/layout/CRC inconsistencies raise `InvalidContainerError`; resource
 ceilings raise `LimitExceededError`. Invalid manifest JSON or typed fields raise

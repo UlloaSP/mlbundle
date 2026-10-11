@@ -2,14 +2,15 @@
 
 This document defines the wire contract for `format_name = "mlbundle"` and
 `format_version = "1"`. Format versions are independent of package versions.
-"Must" denotes a compatibility or security requirement. Phases 1–4b implement
+"Must" denotes a compatibility or security requirement. Phases 1–5 implement
 the manifest, encoding, limits, secure container, metadata-only inspection,
 public export/load and the sklearn, XGBoost and ONNX adapters.
-Schema inference and the CLI remain unimplemented.
+Local schema inference and explicit samples are implemented; the CLI is missing.
 
 The normative container rules are in [Container and resource limits](format-container.md).
 The normative structure, adapter and result rules are in [Adapters and structure](format-adapters.md).
 The implemented ONNX mapping and validation rules are in [ONNX](format-onnx.md).
+The normative schema/declaration rules are in [Schema and samples](format-schema.md).
 These sections are part of this version 1 contract.
 
 ## Members
@@ -20,7 +21,7 @@ These sections are part of this version 1 contract.
 | `model.skops` | Exactly one model member; scikit-learn, skops format. |
 | `model.ubj` | Exactly one model member; XGBoost native UBJSON format. |
 | `model.onnx` | Exactly one model member; original, self-contained ONNX bytes, unchanged. |
-| `schema.json` | Optional; object with `fields` and `reports` arrays from local schema/report generation. No training DataFrame. The schema integration phase defines the supported mlschema field/report vocabulary. |
+| `schema.json` | Optional; exact object with `schema_version`, `fields` and `reports` from local inference. See [Schema and samples](format-schema.md). No training DataFrame. |
 | `structure.json` | Optional only for families without extractable structure; object as defined below. |
 | `samples.json` | Optional; array of row objects keyed by feature name, in declared feature order when consumed. Only explicit user intent may enable it. Values use the canonical JSON value rules. Samples are real user data. |
 
@@ -108,17 +109,16 @@ faithful projection. The round-trip comparison checks all these records.
 | `names` | array of 1–100,000 unique nonempty strings, each at most 1,024 characters | Effective input names, in prediction order; length equals `n_features`. |
 | `dtypes` | equally sized array of null or nonempty strings of at most 256 characters | Training DataFrame dtype declarations in feature order; null means unknown. They do not prove model input types. |
 | `model_dtypes` | optional equally sized array of nonempty strings of at most 256 characters | Verified dtypes exposed by the native model, or null if it exposes none; separate from training dtypes. ONNX uses normalized NumPy dtype names such as `float32`, `float64`, `int32`, `int64`. |
-| `origin` | `"model"`, `"dataframe"`, `"generated"` | Model names, declared training-input names, or generated names. |
+| `origin` | `"model"`, `"dataframe"`, `"declared"`, `"generated"` | Native names, local frame columns, explicitly supplied names, or generated names. |
 
 If a model exposes feature names, origin must be `model` and names must equal
-its extracted names in order. Otherwise `dataframe` names are author declarations
-of training-input column names: currently supplied through `feature_names=`,
-and later also through a locally supplied training frame. This identifier does
-not prove that a DataFrame was used. The reader verifies their count, not their
-historical truth. With no model or declared names, origin is `generated` and
+its extracted names in order, even when a frame supplies training dtypes.
+Otherwise `dataframe` means columns from `training_data=`, and `declared` means
+`feature_names=` without a frame. Both are author declarations: the reader checks
+count/alignment, not historical truth. With neither, origin is `generated` and
 names must be `feature_1` through `feature_N`. Claim extraction represents missing
 model feature names as null, so falsely declaring a named model's origin as
-`dataframe` or `generated` also fails comparison. Model dtype extraction is
+`dataframe`, `declared` or `generated` also fails comparison. Model dtype extraction is
 independent of name origin and must be compared even when its claim is null.
 
 ### `target`
@@ -259,7 +259,7 @@ metadata. Classifier extraction may leave labels null only when the native model
 carries none; the shared pipeline resolves the declaration as specified above.
 Library/serialization/member pairing is validated by the closed
 registry. Structure is compared separately using the same canonical encoding.
-Schema, training dtypes, frame-origin names, target name, training environment,
+Schema, training dtypes, frame/declared-origin names, target name, training environment,
 user metadata, identity and samples are not verified against the model; they must
 still pass their own validation and integrity checks. Inspection verifies format
 and integrity only, and must never attest that model claims match the model.
@@ -272,6 +272,7 @@ encoding or mandatory structure shapes requires a new format version and an
 explicit reader implementation. Tightening caller-selected resource limits does
 not change the format. Corrections to documentation that preserve wire behavior
 and implementation changes behind these contracts do not require a version bump.
+Phase 5 completes the unreleased v1 schema vocabulary and adds `declared` origin.
 
 Hashes detect corruption, not deliberate tampering: an attacker can replace a
 model and update every record. Claim recomputation prevents a bundle from showing
