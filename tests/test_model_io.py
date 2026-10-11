@@ -1,7 +1,7 @@
 """Library-independent pipelines, dependency failures and export-time verification."""
 
 import pytest
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 import mlbundle
 from mlbundle import (
@@ -96,13 +96,15 @@ def test_closed_adapter_pipeline_is_library_agnostic(
         if library == Library.ONNX
         else None
     )
-    claims = claims.model_copy(update={"onnx": graph})
+    claims = claims.model_copy(update={"onnx": graph, "class_labels": None})
 
     class FakeAdapter:
         model_member = MODEL_MEMBERS[library][1]
 
         def recognizes(self, model):
             return model == "native input"
+
+        prepare_export = _prepare_native
 
         def serialize(self, model):
             return b"native format bytes"
@@ -129,15 +131,84 @@ def test_closed_adapter_pipeline_is_library_agnostic(
 
     monkeypatch.setattr(registry, "import_module", resolve)
     path = tmp_path / "bundle.mlbundle"
-    mlbundle.export("native input", path)
+    mlbundle.export("native input", path, class_labels=[["cold", "warm"]])
     loaded = mlbundle.load(path)
     assert loaded.library == library and loaded.native_model == "native input"
+    assert loaded.class_labels == [["cold", "warm"]]
     assert loaded.manifest.environment.onnx == graph
     assert loaded.predict_proba([[1, 2]]) == [[0.2, 0.8]]
+    _check_declared_count_mismatch(path)
     if graph is not None:
-        manifest, members = read_container(path)
-        parts = manifest.model_dump(mode="json", by_alias=True)
-        parts["environment"]["onnx"]["ir_version"] = 11
-        del members[MemberName.MANIFEST]
-        with pytest.raises(ClaimMismatchError, match="onnx"):
-            mlbundle.load(write_container(parts, members))
+        _check_graph_mismatch(path)
+
+
+def _check_graph_mismatch(path):
+    manifest, members = read_container(path)
+    parts = manifest.model_dump(mode="json", by_alias=True)
+    parts["environment"]["onnx"]["ir_version"] = 11
+    del members[MemberName.MANIFEST]
+    with pytest.raises(ClaimMismatchError, match="onnx"):
+        mlbundle.load(write_container(parts, members))
+
+
+def _check_declared_count_mismatch(path):
+    manifest, members = read_container(path)
+    parts = manifest.model_dump(mode="json", by_alias=True)
+    parts["model"]["n_classes"] = [1]
+    parts["target"]["class_labels"] = [["one"]]
+    del members[MemberName.MANIFEST]
+    with pytest.raises(ClaimMismatchError, match="n_classes"):
+        mlbundle.load(write_container(parts, members))
+
+
+def _prepare_native(self, model, declarations):
+    return model
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        DecisionTreeClassifier(),
+        DecisionTreeRegressor(),
+    ],
+)
+def test_sklearn_rejects_class_label_declarations(model, tmp_path):
+    model.fit([[0], [1]], [0, 1])
+    with pytest.raises(UnsupportedModelError, match="Sklearn already carries"):
+        mlbundle.export(model, tmp_path / "bad.mlbundle", class_labels=[[0, 1]])
+
+
+@pytest.mark.parametrize(
+    "labels", [[[1]], [[1, 1]], [[1, "two"]], [[None, 1]], [[float("inf"), 1]], ["ab"]]
+)
+def test_export_declarations_are_strict(labels, tmp_path):
+    model = DecisionTreeClassifier().fit([[0], [1]], [0, 1])
+    with pytest.raises(UnsupportedModelError):
+        mlbundle.export(model, tmp_path / "bad.mlbundle", class_labels=labels)
+
+
+def test_label_less_native_claims_use_declarations():
+    from mlbundle.declarations import (
+        ExportDeclarations,
+        export_declarations,
+        resolve_labels,
+    )
+
+    model = DecisionTreeClassifier().fit([[0], [1]], [0, 1])
+    claims = Adapter().extract_claims(model).model_copy(update={"class_labels": None})
+    with pytest.raises(UnsupportedModelError, match="disagree"):
+        resolve_labels(
+            Adapter().extract_claims(model), export_declarations([["cold", "warm"]])
+        )
+    assert resolve_labels(claims, ExportDeclarations()).class_labels == [[0, 1]]
+    assert resolve_labels(
+        claims, export_declarations([["cold", "warm"]])
+    ).class_labels == [["cold", "warm"]]
+    for labels in [[[1]], [[1, 1]]]:
+        with pytest.raises(UnsupportedModelError):
+            resolve_labels(claims, export_declarations(labels))
+    regressor = DecisionTreeRegressor().fit([[0], [1]], [0, 1])
+    with pytest.raises(UnsupportedModelError, match="Regressors"):
+        resolve_labels(
+            Adapter().extract_claims(regressor), export_declarations([[0, 1]])
+        )

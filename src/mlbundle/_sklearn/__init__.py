@@ -15,6 +15,7 @@ from sklearn.utils.validation import check_is_fitted
 from mlbundle.canonical import canonical_value
 from mlbundle.claims import ClassLabels, FeatureNames, ModelClaims
 from mlbundle.contract import Library, MemberName, ModelKind
+from mlbundle.declarations import ExportDeclarations
 from mlbundle.errors import (
     InvalidJSONError,
     InvalidModelError,
@@ -95,6 +96,13 @@ class Adapter:
             and not type(model).__module__.startswith("xgboost.")
             and (is_classifier(model) or is_regressor(model))
         )
+
+    def prepare_export(self, model: object, declarations: ExportDeclarations) -> object:
+        if declarations.class_labels is not None:
+            raise UnsupportedModelError(
+                reason="Sklearn already carries class labels; class_labels is unsupported."
+            )
+        return model
 
     def _validate(self, model: Any) -> None:
         if not self.recognizes(model):

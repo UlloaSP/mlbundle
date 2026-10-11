@@ -34,6 +34,9 @@ class FakeAdapter:
     def recognizes(self, model):
         return isinstance(model, dict) and "weights" in model
 
+    def prepare_export(self, model, declarations):
+        return model
+
     def serialize(self, model):
         return canonical_dumps(model)
 

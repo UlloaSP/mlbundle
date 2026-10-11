@@ -1,15 +1,15 @@
 # Security policy
 
-mlbundle is pre-alpha. Phases 1–3 implement strict manifest validation,
+mlbundle is pre-alpha. Phases 1–4a implement strict manifest validation,
 contract helpers, secure container reading/writing, metadata-only `inspect`,
-public export/load and the sklearn adapter.
+public export/load and the sklearn and XGBoost adapters.
 The container validates ZIP/ZIP64 layout, bounds sources and actual decompression,
 checks CRC and member integrity, and rejects unsafe members and polyglot wrappers.
 The writer publishes complete validated files atomically where hard links work;
 the exclusive-creation fallback cleans up on failure but exposes the destination
 while copying and cannot guarantee crash-atomic publication. The version 1 contract
-is defined in [docs/format.md](docs/format.md). XGBoost and ONNX loading remain
-unimplemented; their security requirements remain obligations for later phases.
+is defined in [docs/format.md](docs/format.md). ONNX loading remains
+unimplemented; its security requirements remain obligations for a later phase.
 
 ## Threat model
 
@@ -89,6 +89,32 @@ compares the original and reloaded native models before publication. Loaded resu
 contain the native model for runtime explanations; mutating it invalidates the
 relationship to the verified metadata. Pipeline structure is null because v1
 does not describe its input transformations.
+
+## Implemented XGBoost dependency boundary
+
+XGBoost uses native UBJSON only, in memory, with exact XGBClassifier/XGBRegressor
+classes chosen from mlbundle's fixed map. The manifest never supplies loading
+code. Export rejects custom objectives, other wrappers, raw boosters, unsupported
+objectives/boosters and multi-target models. A native copy holds the canonical
+mlbundle attribute binding class labels, wrapper identity and prediction settings;
+the caller's model is never mutated. Load requires and recomputes that binding,
+recoverable config fields, names/types and the complete tree dumps/importances.
+Label agreement proves consistency with the native file, not the historical
+truth of a user-supplied label mapping.
+
+The adapter rejects oversized bytes and non-UBJSON before XGBoost sees them.
+A bounded Python preflight checks document layout, feature/class/target counts,
+tree counts, node arrays, output groups, iteration pointers, indices, reachability
+and dump-compatible depth, keeping
+numeric arrays as byte views. Native errors are translated to bounded mlbundle
+errors without third-party exception text. These checks reduce cheap malformed
+inputs; they are not a complete validation of XGBoost's internal model schema.
+XGBoost's native parser and native inference remain a dependency boundary:
+mlbundle cannot guarantee their memory safety or bound their internal memory/CPU
+use. Native tree dump generation also allocates inside XGBoost before mlbundle
+can inspect its returned byte size. Server consumers must isolate loading and
+prediction and enforce process resource limits. See the exact support and
+resource boundaries in [docs/format.md](docs/format.md).
 
 ## Limits of these guarantees
 

@@ -11,7 +11,7 @@ from pydantic import JsonValue
 
 from ._container_rules import MEMBER_ORDER, BundleSource, effective_limits
 from .canonical import canonical_dumps, canonical_loads
-from .claims import ModelClaims, verify_claims, verify_structure
+from .claims import Label, ModelClaims, verify_claims, verify_structure
 from .container import read_container
 from .contract import (
     FORMAT_NAME,
@@ -22,6 +22,7 @@ from .contract import (
     MemberName,
     SerializationFormat,
 )
+from .declarations import ExportDeclarations, export_declarations, resolve_labels
 from .environment import capture_environment
 from .errors import ClaimMismatchError, InvalidModelError, LimitExceededError
 from .inspection import inspect
@@ -85,6 +86,7 @@ def export(
     destination: str | PathLike[str],
     *,
     feature_names: Sequence[str] | None = None,
+    class_labels: Sequence[Sequence[Label]] | None = None,
     target_name: str | None = None,
     metadata: Mapping[str, JsonValue] | None = None,
     overwrite: bool = False,
@@ -94,17 +96,23 @@ def export(
 
     Model-exposed feature names take precedence over supplied names. Otherwise
     supplied names are declarations; omitted names become feature_1 … feature_N.
+    Class labels are output-major declarations handled by the native adapter;
+    omitted labels use native labels or generated encoded indices.
     No training rows, schema or sample data are included by this API.
     """
     selected = effective_limits(limits)
+    declarations = export_declarations(class_labels)
     adapter = find_adapter(model)
+    model = adapter.prepare_export(model, declarations)
     data = adapter.serialize(model)
     if len(data) > selected.member_bytes(adapter.model_member):
         raise LimitExceededError("Model member size limit exceeded.")
-    claims = adapter.extract_claims(model)
+    claims = resolve_labels(adapter.extract_claims(model), declarations)
     structure = adapter.extract_structure(model)
     restored = adapter.deserialize(data)
-    verify_claims(claims, adapter.extract_claims(restored))
+    verify_claims(
+        claims, resolve_labels(adapter.extract_claims(restored), declarations)
+    )
     verify_structure(structure, adapter.extract_structure(restored))
     members = {adapter.model_member: data}
     if structure is not None:
@@ -140,7 +148,21 @@ def load(source: BundleSource, *, limits: ArchiveLimits | None = None) -> Loaded
     manifest, members = read_container(source, limits=selected)
     adapter = get_adapter(manifest.model.library)
     model = adapter.deserialize(members[adapter.model_member])
-    verify_claims(manifest.verified_claims(), adapter.extract_claims(model))
+    actual = adapter.extract_claims(model)
+    expected = manifest.verified_claims()
+    # Check native dimensions before using any label declaration from the bundle.
+    verify_claims(
+        expected.model_copy(update={"class_labels": actual.class_labels}), actual
+    )
+    actual = resolve_labels(
+        actual,
+        ExportDeclarations(
+            class_labels=manifest.target.class_labels
+            if actual.class_labels is None
+            else None
+        ),
+    )
+    verify_claims(expected, actual)
     structure = _optional_json(members, MemberName.STRUCTURE, selected)
     extracted = adapter.extract_structure(model)
     if (MemberName.STRUCTURE in members) != (extracted is not None):
