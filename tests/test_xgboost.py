@@ -574,6 +574,19 @@ def test_readme_example(tmp_path):
     assert bundle.class_labels == [["cold", "warm"]]
 
 
+def test_other_library_model_bytes(data, tmp_path):
+    from sklearn.tree import DecisionTreeClassifier
+
+    from mlbundle._sklearn import Adapter as SklearnAdapter
+
+    x, y = data
+    path = tmp_path / "xgboost.mlbundle"
+    mlbundle.export(classifier(x, y), path)
+    other = SklearnAdapter().serialize(DecisionTreeClassifier().fit(x, y))
+    with pytest.raises(InvalidModelError, match="UBJSON"):
+        mlbundle.load(rewrite(path, lambda m, b: b.update({MemberName.UBJSON: other})))
+
+
 def test_lying_regressor_kind(data, tmp_path):
     x, y = data
     path = tmp_path / "regressor.mlbundle"
