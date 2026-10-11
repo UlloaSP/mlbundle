@@ -265,6 +265,8 @@ def test_no_hard_links_fallback(manifest_data, tmp_path, monkeypatch, race, fail
             manifest_data, {MemberName.SKOPS: b"model"}, destination=target
         )
         assert target.read_bytes() == result
+        if os.name != "nt":
+            assert stat.S_IMODE(target.stat().st_mode) == 0o600
         with pytest.raises(FileExistsError):
             write_container(
                 manifest_data, {MemberName.SKOPS: b"model"}, destination=target

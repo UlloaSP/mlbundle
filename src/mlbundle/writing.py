@@ -92,7 +92,13 @@ def _atomic_write(destination: Path, data: bytes, overwrite: bool) -> None:
 def _exclusive_write(destination: Path, data: bytes) -> None:
     # Filesystems without hard links still get exclusive ownership; remove our
     # destination on every failure, never a competing writer's existing file.
-    stream = destination.open("xb")
+    descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        stream = os.fdopen(descriptor, "wb")
+    except BaseException:
+        os.close(descriptor)
+        destination.unlink(missing_ok=True)
+        raise
     try:
         with stream:
             stream.write(data)

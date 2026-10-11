@@ -65,9 +65,13 @@ constructors. The bundle cannot provide additional trusted types.
 
 Skops 0.16.0 deliberately distrusts tree storage because unchecked child and
 feature indices can crash native inference. mlbundle checks loaded tree dimensions,
-indices, reachability and depth before computing importances or predicting.
-It also bounds the inner skops ZIP and validates numeric array header sizes
-before skops reads them; object arrays never use pickle loading. Malformed native
+indices, reachability, depth and owning-estimator dimensions before computing
+importances or predicting. Ensemble feature mappings must stay within parent
+input widths. It bounds tree constructor dimensions and class counts before
+native construction, and checks state-array shapes against those dimensions.
+It also bounds the inner skops ZIP and validates every schema-referenced numeric
+array header, including renamed files, before skops reads it. Zero-itemsize
+arrays are rejected; object arrays never use pickle loading. Malformed native
 payloads are wrapped in bounded `InvalidModelError` messages. These checks do not
 make the native parser a sandbox.
 

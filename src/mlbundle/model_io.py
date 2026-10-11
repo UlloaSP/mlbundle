@@ -148,11 +148,18 @@ def load(source: BundleSource, *, limits: ArchiveLimits | None = None) -> Loaded
     verify_structure(structure, extracted)
     schema = _optional_json(members, MemberName.SCHEMA, selected)
     samples = _optional_json(members, MemberName.SAMPLES, selected)
-    if MemberName.SCHEMA in members and not isinstance(schema, dict):
-        raise InvalidModelError("Schema member must be an object.")
+    if MemberName.SCHEMA in members and (
+        not isinstance(schema, dict)
+        or not isinstance(schema.get("fields"), list)
+        or not isinstance(schema.get("reports"), list)
+    ):
+        raise InvalidModelError("Schema member must contain fields and reports arrays.")
     if MemberName.SAMPLES in members and (
         not isinstance(samples, list)
-        or any(not isinstance(row, dict) for row in samples)
+        or any(
+            not isinstance(row, dict) or set(row) != set(manifest.features.names)
+            for row in samples
+        )
     ):
         raise InvalidModelError("Samples member must contain row objects.")
     return LoadedBundle(

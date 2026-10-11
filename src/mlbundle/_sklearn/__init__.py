@@ -21,6 +21,7 @@ from mlbundle.errors import (
     MLBundleError,
     UnsupportedModelError,
 )
+from mlbundle.limits import MAX_CLASSES, MAX_OUTPUTS
 
 from .parameters import parameters
 from .payload import validate_payload
@@ -42,19 +43,22 @@ def _untrusted(data: bytes) -> None:
 
 def _outputs(model: Any, classifier: bool) -> tuple[int, ClassLabels | None]:
     if classifier:
-        classes = getattr(model, "classes_", None)
-        if classes is None:
-            raise UnsupportedModelError(
-                reason="Classifier must expose original classes_."
-            )
-        outputs = classes if isinstance(classes, list) else [classes]
-        labels = cast(ClassLabels, canonical_value(outputs))
+        labels = _labels(model)
         return len(labels), labels
     estimator = model.steps[-1][1] if isinstance(model, Pipeline) else model
     if hasattr(estimator, "n_outputs_"):
-        return int(estimator.n_outputs_), None
+        outputs = estimator.n_outputs_
+        if (
+            not isinstance(outputs, (int, np.integer))
+            or isinstance(outputs, (bool, np.bool_))
+            or not 1 <= outputs <= MAX_OUTPUTS
+        ):
+            raise InvalidModelError("Invalid regressor output count.")
+        return int(outputs), None
     if hasattr(estimator, "coef_"):
         coef = np.asarray(estimator.coef_)
+        if coef.ndim not in (1, 2) or coef.shape[-1] != estimator.n_features_in_:
+            raise InvalidModelError("Invalid regressor coefficient dimensions.")
         return 1 if coef.ndim == 1 else coef.shape[0], None
     if hasattr(estimator, "_y"):
         target = np.asarray(estimator._y)
@@ -66,6 +70,19 @@ def _outputs(model: Any, classifier: bool) -> tuple[int, ClassLabels | None]:
     raise UnsupportedModelError(
         reason="Regressor output count cannot be recovered faithfully."
     )
+
+
+def _labels(model: Any) -> ClassLabels:
+    classes = getattr(model, "classes_", None)
+    if classes is None:
+        raise UnsupportedModelError(reason="Classifier must expose original classes_.")
+    outputs = classes if isinstance(classes, list) else [classes]
+    if not 1 <= len(outputs) <= MAX_OUTPUTS or any(
+        np.asarray(output).ndim != 1 or not 1 <= len(output) <= MAX_CLASSES
+        for output in outputs
+    ):
+        raise InvalidModelError("Invalid classifier label dimensions.")
+    return cast(ClassLabels, canonical_value(outputs))
 
 
 class Adapter:
@@ -135,11 +152,15 @@ class Adapter:
             raise InvalidModelError("Invalid skops model payload.") from None
 
     def extract_claims(self, model: Any) -> ModelClaims:
-        self._validate(model)
         try:
+            self._validate(model)
             classifier = is_classifier(model)
             outputs, labels = _outputs(model, classifier)
             names = getattr(model, "feature_names_in_", None)
+            if names is not None and (
+                np.asarray(names).ndim != 1 or len(names) != model.n_features_in_
+            ):
+                raise InvalidModelError("Invalid model feature-name dimensions.")
             return ModelClaims(
                 estimator_class=type(model).__name__,
                 kind=ModelKind.CLASSIFIER if classifier else ModelKind.REGRESSOR,
@@ -159,10 +180,19 @@ class Adapter:
             raise UnsupportedModelError(
                 reason="Model claims cannot be represented faithfully."
             ) from None
+        except MLBundleError:
+            raise
+        except Exception:
+            raise InvalidModelError("Invalid sklearn model claims.") from None
 
     def extract_structure(self, model: object) -> dict[str, JsonValue] | None:
-        self._validate(model)
-        return extract_structure(model)
+        try:
+            self._validate(model)
+            return extract_structure(model)
+        except MLBundleError:
+            raise
+        except Exception:
+            raise InvalidModelError("Invalid sklearn model structure.") from None
 
     def predictor(self, model: object) -> Predictor:
         return Predictor(model, self.extract_claims(model))

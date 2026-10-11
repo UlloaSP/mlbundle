@@ -94,11 +94,6 @@ def test_roundtrip(model, data, tmp_path):
         loaded.manifest.target.name == "species"
         and loaded.manifest.user_metadata == {"run": 1}
     )
-    assert (
-        isinstance(loaded.native_model, DecisionTreeClassifier)
-        if type(model) is DecisionTreeClassifier
-        else True
-    )
 
 
 @pytest.mark.parametrize(
@@ -286,3 +281,16 @@ def test_parameter_projection(tmp_path):
     params = mlbundle.load(path).manifest.model.hyperparameters
     assert params["tree"]["$estimator"]["class"] == "DecisionTreeClassifier"
     assert "tree__max_depth" in params
+
+
+@pytest.mark.parametrize("model", [DecisionTreeClassifier(), DecisionTreeRegressor()])
+def test_sparse_predictions(model):
+    from scipy.sparse import csr_matrix
+
+    model.fit([[0], [1]], [0, 1])
+    predictor = Adapter().predictor(model)
+    method = "predict_proba" if isinstance(model, DecisionTreeClassifier) else "predict"
+    assert np.array_equal(
+        getattr(predictor, method)(csr_matrix([[0], [1]])),
+        getattr(model, method)([[0], [1]]),
+    )

@@ -16,14 +16,14 @@ class Predictor:
         self.model = model
         self.claims = claims
 
-    def _data(self, data: object) -> object:
+    def _data(self, data: object) -> tuple[object, int]:
         shape = getattr(data, "shape", None)
         if shape is None:
             data = np.asarray(data)
             shape = data.shape
         if len(shape) != 2 or shape[1] != self.claims.n_features:
             raise ValueError("Prediction input must have the model's feature width.")
-        return data
+        return data, int(shape[0])
 
     def _call(self, data: object, *, probabilities: bool) -> Any:
         # Positional arrays/lists remain supported for named models; sklearn
@@ -46,9 +46,8 @@ class Predictor:
     def predict(self, data: object) -> RegressionOutput:
         if self.claims.kind != ModelKind.REGRESSOR:
             raise ValueError("predict requires a regressor.")
-        data = self._data(data)
+        data, rows = self._data(data)
         result = np.asarray(self._call(data, probabilities=False), dtype=float)
-        rows = len(data)  # type: ignore[arg-type]
         expected = (
             (rows,) if self.claims.n_outputs == 1 else (rows, self.claims.n_outputs)
         )
@@ -63,7 +62,7 @@ class Predictor:
     def predict_proba(self, data: object) -> ProbabilityOutput:
         if self.claims.kind != ModelKind.CLASSIFIER:
             raise ValueError("predict_proba requires a classifier.")
-        data = self._data(data)
+        data, rows = self._data(data)
         raw = self._call(data, probabilities=True)
         matrices = raw if isinstance(raw, list) else [raw]
         if not isinstance(matrices, list) or len(matrices) != self.claims.n_outputs:
@@ -72,7 +71,7 @@ class Predictor:
         for matrix, classes in zip(matrices, self.claims.n_classes or [], strict=True):
             values = np.asarray(matrix, dtype=float)
             if (
-                values.shape != (len(data), classes)  # type: ignore[arg-type]
+                values.shape != (rows, classes)
                 or not np.isfinite(values).all()
                 or np.any(values < 0)
                 or np.any(values > 1)

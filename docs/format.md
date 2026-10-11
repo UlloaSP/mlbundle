@@ -444,10 +444,14 @@ are audited with `get_untrusted_types`; every type outside the list is rejected
 at export and independently at load. XGBoost estimators inside sklearn pipelines
 are rejected (`xgboost.core.Booster`, `xgboost.sklearn.XGBClassifier` are untrusted).
 The native XGBoost adapter must own their loading in the next phase.
-The nested skops archive is bounded before parsing; numeric array headers must
-match the stored byte sizes and cannot use object-array loading. Loaded tree
-dimensions, child/feature indices, reachability and depth are checked before
-native feature-importance traversal or prediction. Every loaded root object is
+The nested skops archive is bounded before parsing; every schema-referenced
+numeric array header is checked regardless of filename suffix. Headers must
+match the stored byte sizes and cannot use object-array loading or zero-itemsize
+dtypes. Tree constructor dimensions/class counts and state-array shapes are
+bounded before native construction. Loaded tree dimensions, child/feature indices,
+reachability and depth are checked before native feature-importance traversal or
+prediction, and input/output/class counts must agree with owning estimators.
+Ensemble feature mappings must address the parent input width. Every loaded root object is
 checked again for classifier/regressor identity, fitted state and probability
 support. Multilabel classifiers with independent positive-class columns and
 classifier chains are rejected because their probabilities cannot satisfy the
