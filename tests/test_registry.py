@@ -74,7 +74,11 @@ def test_fake_adapter_contract(monkeypatch, manifest_data):
 
 
 @pytest.mark.parametrize("library", list(Library))
-def test_missing_adapter_module(library):
+def test_missing_adapter_module(monkeypatch, library):
+    def missing(path):
+        raise ModuleNotFoundError(name=path)
+
+    monkeypatch.setattr(registry, "import_module", missing)
     with pytest.raises(AdapterNotImplementedError, match=library.value):
         registry.get_adapter(library)
 

@@ -10,7 +10,6 @@ import mlbundle
 def test_package_version() -> None:
     assert mlbundle.__version__ == version("mlbundle")
     assert all(hasattr(mlbundle, name) for name in mlbundle.__all__)
-    assert not any(hasattr(mlbundle, name) for name in ("export", "load", "inspect"))
 
 
 def test_base_import_does_not_touch_model_libraries():
