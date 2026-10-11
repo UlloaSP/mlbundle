@@ -1,0 +1,41 @@
+# Environments and local secrets
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# Python and tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.hypothesis/
+.cache/
+.tox/
+.nox/
+
+# Build output
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Coverage reports
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.history/
+.DS_Store
+Thumbs.db
+
+# Local model artifacts; intentional fixtures may be committed
+*.mlbundle
+!tests/fixtures/**/*.mlbundle
