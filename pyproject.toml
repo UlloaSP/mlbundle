@@ -36,12 +36,12 @@ requires-python = ">=3.14"
 dependencies = ["pydantic>=2.13.4,<3"]
 
 [project.optional-dependencies]
-# sklearn's floor matches skops; other floors match the target runtime baseline.
-sklearn = ["scikit-learn>=1.2", "skops>=0.16.0"]
+# sklearn's floor provides get_tags; other floors match the runtime baseline.
+sklearn = ["scikit-learn>=1.6", "skops>=0.16.0"]
 xgboost = ["xgboost>=3.4.1", "scikit-learn>=1.2"]
 onnx = ["onnx>=1.23.0", "onnxruntime>=1.30.0"]
 all = [
-    "scikit-learn>=1.2", "skops>=0.16.0", "xgboost>=3.4.1",
+    "scikit-learn>=1.6", "skops>=0.16.0", "xgboost>=3.4.1",
     "onnx>=1.23.0", "onnxruntime>=1.30.0",
 ]
 
@@ -59,6 +59,7 @@ dev = [
     "pre-commit>=4.6.0",
     # Install every adapter in the default development environment.
     "mlbundle[all]",
+    "pandas>=3.0.6",
 ]
 
 [build-system]

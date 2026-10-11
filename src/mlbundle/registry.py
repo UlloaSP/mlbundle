@@ -1,6 +1,7 @@
 """Only mlbundle-owned module paths can select an adapter."""
 
 from importlib import import_module
+from os import PathLike
 from types import MappingProxyType
 from typing import cast
 
@@ -45,3 +46,27 @@ def get_adapter(library: Library) -> Adapter:
     if adapter.library != library or adapter.model_member != MODEL_MEMBERS[library][1]:
         raise UnsupportedModelError
     return adapter
+
+
+def find_adapter(model: object) -> Adapter:
+    """Ask every available closed adapter; preserve dependency errors if none matches."""
+    missing: dict[Library, MissingOptionalDependencyError] = {}
+    for library in Library:
+        try:
+            adapter = get_adapter(library)
+        except AdapterNotImplementedError:
+            continue
+        except MissingOptionalDependencyError as error:
+            missing[library] = error
+            continue
+        if adapter.recognizes(model):
+            return adapter
+    # Class ancestry only identifies which missing extra to report; it never
+    # selects an import path, adapter or estimator constructor.
+    roots = {base.__module__.split(".")[0] for base in type(model).__mro__}
+    for library, error in missing.items():
+        if library.value in roots or (
+            library == Library.ONNX and isinstance(model, (bytes, str, PathLike))
+        ):
+            raise error
+    raise UnsupportedModelError

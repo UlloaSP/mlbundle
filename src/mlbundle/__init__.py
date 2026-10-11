@@ -20,6 +20,7 @@ from .errors import (
     InvalidContainerError,
     InvalidJSONError,
     InvalidManifestError,
+    InvalidModelError,
     LimitExceededError,
     MissingOptionalDependencyError,
     MLBundleError,
@@ -30,6 +31,7 @@ from .inspection import inspect
 from .integrity import IntegrityRecord
 from .limits import ArchiveLimits
 from .manifest import FeatureInfo, Manifest, MemberReferences, ModelInfo, TargetInfo
+from .model_io import export, load
 from .results import LoadedBundle, MetadataView
 
 __version__ = _version("mlbundle")
@@ -47,6 +49,7 @@ __all__ = [
     "InvalidContainerError",
     "InvalidJSONError",
     "InvalidManifestError",
+    "InvalidModelError",
     "Library",
     "LimitExceededError",
     "LoadedBundle",
@@ -67,5 +70,7 @@ __all__ = [
     "UnsupportedFormatVersionError",
     "UnsupportedModelError",
     "__version__",
+    "export",
     "inspect",
+    "load",
 ]

@@ -12,6 +12,7 @@ import mlbundle
         ("LimitExceededError", ("Limit exceeded.",)),
         ("UnsupportedFormatVersionError", ()),
         ("InvalidManifestError", ()),
+        ("InvalidModelError", ("Invalid native model.",)),
         ("InvalidJSONError", ()),
         ("IntegrityMismatchError", ("model.ubj",)),
         ("ClaimMismatchError", ("n_features",)),

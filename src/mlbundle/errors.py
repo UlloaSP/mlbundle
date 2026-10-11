@@ -51,18 +51,27 @@ class ClaimMismatchError(MLBundleError):
 
 
 class UnsupportedModelError(MLBundleError):
-    def __init__(self, untrusted_types: tuple[str, ...] = ()) -> None:
+    def __init__(
+        self, untrusted_types: tuple[str, ...] = (), *, reason: str | None = None
+    ) -> None:
         self.untrusted_types = untrusted_types
         names = ", ".join(_identifier(name) for name in untrusted_types[:20])
         super().__init__(
-            f"Unsupported model ({len(untrusted_types)} untrusted types): {names}."
+            reason
+            or f"Unsupported model ({len(untrusted_types)} untrusted types): {names}."
         )
+
+
+class InvalidModelError(MLBundleError):
+    """Native model content is malformed or violates the adapter contract."""
 
 
 class MissingOptionalDependencyError(MLBundleError):
     def __init__(self, extra: str) -> None:
         self.extra = _identifier(extra)
-        super().__init__(f"Install mlbundle[{self.extra}] for this adapter.")
+        super().__init__(
+            f'Install this adapter with pip install "mlbundle[{self.extra}]".'
+        )
 
 
 class AdapterNotImplementedError(MLBundleError):

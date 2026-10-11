@@ -1,5 +1,6 @@
 """Container round trips and hostile ZIP inputs, including bounded inflation."""
 
+import errno
 import hashlib
 import io
 import random
@@ -226,3 +227,48 @@ def test_remaining_compression_budget(manifest_data, monkeypatch):
             limits=ArchiveLimits(max_archive_bytes=2048, max_compressed_bytes=1000),
         )
     assert len(caps) == 2 and 0 < caps[1] < caps[0] == 1000
+
+
+@pytest.mark.parametrize(
+    "race,fail_copy", [(False, False), (True, False), (False, True)]
+)
+def test_no_hard_links_fallback(manifest_data, tmp_path, monkeypatch, race, fail_copy):
+    import os
+
+    target = tmp_path / "bundle.mlbundle"
+
+    def unsupported(temporary, destination):
+        if race:
+            destination.write_bytes(b"other writer")
+        raise OSError(errno.EOPNOTSUPP, "hard links unsupported")
+
+    monkeypatch.setattr(os, "link", unsupported)
+    if fail_copy:
+        original = os.fsync
+        calls = []
+
+        def fail_second(fd):
+            calls.append(fd)
+            if len(calls) == 2:
+                raise OSError("simulated copy failure")
+            original(fd)
+
+        monkeypatch.setattr(os, "fsync", fail_second)
+    if race or fail_copy:
+        with pytest.raises(FileExistsError if race else OSError):
+            write_container(
+                manifest_data, {MemberName.SKOPS: b"model"}, destination=target
+            )
+        assert target.read_bytes() == b"other writer" if race else not target.exists()
+    else:
+        result = write_container(
+            manifest_data, {MemberName.SKOPS: b"model"}, destination=target
+        )
+        assert target.read_bytes() == result
+        if os.name != "nt":
+            assert stat.S_IMODE(target.stat().st_mode) == 0o600
+        with pytest.raises(FileExistsError):
+            write_container(
+                manifest_data, {MemberName.SKOPS: b"model"}, destination=target
+            )
+    assert not list(tmp_path.glob(".mlbundle-*"))

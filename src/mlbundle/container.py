@@ -1,4 +1,4 @@
-"""The validated byte boundary used by inspection and future model APIs."""
+"""The validated byte boundary shared by inspection and model APIs."""
 
 import struct
 import zlib

@@ -1,5 +1,6 @@
 """Deterministic container writing; the writer owns integrity records."""
 
+import errno
 import os
 import stat
 import tempfile
@@ -68,10 +69,44 @@ def _atomic_write(destination: Path, data: bytes, overwrite: bool) -> None:
             temporary.replace(destination)
         else:
             # Publish the complete file without a check/replace race.
-            os.link(temporary, destination)
+            try:
+                os.link(temporary, destination)
+            except OSError as error:
+                unsupported = {
+                    errno.ENOSYS,
+                    errno.ENOTSUP,
+                    errno.EOPNOTSUPP,
+                    errno.EPERM,
+                    errno.EXDEV,
+                }
+                if error.errno not in unsupported and getattr(
+                    error, "winerror", None
+                ) not in (1, 50, 1314):
+                    raise
+                _exclusive_write(destination, data)
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
+
+
+def _exclusive_write(destination: Path, data: bytes) -> None:
+    # Filesystems without hard links still get exclusive ownership; remove our
+    # destination on every failure, never a competing writer's existing file.
+    descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        stream = os.fdopen(descriptor, "wb")
+    except BaseException:
+        os.close(descriptor)
+        destination.unlink(missing_ok=True)
+        raise
+    try:
+        with stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except BaseException:
+        destination.unlink(missing_ok=True)
+        raise
 
 
 def _compress(data: bytes, cap: int) -> bytes:

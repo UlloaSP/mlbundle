@@ -151,3 +151,14 @@ def canonical_loads(
     except (ValueError, TypeError, UnicodeError, RecursionError):
         raise InvalidJSONError from None
     return cast(JsonValue, value)
+
+
+def canonical_value(
+    value: object, *, max_bytes: int = MANIFEST_BYTES, max_depth: int = JSON_DEPTH
+) -> JsonValue:
+    """Project native scalars/arrays to the same bounded JSON used for comparison."""
+    return canonical_loads(
+        canonical_dumps(value, max_bytes=max_bytes, max_depth=max_depth),
+        max_bytes=max_bytes,
+        max_depth=max_depth,
+    )
