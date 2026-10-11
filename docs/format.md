@@ -2,145 +2,15 @@
 
 This document defines the wire contract for `format_name = "mlbundle"` and
 `format_version = "1"`. Format versions are independent of package versions.
-"Must" denotes a compatibility or security requirement. Phases 1–4a implement
+"Must" denotes a compatibility or security requirement. Phases 1–4b implement
 the manifest, encoding, limits, secure container, metadata-only inspection,
-public export/load and the scikit-learn and XGBoost adapters. The ONNX adapter,
-schema inference and the CLI remain unimplemented.
+public export/load and the sklearn, XGBoost and ONNX adapters.
+Schema inference and the CLI remain unimplemented.
 
-## Container and resource limits
-
-A bundle is one ZIP file with the `.mlbundle` extension. Its root contains only
-the case-sensitive names below. Names are ASCII, with no directory entries,
-slashes, backslashes, `..`, NULs or alternative spellings. Unknown or duplicate
-names, symlinks, other non-regular entries, encrypted entries, unsupported
-compression methods, multi-disk archives and malformed ZIP metadata must be
-rejected. Only ZIP_STORED (method 0) and ZIP_DEFLATED (method 8) are allowed.
-ZIP64 is allowed within the limits, including forced ZIP64 local records for
-small files. Only a single ZIP64 extra field (ID 0x0001) is permitted in a header,
-and it must contain exactly the replacement values required by that header's
-sentinel fields, in ZIP order. Reject other, redundant, duplicate or malformed
-extra fields. ZIP64 end records have the standard fixed 44-byte body, with no
-extensible data sector; their locator and ordinary end record must agree.
-
-Data descriptors are allowed for streaming ZIP writers. Accept the signed and
-unsigned 32-bit and ZIP64 forms only when CRC and both sizes match the central
-directory. With a descriptor, local CRC/sizes may be zero or match the directory;
-ZIP64 sentinel sizes must be resolved through the local ZIP64 extra field.
-Without a descriptor, local CRC and sizes must match the directory exactly.
-The version-needed field is 10 (stored only), 20 or 45; ZIP64 headers use 45.
-Allowed general-purpose flags are the UTF-8 name flag, the descriptor flag and
-the two deflate-option bits (deflated entries only). Reject all other flags.
-
-Reject archive and member comments. The first local header starts at byte zero;
-local records, payloads and any descriptors cover the archive contiguously up
-to the central directory. The directory ends exactly at the end record or
-ZIP64 end record, followed only by its locator and the ordinary end record.
-Reject prepended/appended bytes, gaps, overlapping records and unlisted local
-records. Central entries may list local records in another order. These rules
-exclude polyglot wrappers and metadata the mlbundle writer never produces.
-File attributes may omit a Unix file type (as ordinary ZIP writers do); an
-explicit type must be regular, and the DOS directory bit must be clear.
-
-Readers must bound the source before buffering it: stat filesystem paths and
-read streams in bounded chunks with at most one excess byte for detection.
-Streams are consumed from their current position and are not closed by mlbundle.
-Readers must read named members into memory, never extract them to disk. They
-must inspect directory metadata and enforce limits before reading, allocating
-member buffers or loading models; they must also limit actual bytes produced
-during decompression, rather than trusting directory sizes. Reject inconsistencies
-between headers, directory entries, actual sizes and ZIP CRC checks. No path,
-module name, trusted-types list or external file reference can select loading
-code. ONNX external tensor data is unsupported: the original file must be
-self-contained. Native model formats do not sandbox their parsers or execution.
-Decompression uses chunks of at most 64 KiB and a one-byte lookahead beyond the
-declared output size; the lookahead is rejected before it is retained. Require
-the exact output size, CRC and complete deflate stream, with no trailing packed
-data. Declared sizes are checked against member, aggregate and ratio limits first.
-
-One MiB is 1,048,576 bytes. `ArchiveLimits` defines these defaults and ceilings:
-
-| Limit | Maximum |
-| --- | ---: |
-| Member count, including manifest | 5 (minimum configured value 2) |
-| Entire archive, including headers | 512 MiB |
-| Sum of compressed member sizes | 512 MiB |
-| Any uncompressed member | 512 MiB |
-| Sum of all uncompressed member sizes, including manifest | 1 GiB |
-| Each member's uncompressed/compressed ratio | 200 |
-| `manifest.json` | 8 MiB |
-| `structure.json` | 256 MiB |
-| `schema.json` | 16 MiB |
-| `samples.json` | 16 MiB |
-| JSON container nesting depth | 32 |
-
-The effective member cap is the smaller of its specific cap and the general
-member cap. Check the ratio as `uncompressed_size <= 200 * compressed_size`;
-an empty member with both sizes zero is exempt, a nonempty member with compressed
-size zero is invalid. This applies to stored members too. The mlbundle writer
-always uses deflate level 6 with the RLE strategy and rejects inputs exceeding the ratio ceiling;
-the reader also accepts stored entries from other tools. These limits admit
-forests whose native model is tens of MiB and whose JSON tree arrays are larger.
-Callers may lower archive limits, never raise the ceilings in version 1.
-Consumers still need process memory, CPU and prediction limits; a 1 GiB byte
-budget is not a guarantee that a parsed model uses at most 1 GiB of RAM.
-
-### Container functions and inspection
-
-The internal functions are `mlbundle.container.read_container(source, *,
-limits=None)` and `mlbundle.writing.write_container(manifest, members, *,
-destination=None, overwrite=False, limits=None)`. Reading returns a validated
-`Manifest` and a dictionary of original uncompressed bytes keyed by `MemberName`,
-including `manifest.json`. Source is a path, bytes or a binary stream. It never
-deserializes a native model or resolves an adapter.
-
-Writing accepts a `Manifest` or JSON-ready manifest parts, plus non-manifest
-member bytes. The writer computes and replaces all integrity records; callers
-must already set the model pairing and optional references. JSON-ready parts
-may omit integrity. Optional JSON members pass the bounded canonical decoder;
-their original bytes are preserved. The container validates JSON syntax and
-bounds, while later model/schema APIs own semantic structure and schema checks.
-Metadata inspection does not infer whether a model requires structure.
-
-The writer emits manifest, model, schema, structure, samples in that fixed order,
-omitting absent members. ZIP timestamps are 1980-01-01 00:00:00, the creating
-platform is Unix, permissions are regular-file 0600, compression is deflate
-level 6 with the RLE strategy, memory level 8 and 64 KiB input chunks, and
-extra fields/comments are empty. RLE avoids the different general match-search
-algorithms used by zlib and zlib-ng across platforms; it compresses repeated-byte
-runs and uses Huffman coding for other bytes. It creates no descriptors or ZIP64
-records within the version 1 ceilings. Identical inputs produce identical bytes
-on Windows and Linux; the compression implementation is the standard zlib
-provided by Python (byte identity across different future zlib implementations
-is not a format requirement).
-Compression output is bounded by the remaining archive and aggregate compressed
-budgets, reserving the fixed header/directory overhead before compression.
-
-Writing returns bytes and optionally publishes them to a path after validating
-the complete archive through the reader. Publication uses a flushed temporary
-file in the destination directory: atomic replacement when overwrite is true,
-or atomic hard-link creation otherwise, followed by temporary-file cleanup.
-When hard links are unsupported, publication uses exclusive destination creation,
-flush and fsync, removing its own destination on failure. This fallback prevents
-overwrites and leaves no partial file after a reported failure, but the destination
-is visible while copying; it is not an atomic visibility guarantee or crash-safe
-publication. Other filesystem errors propagate. Existing
-destinations raise `FileExistsError` unless overwrite is explicitly requested;
-the no-overwrite decision also holds if another writer wins a race.
-
-Public `mlbundle.inspect(source, *, limits=None)` returns `MetadataView` with
-the manifest and fixed-order member listing. It validates ZIP records, limits,
-manifest, member hashes and JSON syntax without importing model libraries.
-It cannot attest that model-derived claims or structure match the model; only
-the full validating `load` can do that. The current export API includes neither
-schema nor samples; future sample export must require explicit user intent.
-
-Container/layout/CRC inconsistencies raise `InvalidContainerError`; resource
-ceilings raise `LimitExceededError`. Invalid manifest JSON or typed fields raise
-`InvalidManifestError`; unknown version strings under the mlbundle identity
-raise `UnsupportedFormatVersionError` before validating version-specific fields.
-Invalid optional JSON raises `InvalidJSONError`. Member hash or integrity-size
-disagreement raises `IntegrityMismatchError` naming the allowed member.
-Messages do not include untrusted names, JSON blobs or ZIP exception text.
+The normative container rules are in [Container and resource limits](format-container.md).
+The normative structure, adapter and result rules are in [Adapters and structure](format-adapters.md).
+The implemented ONNX mapping and validation rules are in [ONNX](format-onnx.md).
+These sections are part of this version 1 contract.
 
 ## Members
 
@@ -200,7 +70,7 @@ Identity fields are declarations, not proof of provenance.
 | `serialization` | `"skops"`, `"ubjson"`, `"onnx"` | Must pair respectively with the three libraries and model members above. |
 | `estimator_class` | nonempty string, at most 256 characters | Verified class name (not a Python import path); ONNX uses the adapter's fixed `"ONNX"` identity. Never instantiate from this field. |
 | `kind` | `"classifier"`, `"regressor"` | Verified prediction kind. |
-| `hyperparameters` | object, at most 4,096 top-level keys | Verified JSON projection of the supported estimator's parameters. Sklearn uses `get_params(deep=True)`; other adapters use their recoverable native parameter representation. ONNX uses `{}`. At most 1 MiB canonical bytes and depth 16. |
+| `hyperparameters` | object, at most 4,096 top-level keys | Verified JSON projection of the supported estimator's parameters. Sklearn uses `get_params(deep=True)`; other adapters use their recoverable native parameter representation. ONNX records graph signatures and metadata properties as defined in [ONNX](format-onnx.md), without inventing training settings. At most 1 MiB canonical bytes and depth 16. |
 | `n_features` | integer 1–100,000 | Verified ordered input width. |
 | `n_classes` | null or array of integers 1–100,000 | Verified per-output class counts; classifier array length equals `n_outputs`, regressor value is null. |
 | `n_outputs` | integer 1–1,024 | Verified target output count. Probability columns are classes, not separate target outputs. |
@@ -279,14 +149,15 @@ file, not the historical truth of the author's original-label mapping. Native
 wrapper `predict` still returns encoded indices; the bundle predictor returns
 probabilities aligned with the bound labels.
 
-For a future ONNX graph with no native labels, extraction may return null labels.
+For an ONNX graph with no native labels, extraction may return null labels.
 The shared pipeline then uses supplied labels, or generates `0..N-1` per output,
 and verifies their lengths against native class counts. Such labels are
 declarations, not verified original labels; the ONNX bytes must stay unchanged.
 Graphs exposing labels must return them as claims for exact comparison. ONNX
 must reject supplied labels that disagree with native labels; the shared resolver
-enforces this comparison. The ONNX implementation must establish kind and class
-counts independently of labels.
+enforces this comparison. Kind is verified from the supported output layouts; class counts come from
+fixed probability width or native labels for an unknown width/ZipMap.
+See [ONNX kind and labels](format-onnx.md#kind-and-labels).
 
 ### `environment`
 
@@ -392,191 +263,6 @@ Schema, training dtypes, frame-origin names, target name, training environment,
 user metadata, identity and samples are not verified against the model; they must
 still pass their own validation and integrity checks. Inspection verifies format
 and integrity only, and must never attest that model claims match the model.
-
-## `structure.json`
-
-Structure is never embedded in the manifest. It is a JSON object with required
-`family` and `feature_importances` fields, plus exactly the family fields below.
-`feature_importances` is null or an ordered numeric array of length `n_features`.
-Numbers use the canonical encoding, including non-finite tags. Arrays and tree
-lists preserve native order; no pruning, rounding, flattening of output/class
-dimensions or display-oriented simplification is permitted.
-
-| `family` | Additional required fields |
-| --- | --- |
-| `decision_tree` | `tree`: one tree object. |
-| `tree_ensemble` | `estimator_shape`: original shape of the ensemble's estimator collection; `trees`: row-major flattened list of tree objects. Product of shape equals list length. A one-dimensional collection uses `[N]`. |
-| `linear` | `coef`, `intercept`: native numeric arrays/scalars converted without reshaping. |
-| `xgboost` | `trees`: ordered list of parsed JSON tree dumps, each from `get_dump(dump_format="json", with_stats=True)`. Retain all native fields, including node IDs, split/leaf values, missing-child IDs, gain/cover and children. Do not embed dump strings. |
-| `feature_importances` | No additional fields; the importance array must be non-null. |
-
-A scikit-learn tree object has exactly `node_count` (positive integer),
-`n_features` (positive integer), `n_outputs` (positive integer), `n_classes`
-(native per-output class-count array), and these native `tree_` arrays:
-`children_left`, `children_right`, `feature`, `threshold`, `value`, `impurity`,
-`n_node_samples`, `weighted_n_node_samples`. Except `value`, each array's length
-is `node_count`; `value` retains its native `[node, output, class/value]` shape.
-Preserve leaf and undefined-feature sentinel values, and sklearn's native value
-normalization for the installed version. Do not reinterpret `value` as counts.
-Trees use each constituent tree's own dimensions, not an ensemble-wide guess.
-
-Select family in this precedence: a single `tree_`, a tree ensemble, linear
-coefficients/intercept, then feature importances only. An ensemble exposing
-unsupported non-tree constituents must not masquerade as a supported tree
-ensemble. Unsupported or oversized mandatory structure fails export rather than
-being silently omitted. ONNX graph visualizations and additional structure
-families require a deliberate future contract change.
-
-Sklearn `Pipeline` returns null structure in version 1. Its final estimator
-operates on transformed features; version 1 has no input transformation mapping,
-so no final-step tree or coefficient member is emitted. Claims, names and
-predictions still describe the complete pipeline. Standalone DecisionTree,
-RandomForest, ExtraTrees, GradientBoosting, LogisticRegression, LinearRegression
-and Ridge retain their native structures as specified above. HistGradientBoosting
-is currently rejected: its `TreePredictor` storage is not on mlbundle's trust
-allowlist. No approximate trees are emitted for it.
-
-## Adapter and result contracts
-
-The internal `Adapter` protocol in `mlbundle.adapters` owns recognition,
-export preparation, serialization, loading, claim extraction, structure
-extraction and a `Predictor`. `prepare_export(model, ExportDeclarations)` returns
-the object to serialize and extract, leaving the caller's model unchanged.
-`ExportDeclarations` is a strict frozen record with `class_labels` only. Adapters
-bind or reject declarations according to their native contracts; neither
-`deserialize` nor extraction receives manifest fields. The shared pipeline
-resolves labels only when extraction returns null labels for a classifier.
-The registry imports only the three constant mlbundle module paths `_sklearn`,
-`_xgboost`, `_onnx`, and constructs their module's `Adapter` class. Library
-imports must be lazy, with dependency failures naming the extra to install.
-Missing adapter modules raise `AdapterNotImplementedError` on load; export skips
-unimplemented adapters while looking for one that recognizes its input. A missing
-optional dependency reports `pip install "mlbundle[EXTRA]"`. An unrecognized
-object raises `UnsupportedModelError`.
-
-`export(model, destination, *, feature_names=None, class_labels=None, target_name=None, metadata=None,
-overwrite=False, limits=None)` returns a small `MetadataView` of the written
-bundle. It serializes, extracts, reloads and compares both claims and structure
-before writing. Model-exposed names take precedence over supplied names. It
-captures distribution metadata, including `claims.onnx` in the environment for
-the future ONNX adapter. No unimplemented schema/data parameters are accepted.
-`load(source, *, limits=None)` validates the container, resolves its closed enum,
-deserializes, recomputes claims/structure and compares canonical bytes before
-constructing a `LoadedBundle`. `ClaimMismatchError` identifies the claim without
-echoing values; absent/present structure disagreements are checked separately,
-including a present JSON null. Malformed native payloads raise `InvalidModelError`,
-an `MLBundleError` subclass, without native exception text.
-
-The sklearn adapter uses only `skops.io.dumps/loads`. Its fixed supplemental
-trusted list is exactly `["sklearn.tree._tree.Tree"]`, for numeric node storage
-in the supported tree families; it adds no callable, arbitrary class or I/O type.
-Skops' own defaults remain part of the dependency trust boundary. Dumped bytes
-are audited with `get_untrusted_types`; every type outside the list is rejected
-at export and independently at load. XGBoost estimators inside sklearn pipelines
-are rejected (`xgboost.core.Booster`, `xgboost.sklearn.XGBClassifier` are untrusted).
-The native XGBoost adapter owns standalone XGBoost loading.
-The nested skops archive is bounded before parsing; every schema-referenced
-numeric array header is checked regardless of filename suffix. Headers must
-match the stored byte sizes and cannot use object-array loading or zero-itemsize
-dtypes. Tree constructor dimensions/class counts and state-array shapes are
-bounded before native construction. Loaded tree dimensions, child/feature indices,
-reachability and depth are checked before native feature-importance traversal or
-prediction, and input/output/class counts must agree with owning estimators.
-Ensemble feature mappings must address the parent input width. Every loaded root object is
-checked again for classifier/regressor identity, fitted state and probability
-support. Multilabel classifiers with independent positive-class columns and
-classifier chains are rejected because their probabilities cannot satisfy the
-output-major contract; ordinary multi-output probability-matrix lists are supported.
-
-### Implemented XGBoost mapping
-
-Only exact `XGBClassifier` and `XGBRegressor` classes are supported. Subclasses,
-ranking, survival, custom objectives, raw `Booster`, and the deprecated
-`XGBRFClassifier`/`XGBRFRegressor` wrappers are rejected. Raw boosters do not
-carry enough wrapper identity or custom-objective history for this narrow
-training-side boundary; RF wrappers add no required v0.1 contract. Supported
-classifier objectives are `binary:logistic` and `multi:softprob`. Supported
-regression objectives are `reg:squarederror`, `reg:absoluteerror`,
-`reg:pseudohubererror`, `reg:squaredlogerror`, `reg:logistic`, `count:poisson`,
-`reg:gamma`, and `reg:tweedie`. Only one target is supported. Binary classifiers
-return two probability columns; softmax-only objectives are rejected.
-
-Only native `gbtree` storage is admitted. In XGBoost 3.4.1, the deprecated `dart`
-option uses `gbtree` storage with dropout; that representation is supported and
-all native dump statistics are retained. Legacy native `dart` storage is rejected.
-`gblinear` is rejected: its multi-class coefficient/importance dimensions and
-deprecated format are outside this phase's tree contract. There is no silently
-omitted structure for an admitted XGBoost model.
-
-Serialization is exclusively `bytes(booster.save_raw(raw_format="ubj"))` and
-`load_model(bytearray(data))`, in memory. Class selection uses the closed adapter
-map and the `mlbundle` booster attribute, never the manifest. That attribute is
-exactly `{ "estimator_class": CLASS, "class_labels": LABELS_OR_NULL,
-"prediction": SETTINGS }` encoded canonically. `SETTINGS` has exactly `missing`
-(a finite binary64 value or the canonical NaN tag), `importance_type` (one of
-`gain`, `weight`, `cover`, `total_gain`, `total_cover`; omitted native option
-normalizes to `gain`), and `enable_categorical` (boolean). These settings survive
-loading and are compared with the wrapper. Other booster attributes, including
-`best_iteration`, survive unchanged; prediction respects native best iteration.
-
-`hyperparameters` has exactly these four keys:
-
-```json
-{
-  "learner_model_param": {"base_score":"[5E-1]","boost_from_average":"1","num_class":"0","num_feature":"4","num_target":"1"},
-  "objective": {"name":"binary:logistic","reg_loss_param":{"scale_pos_weight":"1"}},
-  "gradient_booster": {"name":"gbtree","gbtree_model_param":{"num_parallel_tree":"1","num_trees":"3"}},
-  "prediction": {"missing":{"$float":"nan"},"importance_type":"gain","enable_categorical":true}
-}
-```
-
-The first three records are a projection of the parsed native `save_config()`:
-retain every field in `learner_model_param`, `objective`, and
-`gradient_booster.gbtree_model_param`, plus the booster name, with native value
-types/spellings unchanged. `prediction` is the bound wrapper settings record.
-Neither `get_params()` nor the whole config survives native model I/O. Training
-settings such as learning rate, max depth, seed, threads and metrics are therefore
-not claimed or reconstructed. Export compares this projection and the complete
-structure before and after making the native copy, and again through the shared
-serialization round trip. Unsupported unrecoverable claims fail publication.
-
-Booster feature names and feature types become verified claims; absent values
-are null. Structure is exactly the `xgboost` family above, with the wrapper's
-native float32-normalized importance vector for the bound importance type.
-Prediction values and structure scalars promote float32 exactly to binary64.
-Claim/structure comparisons use exact canonical bytes; probability row-sum
-validation allows `rtol=1e-6`, `atol=1e-7` for float32 arithmetic.
-
-Before native parsing, the adapter bounds bytes, recognizes the native UBJSON
-prefix, validates the complete bounded document, and checks feature/class/target,
-tree and node-array dimensions, output-group indices, iteration pointers and
-child/feature indices. Numeric arrays remain
-byte views. At most 100,000 trees are supported; reachable tree depth is at most
-14 so the complete nested dump fits the existing JSON depth ceiling of 32.
-Cycles, aliases and unreachable nodes are rejected. Native dump generation is
-count-bounded; total dump bytes and canonical structure bytes must also fit
-256 MiB and caller-selected lower limits. No truncation is permitted. These
-checks do not sandbox the native parser or cap its internal allocations.
-
-Predictors accept adapter-supported tabular objects without a core pandas/numpy
-dependency. Regressors return `list[float]` for a single output or row-major
-`list[list[float]]` for multiple outputs. Classifiers return row-major
-`list[list[float]]` for one output or an output-major list of those matrices for
-multiple outputs, aligned with class labels. Validate probability dimensions,
-finite probabilities, range and row sums in the adapter. Classifier prediction
-uses `predict_proba`; regressor prediction uses `predict`. Unsupported probability
-or regression contracts fail rather than synthesizing outputs.
-
-`MetadataView` carries `manifest` and a tuple of `MemberName` values including
-the manifest; it has no model. `LoadedBundle` additionally carries the exact
-native object, a uniform predictor, optional schema/structure/sample values, and
-properties for kind, library, class name, ordered feature names and origin, and
-output-major original class labels. Calling the prediction method for the wrong
-kind raises a bounded `ValueError`. Result records and typed models prevent field
-reassignment, but nested JSON values and the native model are not deeply frozen.
-Construction itself performs no model validation; `load` supplies the loaded-result
-guarantee. Consumers must not mutate a validated
-model and continue treating its original metadata as verified.
 
 ## Versioning and integrity
 

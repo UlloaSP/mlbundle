@@ -226,3 +226,10 @@ def oversized_descriptor(parts):
     raw[directory:directory] = b"PK\x07\x08" + b"x" * 4092
     struct.pack_into("<I", raw, len(raw) - 6, directory + 4096)
     return BoundedSliceBytes(raw)
+
+
+@pytest.fixture
+def xgb_data():
+    from sklearn.datasets import load_iris
+
+    return load_iris(return_X_y=True)

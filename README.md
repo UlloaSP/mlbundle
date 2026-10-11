@@ -5,11 +5,11 @@ its internal structure in one compressed `.mlbundle` file. The same package
 writes bundles on the training machine and reads them with validation in a runtime.
 Local schema inference will be added in a later phase.
 
-**Status: pre-alpha, Phase 4a.** The [version 1 format contract](docs/format.md),
+**Status: pre-alpha, Phase 4b.** The [version 1 format contract](docs/format.md),
 strict manifest models, canonical JSON, integrity helpers, environment capture,
 adapter/result contracts, secure container reading/writing and public `inspect`
-and public sklearn/XGBoost `export`/`load` are implemented and tested. The ONNX
-adapter, schema inference and the CLI are still missing. Nothing has been
+and public sklearn/XGBoost/ONNX `export`/`load` are implemented and tested.
+Schema inference and the CLI are still missing. Nothing has been
 published to PyPI.
 
 ## Why it exists
@@ -45,7 +45,7 @@ operation works without deserializing the model or importing model libraries.
 
 Hashes detect corruption; they do not authenticate the author or prevent
 deliberate tampering. Signing is outside the project's scope. These guarantees
-cover container validation and sklearn/XGBoost claim recomputation; native parsers and
+cover container validation and all three adapters' claim recomputation; native parsers and
 prediction still require a consuming runtime's isolation and resource limits.
 See [SECURITY.md](SECURITY.md) for the threat model and vulnerability reporting.
 
@@ -116,6 +116,44 @@ objectives in [docs/format.md](docs/format.md) are covered. Native gbtree/dropou
 is supported; gblinear, RF wrappers, raw boosters, ranking, survival, custom
 objectives and multi-target models are rejected.
 
+Existing self-contained ONNX files travel unchanged, without a converter. Export
+also accepts bytes or a ModelProto (serialized once). This executable example
+creates a small probability graph; production callers can pass their existing file:
+
+```python
+from pathlib import Path
+from onnx import TensorProto, helper
+from mlbundle import export, load
+
+graph = helper.make_graph(
+    [helper.make_node("Softmax", ["features"], ["probabilities"], axis=1)],
+    "classifier",
+    [helper.make_tensor_value_info("features", TensorProto.FLOAT, [None, 2])],
+    [helper.make_tensor_value_info("probabilities", TensorProto.FLOAT, [None, 2])],
+)
+model = helper.make_model(
+    graph, opset_imports=[helper.make_opsetid("", 21)], ir_version=10
+)
+original = model.SerializeToString()
+Path("trained.onnx").write_bytes(original)
+export("trained.onnx", "onnx.mlbundle", class_labels=[["cold", "warm"]])
+bundle = load("onnx.mlbundle")
+assert bundle.native_model.data == original
+assert bundle.class_labels == [["cold", "warm"]]
+assert bundle.predict_proba([[0.0, 0.0]]) == [[0.5, 0.5]]
+```
+
+ONNX native results contain the original `data` and a CPU `session` for native
+inference. Numeric matrix inputs and one-input-per-column mixed numeric graphs
+are supported. Classifiers return tensor or ZipMap probabilities; regressors
+return one value per row. Kind is inferred from supported output layouts. Native
+labels are verified; `class_labels=` on label-free graphs is a count-checked
+declaration, and omitted labels become encoded indices. No labels are bound into
+the unchanged file. Ambiguous layouts, external data, custom domains/functions
+and training/runtime configuration are rejected before session creation.
+ONNX has no visualization structure. See [ONNX support](docs/format-onnx.md) for
+exact shapes, claim fields and native dependency limits.
+
 ## Development
 
 Use Python 3.14 and [uv](https://docs.astral.sh/uv/). The Python minimum follows
@@ -138,9 +176,8 @@ uv build
 The default dev group installs all model extras. Base consumers can use
 `uv sync --no-dev` without installing model libraries. The committed `uv.lock`
 fixes the development versions of scikit-learn, skops, XGBoost, ONNX and ONNX
-Runtime to the target MLSuite runtime baseline; this is not yet evidence of
-compatibility for the future ONNX adapter; sklearn/XGBoost compatibility is exercised by
-the round-trip tests. Pandas is a development dependency for DataFrame tests,
+Runtime to the target MLSuite runtime baseline; all three adapters are exercised
+by the round-trip tests. Pandas is a development dependency for DataFrame tests,
 not a core runtime dependency. `uv run pytest`
 produces terminal and XML coverage reports and enforces an 80% minimum. CI runs
 lint, type checks, and Python 3.14 tests on Ubuntu and Windows. `uv build` creates
