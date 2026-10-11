@@ -1,10 +1,13 @@
 # Security policy
 
-mlbundle is pre-alpha. Phase 1 implements strict manifest validation and contract
-helpers; it has no archive reader, writer or model adapters. The version 1
-contract is defined in [docs/format.md](docs/format.md). The requirements below
-define the security boundary later implementation must enforce; they are not
-reader guarantees provided by today's code.
+mlbundle is pre-alpha. Phases 1 and 2 implement strict manifest validation,
+contract helpers, secure container reading/writing and metadata-only `inspect`.
+The container validates ZIP/ZIP64 layout, bounds sources and actual decompression,
+checks CRC and member integrity, and rejects unsafe members and polyglot wrappers.
+The writer publishes complete validated files atomically. The version 1 contract
+is defined in [docs/format.md](docs/format.md). Model adapters and public
+export/load are not implemented: requirements involving model loading, trusted
+types and claim recomputation below remain obligations for later phases.
 
 ## Threat model
 
@@ -33,6 +36,10 @@ make a received file trustworthy.
   Reject unknown and duplicate members, names with path separators or `..`,
   symlinks and encrypted entries. Limit member count, compressed size,
   uncompressed size and compression ratio before allocating or loading content.
+- Validate local and central records and any data descriptors; require exact
+  decompressed sizes and CRC. Reject comments, non-ZIP64 extra fields and bytes
+  outside the contiguous ZIP layout. ZIP64 and validated streaming descriptors
+  are accepted within the same resource ceilings.
 - Verify each member's SHA-256 against the manifest and validate member sizes.
 - Validate the manifest strictly and reject unknown format versions.
 - Provide a metadata-only `inspect` operation that does not deserialize a model.

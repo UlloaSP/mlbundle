@@ -5,11 +5,12 @@ a trained model, a rich manifest, a locally inferred schema and model structure
 in one compressed `.mlbundle` file. It owns both writing and validated reading
 so that the format is defined once.
 
-Phase 1 defines the version 1 format contract, strict manifest models, canonical
-JSON, integrity helpers, environment capture and adapter/result contracts.
-No bundle API, archive reader, writer, model adapter or CLI exists yet. The rules
-below constrain later phases; they must not be described as implemented until
-code and tests prove them. `docs/format.md` owns the wire contract.
+Phases 1 and 2 implement the version 1 format contract, strict manifest models,
+canonical JSON, integrity helpers, environment capture, adapter/result contracts,
+secure container reading/writing and public metadata-only `inspect`.
+No public export/load API, model adapter, schema inference or CLI exists yet.
+Rules for later phases must not be described as implemented until code and tests
+prove them. `docs/format.md` owns the wire contract.
 
 ## What makes mlbundle special?
 
@@ -197,9 +198,12 @@ The conversation, issues, code, tests and final diff are the work record.
 
 ## How it works
 
-After training, the planned writer will infer the schema locally, extract the
-model's claims and structure, serialize the model in its native supported format
-and produce a zip with a closed member list: required `manifest.json`, exactly
+The container writer accepts serialized member bytes and a manifest or its
+JSON-ready parts, computes integrity records and produces a deterministic ZIP.
+It enforces the same limits and validation as the container reader and publishes
+paths atomically, requiring explicit overwrite. Future model export will infer
+schema locally, extract claims/structure and serialize through native adapters.
+The closed member list is: required `manifest.json`, exactly
 one of `model.skops`, `model.ubj` or `model.onnx`, optional `schema.json`, and
 `structure.json` when the supported model has extractable structure. Optional
 `samples.json` requires explicit user intent. No other members are allowed.
@@ -216,10 +220,11 @@ output. Model-exposed dtypes are verified separately from declared training dtyp
 The writer must test serialization/reloading and reject claims or structure that
 cannot survive the native round trip. Default safety ceilings may only be lowered.
 
-MLSuite will receive the file. The reader will validate the archive and
-manifest, check integrity, load through its closed adapter and recompute claims
-before model use. `inspect` will expose validated metadata without loading a
-model; it cannot attest that model-derived claims match the model.
+The container reader validates the archive, manifest, JSON bounds and integrity
+without loading a model. `inspect` exposes validated metadata and a member list
+without importing model libraries; it cannot attest that model-derived claims
+match the model. Future full loading for MLSuite must use a closed adapter and
+recompute claims before model use.
 
 ## Where code lives
 
@@ -235,7 +240,13 @@ model; it cannot attest that model-derived claims match the model.
 - `src/mlbundle/adapters.py` — adapter/predictor protocols and prediction output types.
 - `src/mlbundle/registry.py` — closed lazy imports of future `_sklearn`, `_xgboost`, `_onnx` modules; each provides an `Adapter` class.
 - `src/mlbundle/results.py` — metadata-only and loaded reader result types.
-- `docs/format.md` — version 1 format specification; container/adapters remain unimplemented.
+- `src/mlbundle/_container_rules.py` — shared source type, closed member sets/order and ceilings.
+- `src/mlbundle/_zip_directory.py` — bounded ZIP/ZIP64 directory and extra-field validation.
+- `src/mlbundle/_zip_members.py` — local headers/descriptors and bounded decompression with CRC.
+- `src/mlbundle/container.py` — source bounds, validated in-memory reading and integrity checks.
+- `src/mlbundle/writing.py` — integrity ownership, deterministic ZIP and atomic publication.
+- `src/mlbundle/inspection.py` — public metadata-only inspection without adapter resolution.
+- `docs/format.md` — version 1 wire specification; model adapters remain unimplemented.
 - `tests/` — one file per feature, with success and error cases together.
 - `pyproject.toml` and `uv.lock` — package metadata, tool configuration and lock.
 - `.github/workflows/ci.yml` — lint, types and cross-platform tests.
