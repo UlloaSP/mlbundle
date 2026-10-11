@@ -129,7 +129,7 @@ def test_multioutput(classifier, data, tmp_path):
     path = tmp_path / "multi.mlbundle"
     mlbundle.export(model, path, feature_names=list("abcd"))
     loaded = mlbundle.load(path)
-    assert loaded.manifest.model.n_outputs == 2 and loaded.feature_origin == "dataframe"
+    assert loaded.manifest.model.n_outputs == 2 and loaded.feature_origin == "declared"
     if classifier:
         assert loaded.class_labels == [[0, 1, 2], [0, 1]]
         assert all(

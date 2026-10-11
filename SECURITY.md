@@ -1,8 +1,9 @@
 # Security policy
 
-mlbundle is pre-alpha. Phases 1–4b implement strict manifest validation,
+mlbundle is pre-alpha. Phases 1–5 implement strict manifest validation,
 contract helpers, secure container reading/writing, metadata-only `inspect`,
-public export/load and the sklearn, XGBoost and ONNX adapters.
+public export/load, the sklearn, XGBoost and ONNX adapters, local schema inference
+and explicitly requested sample rows.
 The container validates ZIP/ZIP64 layout, bounds sources and actual decompression,
 checks CRC and member integrity, and rejects unsafe members and polyglot wrappers.
 The writer publishes complete validated files atomically where hard links work;
@@ -163,10 +164,22 @@ eliminate vulnerabilities in native parsers and dependencies. A consuming
 runtime still owns authentication, authorization, process isolation and
 execution resource limits.
 
-Training rows must stay on the training machine unless the user explicitly
-requests samples. Samples are real data; schemas, feature names and user
-metadata may also contain sensitive information. Users must review what they
-choose to share.
+Training frames are never serialized. Schema inference runs locally and includes
+column names, dtype strings, inferred kinds, nullability, categorical values
+(including unused categories), one-hot suffixes, dtype-based numeric steps and
+pair-axis metadata. It adds no numeric/date ranges, means, row counts, arbitrary
+text values or example rows. These declarations may still be sensitive and are
+not proof of the underlying training data. Native models, learned structure,
+class labels and user metadata can independently reveal training information.
+Omitting samples does not prevent model memorization or model-side disclosure.
+
+Only explicit `sample_rows=N` includes real feature rows: exactly the first N,
+without target or index. The schema/sample members have 16 MiB/depth-32 limits.
+Inspect and load validate closed shapes, feature mappings/row keys and report
+kind/labels without mlschema. Load also verifies native model claims; label-free
+ONNX original labels remain declarations. Consumers must treat schema and sample
+values as untrusted display/input data, never executable instructions.
+See [the exact data-derived contract](docs/format-schema.md) and review what is shared.
 
 ## Reporting a vulnerability
 

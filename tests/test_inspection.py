@@ -18,16 +18,36 @@ from mlbundle.writing import write_container
 
 
 def test_inspect_and_optional_json(manifest_data):
+    from mlbundle.canonical import canonical_dumps
+
     manifest_data["references"]["schema"] = "schema.json"
+    schema = {
+        "schema_version": "1",
+        "fields": [
+            {"kind": "text", "label": name, "required": True, "mappedTo": name}
+            for name in ("a", "b")
+        ],
+        "reports": [
+            {
+                "kind": "classifier",
+                "label": "Predicted class",
+                "mappedTo": "classifier",
+                "output": 0,
+                "labels": [1, "positive"],
+                "showClassProbabilities": True,
+            }
+        ],
+    }
     bundle = write_container(
         manifest_data,
-        {MemberName.SKOPS: b"model", MemberName.SCHEMA: b'{"fields":[],"reports":[]}'},
+        {MemberName.SKOPS: b"model", MemberName.SCHEMA: canonical_dumps(schema)},
     )
     view = inspect(bundle)
     assert isinstance(view, MetadataView)
     assert view.members == (MemberName.MANIFEST, MemberName.SKOPS, MemberName.SCHEMA)
     assert view.manifest.integrity[MemberName.SKOPS].size == 5
     assert not hasattr(view, "native_model")
+    assert view.schema == schema and view.samples is None
 
 
 def test_inspect_no_model_imports(manifest_data, tmp_path):
@@ -38,7 +58,7 @@ import sys
 from mlbundle import inspect
 view = inspect(sys.argv[1])
 assert view.manifest.model.library == "sklearn"
-for name in ("sklearn", "skops", "xgboost", "onnx", "onnxruntime", "numpy"):
+for name in ("sklearn", "skops", "xgboost", "onnx", "onnxruntime", "numpy", "pandas", "mlschema"):
     assert not any(key == name or key.startswith(name + ".") for key in sys.modules), name
 print("inspect imported no model libraries")
 """

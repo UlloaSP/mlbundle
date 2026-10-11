@@ -56,7 +56,7 @@ def test_roundtrip(kind, frame, names, xgb_data, tmp_path):
     assert np.array_equal(loaded.native_model.predict(inputs), model.predict(inputs))
     assert loaded.class_labels == (None if kind == "regression" else labels or [[0, 1]])
     assert loaded.feature_origin == (
-        "model" if frame else "dataframe" if names else "generated"
+        "model" if frame else "declared" if names else "generated"
     )
     if frame:
         assert loaded.manifest.features.model_dtypes == ["float"] * 4

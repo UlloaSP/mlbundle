@@ -209,6 +209,7 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
+    { name = "mlschema", marker = "python_full_version < '3.15'" },
     { name = "onnx" },
     { name = "onnxruntime" },
     { name = "scikit-learn" },
@@ -218,6 +219,9 @@ all = [
 onnx = [
     { name = "onnx" },
     { name = "onnxruntime" },
+]
+schema = [
+    { name = "mlschema", marker = "python_full_version < '3.15'" },
 ]
 sklearn = [
     { name = "scikit-learn" },
@@ -241,6 +245,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "mlschema", marker = "python_full_version == '3.14.*' and extra == 'all'", specifier = "==0.2.1" },
+    { name = "mlschema", marker = "python_full_version == '3.14.*' and extra == 'schema'", specifier = "==0.2.1" },
     { name = "onnx", marker = "extra == 'all'", specifier = ">=1.23.0" },
     { name = "onnx", marker = "extra == 'onnx'", specifier = ">=1.23.0" },
     { name = "onnxruntime", marker = "extra == 'all'", specifier = ">=1.30.0" },
@@ -254,7 +260,7 @@ requires-dist = [
     { name = "xgboost", marker = "extra == 'all'", specifier = ">=3.4.1" },
     { name = "xgboost", marker = "extra == 'xgboost'", specifier = ">=3.4.1" },
 ]
-provides-extras = ["sklearn", "xgboost", "onnx", "all"]
+provides-extras = ["sklearn", "xgboost", "onnx", "schema", "all"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -265,6 +271,19 @@ dev = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "ruff", specifier = ">=0.15.15" },
+]
+
+[[package]]
+name = "mlschema"
+version = "0.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pandas" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a2/97/b3295985c4250525069b86bf0eee31c211b3d35cebee5b995f64a35dcb58/mlschema-0.2.1.tar.gz", hash = "sha256:59f819d677fa662f9c620938a6bef7fd093a11dad5872e507e5035da723cdb9e", size = 56763, upload-time = "2026-06-18T11:21:12.225Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/56/4a/c4b8f535f3ea8cb60af7ab65f30c8dd2a7363768465a63fcccee72cc265f/mlschema-0.2.1-py3-none-any.whl", hash = "sha256:26ae50b7861d7bd907c5117498d384d003d8e2925dcaa14335add3d0bd7101ba", size = 36852, upload-time = "2026-06-18T11:21:11.292Z" },
 ]
 
 [[package]]

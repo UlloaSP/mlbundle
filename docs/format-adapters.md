@@ -63,12 +63,14 @@ unimplemented adapters while looking for one that recognizes its input. A missin
 optional dependency reports `pip install "mlbundle[EXTRA]"`. An unrecognized
 object raises `UnsupportedModelError`.
 
-`export(model, destination, *, feature_names=None, class_labels=None, target_name=None, metadata=None,
-overwrite=False, limits=None)` returns a small `MetadataView` of the written
+`export(model, destination, *, training_data=None, feature_names=None, class_labels=None,
+target_name=None, sample_rows=None, metadata=None, overwrite=False, limits=None)`
+returns a `MetadataView` of the written
 bundle. It serializes, extracts, reloads and compares both claims and structure
 before writing. Model-exposed names take precedence over supplied names. It
 captures distribution metadata, including `claims.onnx` in the environment for
-the ONNX adapter. No unimplemented schema/data parameters are accepted.
+the ONNX adapter. [Local schema export](format-schema.md) owns frame alignment,
+training dtypes, schema/report declarations and explicit sample selection.
 `load(source, *, limits=None)` validates the container, resolves its closed enum,
 deserializes, recomputes claims/structure and compares canonical bytes before
 constructing a `LoadedBundle`. `ClaimMismatchError` identifies the claim without
@@ -176,8 +178,9 @@ finite probabilities, range and row sums in the adapter. Classifier prediction
 uses `predict_proba`; regressor prediction uses `predict`. Unsupported probability
 or regression contracts fail rather than synthesizing outputs.
 
-`MetadataView` carries `manifest` and a tuple of `MemberName` values including
-the manifest; it has no model. `LoadedBundle` additionally carries the exact
+`MetadataView` carries `manifest`, a tuple of `MemberName` values including
+the manifest, and optional `schema` and `samples` JSON values; it has no model.
+`LoadedBundle` additionally carries the exact
 native object, a uniform predictor, optional schema/structure/sample values, and
 properties for kind, library, class name, ordered feature names and origin, and
 output-major original class labels. Calling the prediction method for the wrong

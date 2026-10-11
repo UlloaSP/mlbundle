@@ -16,6 +16,8 @@ class MetadataView:
 
     manifest: Manifest
     members: tuple[MemberName, ...]
+    schema: dict[str, JsonValue] | None = None
+    samples: list[dict[str, JsonValue]] | None = None
 
 
 @dataclass(frozen=True)

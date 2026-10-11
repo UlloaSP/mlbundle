@@ -1,15 +1,15 @@
 # mlbundle
 
-mlbundle is a Python library for packaging a trained model, a rich manifest and
-its internal structure in one compressed `.mlbundle` file. The same package
+mlbundle is a Python library for packaging a trained model, a rich manifest,
+locally inferred schema and structure in one compressed `.mlbundle` file. The same package
 writes bundles on the training machine and reads them with validation in a runtime.
-Local schema inference will be added in a later phase.
 
-**Status: pre-alpha, Phase 4b.** The [version 1 format contract](docs/format.md),
+**Status: pre-alpha, Phase 5.** The [version 1 format contract](docs/format.md),
 strict manifest models, canonical JSON, integrity helpers, environment capture,
 adapter/result contracts, secure container reading/writing and public `inspect`
 and public sklearn/XGBoost/ONNX `export`/`load` are implemented and tested.
-Schema inference and the CLI are still missing. Nothing has been
+Local schema inference, training dtypes and explicit samples are implemented.
+The CLI is still missing. Nothing has been
 published to PyPI.
 
 ## Why it exists
@@ -21,14 +21,14 @@ DataFrame. Loading those files can execute arbitrary code, the artifacts do not
 record the training environment, and training data leaves the user's machine
 just to infer a schema.
 
-mlbundle will compute the schema locally with
-[mlschema](https://github.com/UlloaSP/mlschema), record the model and training
-environment, and carry everything the runtime needs in one file. Training rows
-will be excluded unless the user explicitly asks to include samples.
+mlbundle computes the schema locally with
+[mlschema](https://github.com/UlloaSP/mlschema), records the model and training
+environment, and carries everything the runtime needs in one file. Training rows
+are excluded unless the user explicitly asks to include samples.
 
-The first version will support scikit-learn through skops, XGBoost through its
-native UBJSON format, and existing ONNX files without conversion. Model-library
-dependencies are optional extras (`sklearn`, `xgboost`, `onnx`, `all`), with lazy
+The first version supports scikit-learn through skops, XGBoost through its
+native UBJSON format, and existing ONNX files without conversion. Model and schema
+dependencies are optional extras (`sklearn`, `xgboost`, `onnx`, `schema`, `all`), with lazy
 adapter resolution. The design takes ideas from MLflow's versioned manifest and
 native model formats; it copies no MLflow code. mlbundle is MIT licensed.
 
@@ -70,7 +70,7 @@ Inspection validates format and integrity. It cannot attest that model-derived
 claims or structure match the model. `load` supplies that guarantee and returns
 the native model, predictor and metadata. Model-exposed feature names take
 precedence over `feature_names=`; otherwise those names are declarations with
-origin `dataframe`, or omitted names become `feature_1` through `feature_N`.
+origin `declared`, or omitted names become `feature_1` through `feature_N`.
 `target_name=` and `metadata=` record author declarations. Existing destinations
 require `overwrite=True`. Paths, bytes and binary streams are accepted by `load`.
 
@@ -81,7 +81,55 @@ LinearRegression, Ridge and scaler/classifier pipelines are covered by round-tri
 tests. Multi-output labels and probabilities retain output-major order. Pipeline
 structure is null because v1 does not map transformed features. Custom types,
 user functions, HistGradientBoosting and XGBoost steps inside sklearn pipelines
-are rejected. Export currently includes no training DataFrame, schema or samples.
+are rejected.
+
+For local schema inference, install `mlbundle[sklearn,schema]` on Python 3.14.
+Use the training frame with string column names in model input order:
+
+```python
+import pandas as pd
+from sklearn.tree import DecisionTreeClassifier
+from mlbundle import export, inspect, load
+
+training = pd.DataFrame(
+    {
+        "temperature": [0.0, 1.0, 0.1, 0.9],
+        "humidity": [1.0, 0.0, 0.9, 0.1],
+        "target": ["cold", "warm", "cold", "warm"],
+    }
+)
+features = training.drop(columns="target")
+model = DecisionTreeClassifier(random_state=7).fit(features, training["target"])
+export(model, "schema.mlbundle", training_data=training, target_name="target")
+view = inspect("schema.mlbundle")
+assert view.manifest.features.dtypes == ["float64", "float64"]
+assert view.schema["reports"][0]["labels"] == ["cold", "warm"]
+assert view.samples is None
+assert load("schema.mlbundle").schema == view.schema
+```
+
+Without `target_name`, the frame must contain only features. With a frame, a
+named target must exist and is excluded from inference and samples. Native
+names take precedence and must match frame columns in order; a model without
+names uses origin `dataframe`. `feature_names=` with a frame must agree exactly.
+One-hot binary columns such as `color__red`/`color__blue` share a category field
+using the same `__` convention as MLSuite. Schema is a declaration; load verifies
+its mappings and reports against the model's validated metadata.
+
+What leaves the machine: column names, dtype strings, inferred kinds,
+nullability, numeric steps from dtypes, category values (including unused ones),
+one-hot suffixes and pair-axis metadata, plus class labels and model metadata.
+Inference adds no numeric/date ranges, means, arbitrary text values or example
+rows. Category names can be sensitive. Native models and structure may themselves
+retain training information; omitting samples is not protection against memorization.
+
+`export(..., training_data=training, target_name="target", sample_rows=2)` explicitly
+includes the first two feature rows. **Samples are real data.** This option is
+off by default, requires a positive integer within the frame, and excludes the
+target and index. Missing values become null, timestamps ISO strings and NumPy/
+categorical scalars JSON values. Both members have a 16 MiB ceiling. See
+[the schema and sample contract](docs/format-schema.md) for exact shapes,
+conversion, reports per output and MLSuite's series presentation mapping.
 
 XGBoost supports fitted `XGBClassifier` and `XGBRegressor` tree wrappers, with
 native UBJSON stored and loaded entirely in memory. Train classifiers on encoded
@@ -157,10 +205,11 @@ exact shapes, claim fields and native dependency limits.
 ## Development
 
 Use Python 3.14 and [uv](https://docs.astral.sh/uv/). The Python minimum follows
-mlschema 0.2.1; source code must avoid syntax that requires Python 3.14 so the
+the development baseline; source code must avoid syntax that requires Python 3.14 so the
 supported range can be widened later. Pydantic v2 is the sole core runtime
 dependency, for strict manifest validation. Model libraries are optional;
-mlschema integration comes in Phase 5.
+mlschema is the lazy `schema` extra, included in `all`. Its current version
+supports Python 3.14 only; mlbundle's own Python range has no upper bound.
 
 ```shell
 uv python install 3.14
@@ -173,12 +222,14 @@ uv run pytest
 uv build
 ```
 
-The default dev group installs all model extras. Base consumers can use
+The default dev group installs all adapter and schema extras. Base consumers can use
 `uv sync --no-dev` without installing model libraries. The committed `uv.lock`
 fixes the development versions of scikit-learn, skops, XGBoost, ONNX and ONNX
 Runtime to the target MLSuite runtime baseline; all three adapters are exercised
-by the round-trip tests. Pandas is a development dependency for DataFrame tests,
-not a core runtime dependency. `uv run pytest`
+by the round-trip tests. The schema extra pins mlschema 0.2.1 from PyPI and brings
+pandas transitively; neither is a core dependency. Import and inspect require
+neither; load works without them, although native sklearn imports an installed
+pandas opportunistically. `uv run pytest`
 produces terminal and XML coverage reports and enforces an 80% minimum. CI runs
 lint, type checks, and Python 3.14 tests on Ubuntu and Windows. `uv build` creates
 local wheel and source archives; it does not publish them.

@@ -27,6 +27,7 @@ class SerializationFormat(StrEnum):
 class FeatureOrigin(StrEnum):
     MODEL = "model"
     DATAFRAME = "dataframe"
+    DECLARED = "declared"
     GENERATED = "generated"
 
 

@@ -5,13 +5,12 @@ a trained model, a rich manifest, a locally inferred schema and model structure
 in one compressed `.mlbundle` file. It owns both writing and validated reading
 so that the format is defined once.
 
-Phases 1–4b implement the version 1 format contract, strict manifest models,
+Phases 1–5 implement the version 1 format contract, strict manifest models,
 canonical JSON, integrity helpers, environment capture, adapter/result contracts,
 secure container reading/writing, public metadata-only `inspect`, export/load,
-and the scikit-learn, XGBoost and ONNX adapters. Schema inference and the CLI
-remain unimplemented.
-Rules for later phases must not be described as implemented until code and tests
-prove them. `docs/format.md` owns the wire contract.
+the scikit-learn, XGBoost and ONNX adapters, local schema inference, training
+dtypes and explicit samples. The CLI remains unimplemented.
+Rules for later phases require code and test proof before claiming implementation. `docs/format.md` owns the wire contract.
 
 ## What makes mlbundle special?
 
@@ -146,8 +145,8 @@ still preserve validation, security and reproducibility.
 
 ## Development
 
-Work from the repository root using `uv`. Python 3.14 is the minimum because
-mlschema 0.2.1 supports that version. Keep `uv_build` as the build backend.
+Work from the repository root using `uv` on Python 3.14. The optional `schema`
+extra uses mlschema 0.2.1 on 3.14 only. Keep `uv_build` as the build backend.
 
 ```shell
 uv python install 3.14
@@ -211,7 +210,9 @@ wrappers with closed probability/regression objectives and one target. Original
 class labels supplied through output-major `class_labels=` are bound to a native
 copy through an mlbundle-owned booster attribute and verified on load. Omitted
 labels use encoded indices; sklearn rejects this option because it owns classes_.
-Schema inference is future work; export currently includes no training rows.
+Local `training_data=` inference uses mlschema with `__`, excludes a named target,
+and records training dtypes. Only explicit `sample_rows=N` includes real rows.
+Schema/report and sample validation is shared by export, inspect and load.
 ONNX preserves path/bytes unchanged (ModelProto is serialized once), rejects
 external tensors, custom domains, functions and training/runtime configuration
 before a CPU session, and verifies graph signatures, metadata and environment
@@ -263,6 +264,9 @@ needs no library-specific shared pipeline edit.
 - `src/mlbundle/limits.py` — shared archive ceilings and specific member caps.
 - `src/mlbundle/canonical.py` — deterministic JSON encoding and bounded strict decoding.
 - `src/mlbundle/model_io.py` — library-independent public export/load, manifest construction and round-trip verification.
+- `src/mlbundle/training.py` — lazy local DataFrame alignment and schema inference.
+- `src/mlbundle/schema.py` and `_schema_fields.py` — closed schema/report declarations and reader cross-checks without mlschema.
+- `src/mlbundle/samples.py` — explicit feature-row selection and bounded cell conversion.
 - `src/mlbundle/_sklearn/` — skops trust/loading, parameter and claim extraction, native structure, nested payload bounds and validated prediction.
 - `src/mlbundle/_xgboost/` — closed wrappers/objectives, native UBJSON preflight/loading, label binding, recoverable config, complete tree structure and validated prediction.
 - `src/mlbundle/_onnx/` — bounded protobuf/graph validation, unchanged bytes, native signatures/labels, CPU sessions and tabular prediction.
@@ -280,7 +284,7 @@ needs no library-specific shared pipeline edit.
 - `src/mlbundle/container.py` — source bounds, validated in-memory reading and integrity checks.
 - `src/mlbundle/writing.py` — integrity ownership, deterministic ZIP and atomic publication.
 - `src/mlbundle/inspection.py` — public metadata-only inspection without adapter resolution.
-- `docs/format.md` — version 1 wire specification, with normative container, adapter/structure and ONNX sections in linked files.
+- `docs/format.md` — version 1 wire specification; linked container, adapter/structure, ONNX and schema/sample sections are normative.
 - `tests/` — one file per feature, with success and error cases together.
 - `pyproject.toml` and `uv.lock` — package metadata, tool configuration and lock.
 - `.github/workflows/ci.yml` — lint, types and cross-platform tests.
