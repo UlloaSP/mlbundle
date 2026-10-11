@@ -20,6 +20,7 @@ from .claims import (
     validate_labels,
 )
 from .contract import (
+    FORMAT_NAME,
     FORMAT_VERSION,
     MODEL_MEMBERS,
     FeatureOrigin,
@@ -175,6 +176,11 @@ class Manifest(ContractModel):
     def from_bytes(cls, data: bytes) -> Manifest:
         try:
             value = canonical_loads(data)
+            if not isinstance(value, dict) or value.get("format_name") != FORMAT_NAME:
+                raise InvalidManifestError
+            version = value.get("format_version")
+            if isinstance(version, str) and version != FORMAT_VERSION:
+                raise UnsupportedFormatVersionError
             return cls.model_validate_json(canonical_dumps(value))
         except (ValidationError, InvalidJSONError):
             raise InvalidManifestError from None

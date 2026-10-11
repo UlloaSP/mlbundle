@@ -26,6 +26,7 @@ from .errors import (
     UnsupportedFormatVersionError,
     UnsupportedModelError,
 )
+from .inspection import inspect
 from .integrity import IntegrityRecord
 from .limits import ArchiveLimits
 from .manifest import FeatureInfo, Manifest, MemberReferences, ModelInfo, TargetInfo
@@ -66,4 +67,5 @@ __all__ = [
     "UnsupportedFormatVersionError",
     "UnsupportedModelError",
     "__version__",
+    "inspect",
 ]

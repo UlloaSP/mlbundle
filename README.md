@@ -5,11 +5,11 @@ manifest, its input schema and its internal structure in one compressed
 `.mlbundle` file. The same package will write bundles on the training machine
 and read them with validation in a runtime.
 
-**Status: pre-alpha, Phase 1.** The [version 1 format contract](docs/format.md),
-strict manifest models, canonical JSON, integrity helpers, environment capture
-and adapter/result contracts are implemented and tested. No archive reader,
-writer, model adapter, public export/load/inspect API or CLI exists yet, and
-nothing has been published to PyPI.
+**Status: pre-alpha, Phase 2.** The [version 1 format contract](docs/format.md),
+strict manifest models, canonical JSON, integrity helpers, environment capture,
+adapter/result contracts, secure container reading/writing and public `inspect`
+are implemented and tested. No model adapter, public export/load API, schema
+inference or CLI exists yet, and nothing has been published to PyPI.
 
 ## Why it exists
 
@@ -33,19 +33,31 @@ native model formats; it copies no MLflow code. mlbundle is MIT licensed.
 
 ## Security model
 
-Bundles are untrusted input. The planned reader must reject unsafe zip members,
-enforce resource limits, validate the manifest and format version, and verify
-member hashes. It must use a closed set of model types and a trusted-types list
-owned by mlbundle, with no pickle, joblib or cloudpickle path. Model-derived
+Bundles are untrusted input. The container reader rejects unsafe ZIP members,
+enforces resource limits, validates the manifest and format version, and verifies
+member hashes. Future model loading must use a closed set of model types and a
+trusted-types list owned by mlbundle, with no pickle, joblib or cloudpickle path. Model-derived
 metadata and visualisation structures are claims: the reader must recompute
 them from the loaded model and reject mismatches. A metadata-only `inspect`
-operation must work without deserializing the model.
+operation works without deserializing the model or importing model libraries.
 
 Hashes detect corruption; they do not authenticate the author or prevent
 deliberate tampering. Signing is outside the project's scope. These guarantees
-are requirements for the future reader and adapters; today's contract helpers
-do not load or validate a ZIP archive or model.
+cover today's container validation; model loading and claim recomputation remain
+requirements for future adapters.
 See [SECURITY.md](SECURITY.md) for the threat model and vulnerability reporting.
+
+```python
+from mlbundle import inspect
+
+metadata = inspect("trained.mlbundle")
+print(metadata.manifest.model.library)
+print(metadata.members)
+```
+
+Inspection validates format and integrity. It cannot attest that model-derived
+claims or structure match the model. The internal container functions accept
+already serialized bytes; public model export and loading arrive in later phases.
 
 ## Development
 
