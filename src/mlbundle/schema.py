@@ -6,7 +6,7 @@ from pydantic import Field, JsonValue, ValidationError
 
 from ._base import ContractModel
 from ._schema_fields import OneHotField, SchemaField, SeriesField
-from .canonical import canonical_dumps, canonical_loads
+from .canonical import DecodedJSON, canonical_dumps
 from .claims import Label, ModelClaims
 from .contract import MemberName, ModelKind
 from .errors import InvalidSamplesError, InvalidSchemaError
@@ -118,7 +118,7 @@ def validate_samples(value: JsonValue, names: list[str]) -> list[dict[str, JsonV
 
 
 def read_declarations(
-    manifest: Manifest, members: dict[MemberName, bytes], limits: ArchiveLimits
+    manifest: Manifest, members: dict[MemberName, DecodedJSON], limits: ArchiveLimits
 ) -> tuple[dict[str, JsonValue] | None, list[dict[str, JsonValue]] | None]:
     schema = samples = None
     if (
@@ -132,20 +132,14 @@ def read_declarations(
                 "Schema features cannot contain the declared target."
             )
         schema = validate_schema(
-            canonical_loads(
-                members[MemberName.SCHEMA],
-                max_bytes=limits.member_bytes(MemberName.SCHEMA),
-            ),
+            members[MemberName.SCHEMA].value,
             manifest.features.names,
             manifest.verified_claims(),
             max_bytes=limits.member_bytes(MemberName.SCHEMA),
         )
     if MemberName.SAMPLES in members:
         samples = validate_samples(
-            canonical_loads(
-                members[MemberName.SAMPLES],
-                max_bytes=limits.member_bytes(MemberName.SAMPLES),
-            ),
+            members[MemberName.SAMPLES].value,
             manifest.features.names,
         )
     return schema, samples

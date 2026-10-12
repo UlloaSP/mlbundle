@@ -106,8 +106,12 @@ def verify_claims(expected: ModelClaims, actual: ModelClaims) -> None:
             raise ClaimMismatchError(name)
 
 
-def verify_structure(expected: JsonValue, actual: JsonValue) -> None:
-    if canonical_dumps(expected, max_bytes=STRUCTURE_BYTES) != canonical_dumps(
-        actual, max_bytes=STRUCTURE_BYTES
-    ):
+def verify_structure(expected: JsonValue, actual: JsonValue) -> bytes:
+    encoded = canonical_dumps(expected, max_bytes=STRUCTURE_BYTES)
+    verify_structure_bytes(encoded, actual)
+    return encoded
+
+
+def verify_structure_bytes(expected: bytes, actual: JsonValue) -> None:
+    if expected != canonical_dumps(actual, max_bytes=STRUCTURE_BYTES):
         raise ClaimMismatchError("structure")

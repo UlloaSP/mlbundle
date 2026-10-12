@@ -96,6 +96,12 @@ their original bytes are preserved. The container validates JSON syntax and
 bounds, while later model/schema APIs own semantic structure and schema checks.
 Metadata inspection does not infer whether a model requires structure.
 
+Internally, optional JSON members retain their validated values within one
+operation. Inspect/load reuse that decode for schema/sample checks, and load
+encodes the retained structure once for exact comparison with native extraction.
+There is no global cache or bundle-supplied validation record. Public export
+reuses the writer's complete container validation when returning metadata.
+
 The writer emits manifest, model, schema, structure, samples in that fixed order,
 omitting absent members. ZIP timestamps are 1980-01-01 00:00:00, the creating
 platform is Unix, permissions are regular-file 0600, compression is deflate
