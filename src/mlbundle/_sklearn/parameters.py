@@ -10,11 +10,17 @@ from mlbundle.canonical import canonical_value
 from mlbundle.errors import LimitExceededError, UnsupportedModelError
 from mlbundle.limits import HYPERPARAMETER_BYTES
 
+from .trusted import dtype_identifier, reference_identifier
+
 MAX_VISITS = 100_000
 
 
 def _parameter(
-    value: object, ancestors: frozenset[int], budget: list[int] | None = None
+    value: object,
+    ancestors: frozenset[int],
+    budget: list[int] | None = None,
+    *,
+    estimator_ref: bool = False,
 ) -> JsonValue:
     budget = [0] if budget is None else budget
     budget[0] += 1
@@ -28,12 +34,7 @@ def _parameter(
             raise UnsupportedModelError(
                 (f"{type(value).__module__}.{type(value).__name__}",)
             )
-        return {
-            "$estimator": {
-                "class": type(value).__name__,
-                "params": parameters(value, path, budget),
-            }
-        }
+        return _estimator(value, path, budget, estimator_ref)
     if isinstance(value, np.random.RandomState):
         return {"$random_state": canonical_value(value.get_state())}
     if isinstance(value, dict):
@@ -41,12 +42,36 @@ def _parameter(
             raise UnsupportedModelError(reason="Hyperparameter keys must be strings.")
         return {key: _parameter(item, path, budget) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
-        return [_parameter(item, path, budget) for item in value]
+        return [
+            _parameter(item, path, budget, estimator_ref=estimator_ref)
+            for item in value
+        ]
+    return _leaf(value)
+
+
+def _leaf(value: object) -> JsonValue:
+    if isinstance(value, np.dtype):
+        return {"$dtype": dtype_identifier(value)}
     if callable(value):
+        identifier = reference_identifier(value)
+        if identifier is not None:
+            return {"$type" if isinstance(value, type) else "$function": identifier}
         raise UnsupportedModelError(
             reason="Callable and type hyperparameters are unsupported."
         )
     return canonical_value(value, max_bytes=HYPERPARAMETER_BYTES, max_depth=16)
+
+
+def _estimator(value, ancestors, budget, reference) -> JsonValue:
+    # Named deep keys own step parameters; constructor lists retain routing/order.
+    if reference:
+        return {"$estimator_ref": type(value).__name__}
+    return {
+        "$estimator": {
+            "class": type(value).__name__,
+            "params": parameters(value, ancestors, budget),
+        }
+    }
 
 
 def parameters(
@@ -58,7 +83,12 @@ def parameters(
     return cast(
         dict[str, JsonValue],
         {
-            key: _parameter(value, ancestors, budget)
+            key: _parameter(
+                value,
+                ancestors,
+                budget,
+                estimator_ref=key in ("steps", "transformers", "transformer_list"),
+            )
             for key, value in model.get_params(deep=True).items()
         },
     )

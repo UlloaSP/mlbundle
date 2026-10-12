@@ -20,6 +20,7 @@ from .fitted import validate_fitted
 from .labels import validate_classes as _validate_classes
 from .payload import validate_payload
 from .prediction_state import prediction_state
+from .trusted import dtype_identifier
 
 _ARRAYS = (
     "children_left",
@@ -79,12 +80,8 @@ def validate_tree_storage(model: object) -> None:
         if id(value) in seen:
             continue
         seen.add(id(value))
-        if isinstance(value, Tree):
-            if type(value) is not Tree:
-                raise UnsupportedModelError(
-                    reason="Only exact native Tree storage is supported."
-                )
-            validate_tree(value)
+        if isinstance(value, (Tree, np.dtype)):
+            _native_storage(value)
         elif isinstance(value, dict):
             pending.extend(value.values())
         elif isinstance(value, (list, tuple)):
@@ -97,6 +94,17 @@ def validate_tree_storage(model: object) -> None:
             if isinstance(value, BaseEstimator):
                 _validate_owner(value)
             pending.extend(vars(value).values())
+
+
+def _native_storage(value) -> None:
+    if isinstance(value, np.dtype):
+        dtype_identifier(value)
+    elif type(value) is not Tree:
+        raise UnsupportedModelError(
+            reason="Only exact native Tree storage is supported."
+        )
+    else:
+        validate_tree(value)
 
 
 def _width(model: Any) -> int | None:

@@ -84,10 +84,11 @@ including a present JSON null. Malformed native payloads raise `InvalidModelErro
 an `MLBundleError` subclass, without native exception text.
 
 The sklearn adapter uses only `skops.io.dumps/loads`. Its fixed supplemental
-trusted list is exactly `sklearn.tree._tree.Tree`,
-`sklearn.neural_network._stochastic_optimizers.AdamOptimizer` and
-`sklearn.neural_network._stochastic_optimizers.SGDOptimizer`: numeric tree storage
-and the fitted MLP solver records. It adds no callable, arbitrary class or I/O type.
+trusted list includes `sklearn.tree._tree.Tree`,
+`sklearn.neural_network._stochastic_optimizers.AdamOptimizer`,
+`sklearn.neural_network._stochastic_optimizers.SGDOptimizer`, `numpy.dtype` and
+the exact score/NumPy function names in [the state contract](format-state.md).
+It adds no arbitrary class, callable or I/O constructor.
 Skops' own defaults remain part of the dependency trust boundary. Dumped bytes
 are audited with `get_untrusted_types`; every type outside the list is rejected
 at export and independently at load. XGBoost estimators inside sklearn pipelines
@@ -198,7 +199,8 @@ uses `predict_proba`; regressor prediction uses `predict`. Unsupported probabili
 or regression contracts fail rather than synthesizing outputs. Inputs must have
 rank two and the native feature width. Numeric inputs reject strings, complex
 values and infinities; sklearn/XGBoost permit NaN for native missing-value handling.
-A sklearn Pipeline with a fitted OneHotEncoder/OrdinalEncoder also admits strings;
+A sklearn Pipeline with a fitted OneHotEncoder/OrdinalEncoder/TargetEncoder also admits strings,
+including fitted clones inside nested ColumnTransformer/FeatureUnion steps;
 categorical XGBoost DataFrame columns retain native recoding. ONNX requires finite
 numeric cells as specified separately. Input and remaining native failures become
 bounded `MLBundleError` subclasses without cell contents. Shape errors additionally
