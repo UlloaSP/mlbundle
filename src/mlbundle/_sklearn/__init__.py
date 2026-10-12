@@ -3,7 +3,6 @@
 from typing import Any, cast
 
 import numpy as np
-import skops.io as sio
 from pydantic import JsonValue, ValidationError
 from sklearn.base import BaseEstimator, is_classifier, is_regressor
 from sklearn.exceptions import NotFittedError
@@ -27,8 +26,8 @@ from mlbundle.limits import MAX_CLASSES, MAX_OUTPUTS
 from .parameters import parameters
 from .payload import validate_payload
 from .prediction import Predictor
-from .serialization import deserialize as load_skops, serialize as dump_skops
-from .structure import extract_structure, validate_tree_storage
+from .serialization import SkopsIO
+from .structure import extract_structure, has_structure, validate_tree_storage
 from .trusted import TRUSTED_TYPES as TRUSTED_TYPES
 
 
@@ -80,6 +79,13 @@ class Adapter:
     library = Library.SKLEARN
     model_member = MemberName.SKOPS
 
+    def __init__(self) -> None:
+        # Each registry call creates fresh synchronous operation state.
+        self._io = SkopsIO(self._validate, validate_payload)
+
+    def _state(self, model: object) -> str:
+        return self._io.state(model)
+
     def recognizes(self, model: object) -> bool:
         return (
             isinstance(model, BaseEstimator)
@@ -124,10 +130,10 @@ class Adapter:
         validate_tree_storage(model)
 
     def serialize(self, model: object) -> bytes:
-        return dump_skops(model, self._validate)
+        return self._io.serialize(model)
 
     def deserialize(self, data: bytes) -> object:
-        return load_skops(data, self._validate)
+        return self._io.deserialize(data)
 
     def extract_claims(self, model: Any) -> ModelClaims:
         try:
@@ -143,9 +149,7 @@ class Adapter:
                 estimator_class=type(model).__name__,
                 kind=ModelKind.CLASSIFIER if classifier else ModelKind.REGRESSOR,
                 hyperparameters=parameters(model),
-                state_sha256=validate_payload(sio.dumps(model))
-                if isinstance(model, Pipeline) or extract_structure(model) is None
-                else None,
+                state_sha256=self._state(model) if not has_structure(model) else None,
                 n_features=int(model.n_features_in_),
                 n_classes=None
                 if labels is None
@@ -169,7 +173,7 @@ class Adapter:
     def extract_structure(self, model: object) -> dict[str, JsonValue] | None:
         try:
             self._validate(model)
-            return extract_structure(model)
+            return extract_structure(model, state_sha256=self._state(model))
         except MLBundleError:
             raise
         except Exception:

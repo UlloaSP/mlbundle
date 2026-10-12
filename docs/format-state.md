@@ -57,6 +57,15 @@ also compares the payload commitment with a fresh skops serialization of the
 loaded object. Ignored declarations or state that changes during construction
 are invalid models. Export applies the same rules before publication.
 
+Adapter work belongs to one synchronous export/load, never a global cache.
+Sklearn validates and digests each original or freshly reserialized constructed
+payload once, then shares those results with claim/structure extraction before
+the native model leaves that operation. The received-payload versus constructed-
+state comparison remains mandatory; independent public calls start fresh.
+Tree constructor checks reuse numeric headers already checked against actual
+streamed bytes. Equal digest-only records and scalar encodings
+are memoized within that digest, with identical commitment bytes and byte ceilings.
+
 ### Closed scalar and function values
 
 `_sklearn/trusted.py` owns these lists for export, projection and load; bundle
@@ -215,6 +224,13 @@ field, `tree_info`, iteration pointers, parallel-tree counts, category encodings
 categorical splits/default directions and optional dropout weights. Learner base
 score and objective fields remain verified hyperparameters. Tree dumps alone are
 insufficient to describe this prediction state.
+
+XGBoost retains bounded, validated immutable UBJSON snapshots within the operation.
+Equal payload bytes reuse preflight; structure reuse requires exact native booster
+byte-span equality plus feature names/types and the importance setting. Every
+native copy and loaded model is still checked through freshly serialized bytes.
+Dump JSON is decoded as one byte/depth-bounded array before canonical structure
+encoding. Cached canonical structure bytes are decoded afresh for each result.
 
 Booster attribute keys are closed: `mlbundle`, `best_iteration`, `best_score`,
 `scikit_learn`. The last three are preserved in `hyperparameters.attributes`;

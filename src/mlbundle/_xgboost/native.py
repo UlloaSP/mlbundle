@@ -12,7 +12,7 @@ from mlbundle.limits import MAX_CLASSES, MAX_FEATURES, ArchiveLimits
 from .arrays import array as _array, tree_indices as _tree_indices
 from .categories import validate_categories, validate_encodings
 from .state import attributes, native_keys
-from .ubjson import decode
+from .ubjson import decode_snapshot
 
 ATTRIBUTE = "mlbundle"
 MAX_TREES = 100_000
@@ -94,12 +94,14 @@ def parameters(learner: dict[str, Any], settings: dict[str, Any]) -> dict[str, A
     }
 
 
-def validate_payload(data: bytes) -> None:
+def validate_payload(data: bytes) -> tuple[dict[str, Any], memoryview]:
     if len(data) > ArchiveLimits().max_member_bytes:
         raise InvalidModelError("XGBoost payload exceeds the byte limit.")
     if not data.startswith(b"{L\x00\x00\x00\x00\x00\x00\x00\x07learner{"):
         raise InvalidModelError("Expected a native XGBoost UBJSON model.")
-    document = decode(data)
+    document, model_bytes = decode_snapshot(data)
+    if model_bytes is None:
+        raise InvalidModelError("Missing XGBoost native model.")
     native_keys(document)
     learner = document["learner"]
     dimensions(learner)
@@ -149,6 +151,8 @@ def validate_payload(data: bytes) -> None:
             raise InvalidModelError(
                 "XGBoost categorical bitset bytes exceed the limit."
             )
+
+    return document, model_bytes
 
 
 def _iterations(model: dict[str, Any], count: int, learner: dict[str, Any]) -> None:

@@ -217,17 +217,44 @@ def test_old_standalone_and_all_sklearn_representation(tmp_path):
 
 
 def test_full_export_roundtrip_rejects_component_loss(tmp_path, monkeypatch):
-    from mlbundle._sklearn import transformers
+    from mlbundle._sklearn import serialization
 
     model, _ = pipeline()
-    original = transformers.deserialize
+    original = serialization.sio.loads
 
-    def changed(data):
-        restored = original(data)
+    def changed(data, **kwargs):
+        restored = original(data, **kwargs)
         restored.steps[0][1].mean_[0] += 1
         return restored
 
-    monkeypatch.setattr(transformers, "deserialize", changed)
-    with pytest.raises(mlbundle.ClaimMismatchError, match=r"pipeline\.transformers"):
+    monkeypatch.setattr(serialization.sio, "loads", changed)
+    with pytest.raises(mlbundle.InvalidModelError, match="state does not survive"):
         mlbundle.export(model, tmp_path / "never.mlbundle")
     assert not list(tmp_path.iterdir())
+
+
+def test_transformer_snapshots_are_local_to_each_public_operation(
+    tmp_path, monkeypatch
+):
+    from mlbundle._sklearn import transformers
+
+    model, _ = pipeline()
+    calls = []
+    original = transformers.validate_payload
+
+    def checked(data):
+        calls.append(data)
+        return original(data)
+
+    monkeypatch.setattr(transformers, "validate_payload", checked)
+    path = tmp_path / "model.mlbundle"
+    mlbundle.export(model, path)
+    assert len(calls) == 2
+    calls.clear()
+    mlbundle.load(path)
+    assert len(calls) == 2
+    model.steps[0][1].extra_ = 1
+    with pytest.raises(
+        mlbundle.InvalidModelError, match="Unknown sklearn estimator state"
+    ):
+        mlbundle.export(model, path, overwrite=True)

@@ -45,6 +45,7 @@ def extract(
     verbose: bool,
     *,
     names: list[str],
+    transformer_adapter: transformers.Adapter,
 ) -> PipelineInfo:
     try:
         if library not in (Library.XGBOOST, Library.CATBOOST):
@@ -73,7 +74,7 @@ def extract(
             validate_components(prefix)
         return PipelineInfo(
             step_names=step_names,
-            transformers=None if prefix is None else transformers.claims(prefix),
+            transformers=None if prefix is None else transformer_adapter.claims(prefix),
             estimator=NativeComponentInfo(
                 library=library,
                 serialization=MODEL_MEMBERS[library][0],

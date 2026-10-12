@@ -24,6 +24,7 @@ from .prediction import Predictor
 @dataclass(frozen=True)
 class CompositeExport:
     leaf: NativeExport
+    transformer_adapter: transformers.Adapter
     prefix: Pipeline | None
     restored_prefix: Pipeline | None
     step_names: list[str]
@@ -45,6 +46,7 @@ class CompositeExport:
             self.step_names,
             self.verbose,
             names=names,
+            transformer_adapter=self.transformer_adapter,
         )
         actual_leaf = self.leaf.adapter.extract_claims(self.leaf.restored)
         actual_model = rebuild(
@@ -60,6 +62,7 @@ class CompositeExport:
             self.step_names,
             self.verbose,
             names=names,
+            transformer_adapter=self.transformer_adapter,
         )
         verify(expected, actual)
         original = structure(self.leaf.structure, expected)
@@ -85,6 +88,7 @@ def prepare(
         )
     leaf = prepare_native(leaf_model, adapter, declarations, limits)
     prefix = restored = None
+    transformer_adapter = transformers.Adapter()
     members = dict(leaf.members)
     if len(model.steps) > 1:
         prefix = Pipeline(
@@ -93,14 +97,15 @@ def prepare(
             verbose=model.verbose,
             transform_input=None,
         )
-        data = transformers.serialize(prefix)
+        data = transformer_adapter.serialize(prefix)
         if len(data) > limits.member_bytes(MemberName.SKOPS):
             raise LimitExceededError("Model member size limit exceeded.")
         members[MemberName.SKOPS] = data
-        restored = transformers.deserialize(data)
+        restored = transformer_adapter.deserialize(data)
     claims = outer_claims(prefix, leaf.claims, model.verbose)
     return CompositeExport(
         leaf,
+        transformer_adapter,
         prefix,
         restored,
         [name for name, _ in model.steps],
@@ -117,17 +122,24 @@ def load_components(
     verbose: bool,
 ) -> tuple[Pipeline, Predictor, ModelClaims, dict[str, JsonValue]]:
     adapter = get_adapter(recipe.estimator.library)
+    transformer_adapter = transformers.Adapter()
     leaf = adapter.deserialize(members[adapter.model_member])
     prefix = (
         None
         if recipe.transformers is None
-        else transformers.deserialize(members[MemberName.SKOPS])
+        else transformer_adapter.deserialize(members[MemberName.SKOPS])
     )
     native_claims = adapter.extract_claims(leaf)
     model = rebuild(prefix, leaf, recipe.step_names, verbose)
     validate_components(model)
     actual = extract(
-        prefix, native_claims, adapter.library, recipe.step_names, verbose, names=names
+        prefix,
+        native_claims,
+        adapter.library,
+        recipe.step_names,
+        verbose,
+        names=names,
+        transformer_adapter=transformer_adapter,
     )
     verify(recipe, actual)
     claims = outer_claims(prefix, native_claims, verbose)

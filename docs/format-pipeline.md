@@ -82,7 +82,9 @@ deserializes bytes with its own preflight. Shared claims and native structure
 must survive that round trip. The prefix is a transformer-only exact Pipeline:
 the shared skops byte route applies the owned trust/catalog, payload/buffer
 bounds and payload-versus-reserialized commitment comparison. It checks fitted
-transformers and projects their parameters with the standalone owner.
+transformers and projects their parameters with the standalone owner. Each component
+reuses verified snapshots within the synchronous operation, as defined in
+[state verification](format-state.md); public calls never share that state.
 
 Shared composite extraction verifies fitted widths and names, recomputes the
 recipe and outer claims for both original and restored components, and compares

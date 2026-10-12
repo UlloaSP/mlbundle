@@ -142,7 +142,9 @@ def test_metadata_output_and_unfitted_prefix(tmp_path):
 def test_transformer_route_rejections_and_success():
     frame, y = data()
     prefix = Pipeline([("scale", StandardScaler())]).fit(frame)
-    restored = transformers.deserialize(transformers.serialize(prefix))
+    restored = transformers.Adapter().deserialize(
+        transformers.Adapter().serialize(prefix)
+    )
     assert np.array_equal(restored.transform(frame), prefix.transform(frame))
     for invalid, message in [
         (StandardScaler(), "nonempty exact Pipeline"),
@@ -150,7 +152,7 @@ def test_transformer_route_rejections_and_success():
         (Pipeline([("leaf", LogisticRegression().fit(frame, y))]), "non-transformer"),
     ]:
         with pytest.raises(mlbundle.UnsupportedModelError, match=message):
-            transformers.serialize(invalid)
+            transformers.Adapter().serialize(invalid)
 
 
 def test_unverifiable_width_and_custom_function(tmp_path):

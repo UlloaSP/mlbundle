@@ -21,6 +21,7 @@ class Decoder:
         self.data = memoryview(data)
         self.position = 0
         self.values = 0
+        self.model_bytes: memoryview | None = None
 
     def take(self, count: int) -> memoryview:
         if count < 0 or count > len(self.data) - self.position:
@@ -92,7 +93,10 @@ class Decoder:
             if index >= 100_000:
                 raise InvalidModelError("UBJSON object collection exceeds the limit.")
             key = self.string() if marker == "{" else None
+            start = self.position
             value = self.value(depth, typed)
+            if depth == 2 and key == "gradient_booster":
+                self.model_bytes = self.data[start : self.position]
             if marker == "{":
                 if key in result:
                     raise InvalidModelError("Duplicate UBJSON object key.")
@@ -103,9 +107,13 @@ class Decoder:
         return result
 
 
-def decode(data: bytes) -> dict[str, Any]:
+def decode_snapshot(data: bytes) -> tuple[dict[str, Any], memoryview | None]:
     decoder = Decoder(data)
     value = decoder.value()
     if not isinstance(value, dict) or decoder.position != len(data):
         raise InvalidModelError("Invalid UBJSON model document.")
-    return value
+    return value, decoder.model_bytes
+
+
+def decode(data: bytes) -> dict[str, Any]:
+    return decode_snapshot(data)[0]

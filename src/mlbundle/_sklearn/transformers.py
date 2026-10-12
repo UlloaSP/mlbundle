@@ -2,7 +2,6 @@
 
 from typing import Any, cast
 
-import skops.io as sio
 from sklearn.exceptions import NotFittedError
 from sklearn.pipeline import Pipeline
 from sklearn.utils.validation import check_is_fitted
@@ -13,7 +12,7 @@ from mlbundle.errors import UnsupportedModelError
 from .parameters import parameters
 from .payload import validate_payload
 from .pipeline_scope import native_types, reject_placement, validate_components
-from .serialization import deserialize as load_skops, serialize as dump_skops
+from .serialization import SkopsIO
 from .structure import validate_tree_storage
 
 
@@ -43,24 +42,28 @@ def validate(model: Any) -> None:
     parameters(model)
 
 
-def serialize(model: Pipeline) -> bytes:
-    if type(model) is not Pipeline or not model.steps:
-        raise UnsupportedModelError(
-            reason="Transformer member must be a nonempty exact Pipeline."
+class Adapter:
+    """Transformer snapshot owner for one composite export/load."""
+
+    def __init__(self) -> None:
+        self._io = SkopsIO(validate, validate_payload)
+
+    def serialize(self, model: Pipeline) -> bytes:
+        if type(model) is not Pipeline or not model.steps:
+            raise UnsupportedModelError(
+                reason="Transformer member must be a nonempty exact Pipeline."
+            )
+        validate_components(model)
+        return self._io.serialize(model)
+
+    def deserialize(self, data: bytes) -> Pipeline:
+        return cast(Pipeline, self._io.deserialize(data))
+
+    def claims(self, model: Pipeline) -> TransformerInfo:
+        validate(model)
+        return TransformerInfo(
+            member="model.skops",
+            estimator_class="Pipeline",
+            hyperparameters=parameters(model),
+            state_sha256=self._io.state(model),
         )
-    validate_components(model)
-    return dump_skops(model, validate)
-
-
-def deserialize(data: bytes) -> Pipeline:
-    return cast(Pipeline, load_skops(data, validate))
-
-
-def claims(model: Pipeline) -> TransformerInfo:
-    validate(model)
-    return TransformerInfo(
-        member="model.skops",
-        estimator_class="Pipeline",
-        hyperparameters=parameters(model),
-        state_sha256=validate_payload(sio.dumps(model)),
-    )

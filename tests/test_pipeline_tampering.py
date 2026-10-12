@@ -176,7 +176,7 @@ def test_member_recipe_disagreement(composite, change):
 @pytest.mark.parametrize("alteration", ["state", "params", "names", "width"])
 def test_rehashed_transformer_payload(composite, alteration):
     record, members = composite
-    restored = transformers.deserialize(members[mlbundle.MemberName.SKOPS])
+    restored = transformers.Adapter().deserialize(members[mlbundle.MemberName.SKOPS])
     step = restored.steps[0][1]
     if alteration == "state":
         step.mean_[0] += 1

@@ -18,35 +18,63 @@ def audit_types(data: bytes) -> None:
         raise UnsupportedModelError(unsupported)
 
 
-def serialize(model: object, validate: Callable[[object], None]) -> bytes:
-    try:
-        data = sio.dumps(model)
+class SkopsIO:
+    """Reuse checked snapshots inside one operation; never across public calls."""
+
+    def __init__(
+        self,
+        validate: Callable[[object], None],
+        payload: Callable[[bytes], str] = validate_payload,
+    ) -> None:
+        self.validate = validate
+        self.payload = payload
+        self._states: list[tuple[object, str]] = []
+        self._payload: bytes | None = None
+        self._digest: str | None = None
+
+    def state(self, model: object) -> str:
+        for native, digest in self._states:
+            if native is model:
+                return digest
+        return self.payload(sio.dumps(model))
+
+    def serialize(self, model: object) -> bytes:
         try:
-            validate_payload(data)
-        except UnsupportedModelError:
+            self._states = []
+            self._payload, self._digest = None, None
+            data = sio.dumps(model)
+            try:
+                digest = self.payload(data)
+            except UnsupportedModelError:
+                audit_types(data)
+                raise
             audit_types(data)
+            self.validate(model)
+            self._states = [(model, digest)]
+            self._payload, self._digest = data, digest
+            return data
+        except MLBundleError:
             raise
-        audit_types(data)
-        validate(model)
-        return data
-    except MLBundleError:
-        raise
-    except Exception:
-        raise UnsupportedModelError(
-            reason="Model cannot be serialized safely with skops."
-        ) from None
+        except Exception:
+            raise UnsupportedModelError(
+                reason="Model cannot be serialized safely with skops."
+            ) from None
 
-
-def deserialize(data: bytes, validate: Callable[[object], None]) -> object:
-    try:
-        expected_state = validate_payload(data)
-        audit_types(data)
-        model = sio.loads(data, trusted=list(TRUSTED_TYPES))
-        validate(model)
-        if expected_state != validate_payload(sio.dumps(model)):
-            raise InvalidModelError("Skops state does not survive native construction.")
-        return model
-    except MLBundleError:
-        raise
-    except Exception:
-        raise InvalidModelError("Invalid skops model payload.") from None
+    def deserialize(self, data: bytes) -> object:
+        try:
+            expected = self._digest if data is self._payload else self.payload(data)
+            self._payload, self._digest = None, None
+            audit_types(data)
+            model = sio.loads(data, trusted=list(TRUSTED_TYPES))
+            self.validate(model)
+            actual = self.payload(sio.dumps(model))
+            if expected != actual:
+                raise InvalidModelError(
+                    "Skops state does not survive native construction."
+                )
+            self._states = [*self._states[-1:], (model, actual)]
+            return model
+        except MLBundleError:
+            raise
+        except Exception:
+            raise InvalidModelError("Invalid skops model payload.") from None
