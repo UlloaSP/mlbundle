@@ -13,29 +13,30 @@ The implemented ONNX mapping and validation rules are in [ONNX](format-onnx.md).
 The implemented CBM mapping and validation rules are in [CatBoost](format-catboost.md).
 The normative schema/declaration rules are in [Schema and samples](format-schema.md).
 [Prediction state and bounded work](format-state.md) is also normative.
-These sections are part of this version 1 contract.
+[Composite pipelines](format-pipeline.md) is normative for the split representation.
 
 ## Members
 
 | Member | Rule and contents |
 | --- | --- |
 | `manifest.json` | Required; the manifest described below. |
-| `model.skops` | Exactly one model member; scikit-learn, skops format. |
-| `model.ubj` | Exactly one model member; XGBoost native UBJSON format. |
-| `model.cbm` | Exactly one model member; CatBoost native CBM binary format. |
-| `model.onnx` | Exactly one model member; original, self-contained ONNX bytes, unchanged. |
+| `model.skops` | Standalone model member; scikit-learn, skops format. |
+| `model.ubj` | Standalone model member; XGBoost native UBJSON format. |
+| `model.cbm` | Standalone model member; CatBoost native CBM binary format. |
+| `model.onnx` | Standalone model member; original, self-contained ONNX bytes, unchanged. |
 | `schema.json` | Optional; exact object with `schema_version`, `fields` and `reports` from local inference. See [Schema and samples](format-schema.md). No training DataFrame. |
 | `structure.json` | Optional only for families without extractable structure; object as defined below. |
 | `samples.json` | Optional; array of row objects keyed by feature name, in declared feature order when consumed. Only explicit user intent may enable it. Values use the canonical JSON value rules. Samples are real user data. |
 
+Model members are one standalone member, or the declared skops/UBJSON or skops/CBM
+composite pair; single-step composites use only the leaf. See [pipelines](format-pipeline.md).
 Presence of schema, structure or samples must match both the manifest reference
 and an integrity record. There is no member for arbitrary user files. A training
 DataFrame must never be included. For samples, each row must contain exactly the
 declared feature names, without a target column or arbitrary extra columns; the
 byte/depth limits apply even when no rows are present.
 
-For version 1, structure extraction is mandatory for supported scikit-learn
-models exposing `tree_`, tree ensembles with constituent `tree_` estimators,
+Version 1 requires structure for supported scikit-learn models exposing `tree_`, tree ensembles with constituent `tree_` estimators,
 models exposing `coef_`/`intercept_`, and models exposing `feature_importances_`;
 and for supported XGBoost and CatBoost tree boosters. A member is required whenever the
 adapter's extraction returns an object. Other supported sklearn families
@@ -51,8 +52,7 @@ All objects representing typed records reject unknown keys. Types are strict:
 booleans do not stand for integers, strings do not stand for numbers and enum
 values are exact. JSON object keys are strings. Arrays are ordered. Null is
 distinct from an empty array/object. Unless marked optional, fields are required.
-Optional fields can be omitted or null; writers emit defaults explicitly.
-`user_metadata` may be omitted and defaults to `{}`.
+Optional fields can be omitted/null; writers emit defaults. `user_metadata` defaults to `{}`.
 
 ### Identity
 
@@ -65,13 +65,12 @@ Optional fields can be omitted or null; writers emit defaults explicitly.
 | `writer_version` | nonempty string, at most 256 characters | mlbundle package version that wrote the bundle. Must equal `environment.packages.mlbundle`. |
 
 Identity fields are declarations, not proof of provenance.
-
 ### `model`
 
 | Field | Type | Meaning / verification |
 | --- | --- | --- |
 | `library` | `"sklearn"`, `"xgboost"`, `"catboost"`, `"onnx"` | Closed adapter identifier; validated against serialization/member pairing. |
-| `serialization` | `"skops"`, `"ubjson"`, `"cbm"`, `"onnx"` | Must pair respectively with the four libraries and model members above. |
+| `serialization` | `"skops"`, `"ubjson"`, `"cbm"`, `"onnx"`, `"pipeline"` | Standalone formats pair with their libraries; pipeline requires sklearn and a strict recipe. |
 | `estimator_class` | nonempty string, at most 256 characters | Verified class name (not a Python import path); ONNX uses the adapter's fixed `"ONNX"` identity. Never instantiate from this field. |
 | `kind` | `"classifier"`, `"regressor"` | Verified prediction kind. |
 | `hyperparameters` | object, at most 4,096 top-level keys | Verified JSON projection of the supported estimator's parameters. Sklearn uses `get_params(deep=True)`; other adapters use their recoverable native parameter representation. ONNX records graph signatures and metadata properties as defined in [ONNX](format-onnx.md), without inventing training settings. At most 1 MiB canonical bytes and depth 16. |
@@ -79,6 +78,9 @@ Identity fields are declarations, not proof of provenance.
 | `n_classes` | null or array of integers 1–100,000 | Verified per-output class counts; classifier array length equals `n_outputs`, regressor value is null. |
 | `n_outputs` | integer 1–1,024 | Verified target output count. Probability columns are classes, not separate target outputs. |
 
+`model.pipeline` defaults to null for old bundles and is required exactly for
+`serialization="pipeline"`. Its records, cross-checks and declaration semantics
+are specified in [Composite pipelines](format-pipeline.md); standalone writers omit this null extension to preserve existing wire bytes.
 Hyperparameter values preserve JSON scalars, nested containers and numeric tags.
 Do not stringify unsupported objects or call `repr` as a fallback. If an adapter
 supports nested estimators in parameters, their representation is an object

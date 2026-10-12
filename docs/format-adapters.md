@@ -4,6 +4,7 @@ Normative sections of [the format contract](format.md).
 
 ## `structure.json`
 
+Composites add only the checked `pipeline` boundary sibling defined in [pipelines](format-pipeline.md); native indices address transformed features.
 Structure is never embedded in the manifest. It is a JSON object with required
 `family` and `feature_importances` fields, plus exactly the family fields below.
 `feature_importances` is null or an ordered numeric array of length `n_features`.
@@ -40,7 +41,7 @@ ensemble. Unsupported or oversized mandatory structure fails export rather than
 being silently omitted. ONNX graph visualizations and additional structure
 families require a deliberate future contract change.
 
-Sklearn `Pipeline` returns null structure in version 1. Its final estimator
+All-scikit-learn `Pipeline` returns null structure in version 1. Its final estimator
 operates on transformed features; version 1 has no input transformation mapping,
 so no final-step tree or coefficient member is emitted. Claims, names and
 predictions still describe the complete pipeline; `model.state_sha256` also
@@ -91,11 +92,13 @@ the exact score/NumPy function names in [the state contract](format-state.md).
 It adds no arbitrary class, callable or I/O constructor.
 Skops' own defaults remain part of the dependency trust boundary. Dumped bytes
 are audited with `get_untrusted_types`; every type outside the list is rejected
-at export and independently at load. XGBoost estimators inside sklearn pipelines
-are rejected (`xgboost.core.Booster`, `xgboost.sklearn.XGBClassifier` are untrusted).
-CatBoost pipeline steps are also rejected, with unsupported types listed and
-an instruction to export `pipeline.named_steps["est"]` directly. Native adapters
-own standalone XGBoost and CatBoost loading; neither is implicitly unwrapped.
+at export and independently at load. Exact outer Pipelines ending in a supported
+XGBoost/CatBoost wrapper use the [composite route](format-pipeline.md): prefix-only
+skops, native leaf bytes through the unchanged preflight/adapter, and closed Pipeline
+reconstruction. Transformer parameters/state, data-free widths/names, leaf claims
+and extended native structure are recomputed. Other native placements fail with
+bounded unsupported types. Native adapters never receive skops-contained booster
+state, and their trusted types stay excluded. All-sklearn pipelines stay unchanged.
 MLPClassifier/MLPRegressor support adam, sgd and lbfgs, alone or in a Pipeline.
 MLP structure is null; layer weights and complete fitted/optimizer state are
 bound by the manifest state commitment. Optimizers permit ObjectNode only

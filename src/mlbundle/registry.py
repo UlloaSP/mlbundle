@@ -9,7 +9,9 @@ from .adapters import Adapter
 from .contract import MODEL_MEMBERS, Library
 from .errors import (
     AdapterNotImplementedError,
+    InvalidModelError,
     MissingOptionalDependencyError,
+    MLBundleError,
     UnsupportedModelError,
 )
 
@@ -83,3 +85,19 @@ def find_adapter(model: object) -> Adapter:
         ):
             raise error
     raise UnsupportedModelError
+
+
+def is_composite(model: object) -> bool:
+    # Ancestry only gates the constant sklearn route, never a model-supplied path.
+    roots = {base.__module__.split(".")[0] for base in type(model).__mro__}
+    if "sklearn" not in roots or roots & {"xgboost", "catboost"}:
+        return False
+    get_adapter(Library.SKLEARN)
+    from ._sklearn.pipeline_scope import composite_candidate
+
+    try:
+        return composite_candidate(model)
+    except MLBundleError:
+        raise
+    except Exception:
+        raise InvalidModelError("Invalid composite Pipeline state.") from None

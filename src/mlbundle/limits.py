@@ -17,7 +17,7 @@ MAX_OUTPUTS = 1024
 
 
 class ArchiveLimits(ContractModel):
-    max_members: int = Field(default=5, ge=2, le=5)
+    max_members: int = Field(default=6, ge=2, le=6)
     max_archive_bytes: int = Field(default=512 * MIB, gt=0, le=512 * MIB)
     max_compressed_bytes: int = Field(default=512 * MIB, gt=0, le=512 * MIB)
     max_member_bytes: int = Field(default=512 * MIB, gt=0, le=512 * MIB)

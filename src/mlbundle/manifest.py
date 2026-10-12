@@ -10,6 +10,7 @@ from uuid import UUID
 from pydantic import Field, JsonValue, ValidationError, field_validator, model_validator
 
 from ._base import ContractModel, Name, ShortString
+from ._pipeline_contract import PipelineInfo, expected_model_members
 from .canonical import canonical_dumps, canonical_loads
 from .claims import (
     ClassLabels,
@@ -46,10 +47,31 @@ _UTC_TIMESTAMP = re.compile(
 class ModelInfo(EstimatorInfo):
     library: Library
     serialization: SerializationFormat
+    pipeline: PipelineInfo | None = None
 
     @model_validator(mode="after")
     def native_serialization(self) -> ModelInfo:
-        if self.serialization != MODEL_MEMBERS[self.library][0]:
+        if self.serialization == SerializationFormat.PIPELINE:
+            if self.library != Library.SKLEARN or self.pipeline is None:
+                raise ValueError(
+                    "Composite representation requires sklearn and a recipe."
+                )
+            leaf = self.pipeline.estimator.claims
+            if (
+                self.estimator_class != "Pipeline"
+                or self.state_sha256 is not None
+                or (self.kind, self.n_classes, self.n_outputs)
+                != (leaf.kind, leaf.n_classes, leaf.n_outputs)
+                or set(self.hyperparameters) != {"memory", "verbose", "transform_input"}
+                or self.hyperparameters["memory"] is not None
+                or self.hyperparameters["transform_input"] is not None
+                or type(self.hyperparameters["verbose"]) is not bool
+            ):
+                raise ValueError("Invalid composite outer claims.")
+        elif (
+            self.pipeline is not None
+            or self.serialization != MODEL_MEMBERS[self.library][0]
+        ):
             raise ValueError("Library and serialization must agree.")
         return self
 
@@ -96,7 +118,7 @@ class Manifest(ContractModel):
     features: FeatureInfo
     target: TargetInfo
     environment: TrainingEnvironment
-    integrity: dict[MemberName, IntegrityRecord] = Field(min_length=1, max_length=4)
+    integrity: dict[MemberName, IntegrityRecord] = Field(min_length=1, max_length=5)
     references: MemberReferences
     user_metadata: dict[str, JsonValue] = Field(default_factory=dict, max_length=1024)
 
@@ -135,7 +157,15 @@ class Manifest(ContractModel):
         if len(self.features.names) != self.model.n_features:
             raise ValueError("Feature count and names must agree.")
         validate_labels(self.model, self.target.class_labels)
-        expected = {MODEL_MEMBERS[self.model.library][1]}
+        expected = expected_model_members(self.model.library, self.model.pipeline)
+        if self.model.pipeline is not None and (
+            canonical_dumps(self.target.class_labels)
+            != canonical_dumps(self.model.pipeline.estimator.claims.class_labels)
+            or self.references.structure is None
+        ):
+            raise ValueError(
+                "Composite labels and structure must agree with the recipe."
+            )
         expected.update(
             MemberName(member)
             for member in self.references.model_dump().values()
@@ -156,7 +186,7 @@ class Manifest(ContractModel):
         return self
 
     def verified_claims(self) -> ModelClaims:
-        fields = self.model.model_dump(exclude={"library", "serialization"})
+        fields = self.model.model_dump(exclude={"library", "serialization", "pipeline"})
         return ModelClaims(
             **fields,
             feature_names=(
@@ -169,8 +199,14 @@ class Manifest(ContractModel):
             onnx=self.environment.onnx,
         )
 
+    def _wire_fields(self) -> dict[str, JsonValue]:
+        fields = self.model_dump(mode="json", by_alias=True)
+        if self.model.pipeline is None:
+            fields["model"].pop("pipeline")
+        return fields
+
     def to_bytes(self) -> bytes:
-        return canonical_dumps(self.model_dump(mode="json", by_alias=True))
+        return canonical_dumps(self._wire_fields())
 
     @classmethod
     def from_bytes(cls, data: bytes) -> Manifest:

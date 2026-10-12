@@ -155,6 +155,8 @@ select = [
 ignore = ["E501", "PLR0913", "PLR2004", "RET504"]
 
 [tool.ruff.lint.per-file-ignores]
+"src/mlbundle/model_io.py" = ["PLC0415"]  # Lazy optional adapter imports.
+"src/mlbundle/registry.py" = ["PLC0415"]
 "tests/**/*.py" = ["ARG", "PLR2004", "PLR0124", "PLC0415", "S101", "DTZ"]
 # The base/artifact checks must run without importing the sklearn fixture producer.
 "scripts/package_smoke.py" = ["PLC0415"]

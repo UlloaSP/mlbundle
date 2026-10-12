@@ -101,9 +101,16 @@ make the native parser a sandbox.
 The installed skops load path builds nodes, audits them and only then constructs
 objects; NumPy buffers use `allow_pickle=False`. No pickle/joblib loading fallback
 is used. Skops imports `pickle` only to recognize an unrelated save-side exception;
-this does not deserialize pickle bytes. Custom estimators/functions and XGBoost/CatBoost
-estimators inside sklearn pipelines are rejected. CatBoost rejections name the unsupported
-type and advise exporting the estimator directly; neither adapter unwraps pipelines. HistGradientBoosting's separate
+this does not deserialize pickle bytes. Custom estimators/functions and unsupported
+native placements are rejected. Exact outer Pipelines ending in an admitted native
+wrapper split transformer skops bytes from UBJSON/CBM, retaining each adapter's
+preflight, trust, state/claims and structure checks; no booster type enters skops.
+Closed fitted-state width proofs never use data. Shared bounded names/parameters/
+commitments and inner tree coordinates are recomputed before closed Pipeline
+reconstruction is returned. Cache/metadata routing/unknown outer state fail;
+step names and outer options are declarations, not authenticated training history.
+See [the composite contract](docs/format-pipeline.md).
+HistGradientBoosting's separate
 `TreePredictor` storage is also excluded. Broadening the supplemental list requires
 source review and hostile-payload tests, never author approval or bundle metadata.
 
@@ -111,8 +118,8 @@ Both export and load recompute the same model claims and structures and compare
 canonical bytes, preserving class-label types and order. Export additionally
 compares the original and reloaded native models before publication. Loaded results
 contain the native model for runtime explanations; mutating it invalidates the
-relationship to the verified metadata. Pipeline structure is null because v1
-does not describe its input transformations.
+relationship to the verified metadata. All-sklearn Pipeline structure stays null;
+composites expose checked native trees in transformed feature coordinates.
 
 The closed sklearn class/attribute catalog is audited against 1.9.1 with skops
 0.16.0. Other versions/configurations can be rejected for unknown state. The

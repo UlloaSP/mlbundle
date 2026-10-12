@@ -218,11 +218,11 @@ claims. `native_model` is an OnnxModel with original bytes and a CPU session.
 Kind is inferred from supported outputs; native labels are verified, absent
 labels use count-checked declarations. Structure is null. See the normative
 ONNX section linked from `docs/format.md` for exact layouts and resource bounds.
-CatBoost supports exact numeric single-target symmetric classifiers/regressors, with native state commitments and in-memory loading. Sklearn pipelines containing XGBoost/CatBoost estimators are rejected; export the estimator directly.
-The closed member list is: required `manifest.json`, exactly
-one of `model.skops`, `model.ubj`, `model.cbm` or `model.onnx`, optional `schema.json`, and
+CatBoost supports exact numeric single-target symmetric classifiers/regressors, with native state commitments and in-memory loading. Exact outer sklearn Pipelines ending in XGBoost/CatBoost use separately checked skops/native components; other native placements remain rejected.
+The closed member list is: required `manifest.json`, one
+native member, or declared `model.skops` + `model.ubj`/`model.cbm` pair, optional `schema.json`, and
 `structure.json` when the supported model has extractable structure. Optional
-`samples.json` requires explicit user intent. No other members are allowed.
+`samples.json` requires explicit user intent. The ceiling is six members; no others are allowed.
 
 The manifest must record format name/version, bundle id, UTC creation time and
 writer version; model library, estimator class, classifier/regressor kind,
@@ -261,11 +261,12 @@ its kind/count inference remains ONNX-owned. Keep native behavior in adapters; f
 - `src/mlbundle/contract.py` — closed identifiers and native member/format pairing.
 - `src/mlbundle/limits.py` — shared archive ceilings and specific member caps.
 - `src/mlbundle/canonical.py` and `_canonical_work.py` — deterministic JSON and bounded decoding/expansion.
-- `src/mlbundle/model_io.py` — library-independent public export/load, manifest construction and round-trip verification.
+- `src/mlbundle/model_io.py`, `_native_io.py`, `_export_manifest.py` — public I/O, native round trips and manifest construction.
+- `src/mlbundle/_composite/`, `_pipeline_contract.py` — strict recipe, separate I/O, closed reconstruction/claims/prediction and input/inner boundaries. Read `docs/format-pipeline.md` when changing composites.
 - `src/mlbundle/training.py` — lazy local DataFrame alignment and schema inference.
 - `src/mlbundle/schema.py` and `_schema_fields.py` — closed schema/report declarations and reader cross-checks without mlschema.
 - `src/mlbundle/samples.py` — explicit feature-row selection and bounded cell conversion.
-- `src/mlbundle/_sklearn/` — closed dtype/type/function trust, skops loading, MLP state, parameter/claim extraction, native structure, nested payload bounds and fitted categorical prediction.
+- `src/mlbundle/_sklearn/` — owned trust/skops/state/parameters/structure, transformer route and closed fitted-width/name proofs. Composite commitments/native structure bind the rebuilt Pipeline; all-sklearn structure stays null.
 - `src/mlbundle/_xgboost/` — closed wrappers/objectives, native UBJSON preflight/loading, label binding, recoverable config, complete tree structure and validated prediction.
 - `src/mlbundle/_catboost/` — closed numeric symmetric wrappers/losses, CBM preflight/in-memory loading, complete native state/structure and validated prediction.
 - `src/mlbundle/_onnx/` — bounded protobuf/graph validation, unchanged bytes, native signatures/labels, CPU sessions and tabular prediction.
@@ -276,13 +277,12 @@ its kind/count inference remains ONNX-owned. Keep native behavior in adapters; f
 - `src/mlbundle/environment.py` — training declarations and distribution metadata capture.
 - `src/mlbundle/adapters.py` and `_prediction_input.py` — adapter/predictor protocols, output types and shared input checks.
 - `src/mlbundle/registry.py` — closed lazy resolution of `_sklearn`, `_xgboost`, `_catboost` and `_onnx` adapters.
-- `src/mlbundle/results.py` — metadata-only and loaded reader result types.
 - `src/mlbundle/_container_rules.py` — shared source type, closed member sets/order and ceilings.
 - `src/mlbundle/_zip_directory.py` — bounded ZIP/ZIP64 directory and extra-field validation.
 - `src/mlbundle/_zip_members.py` — local headers/descriptors and bounded decompression with CRC.
 - `src/mlbundle/container.py` — source bounds, validated in-memory reading and integrity checks.
 - `src/mlbundle/writing.py` — integrity ownership, deterministic ZIP and atomic publication.
-- `src/mlbundle/inspection.py` — public metadata-only inspection without adapter resolution.
+- `src/mlbundle/inspection.py`, `results.py` — metadata-only inspection and result records without adapter resolution.
 - `docs/format.md` — version 1 wire specification; linked container, adapter/structure, ONNX and schema/sample sections are normative.
 - `tests/` — one file per feature, with success and error cases together.
 - `scripts/package_smoke.py` — fixture, isolated install and artifact-content checks.

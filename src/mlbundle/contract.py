@@ -24,6 +24,7 @@ class SerializationFormat(StrEnum):
     UBJSON = "ubjson"
     CBM = "cbm"
     ONNX = "onnx"
+    PIPELINE = "pipeline"
 
 
 class FeatureOrigin(StrEnum):

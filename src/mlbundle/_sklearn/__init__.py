@@ -3,7 +3,6 @@
 from typing import Any, cast
 
 import numpy as np
-import skops.io as sio
 from pydantic import JsonValue, ValidationError
 from sklearn.base import BaseEstimator, is_classifier, is_regressor
 from sklearn.exceptions import NotFittedError
@@ -27,24 +26,9 @@ from mlbundle.limits import MAX_CLASSES, MAX_OUTPUTS
 from .parameters import parameters
 from .payload import validate_payload
 from .prediction import Predictor
+from .serialization import SkopsIO
 from .structure import extract_structure, has_structure, validate_tree_storage
-from .trusted import TRUSTED_TYPES
-
-
-def _untrusted(data: bytes) -> None:
-    unsupported = tuple(
-        sorted(set(sio.get_untrusted_types(data=data)) - set(TRUSTED_TYPES))
-    )
-    if unsupported:
-        if any(name.startswith("catboost.") for name in unsupported):
-            raise UnsupportedModelError(
-                unsupported,
-                reason=(
-                    f"{UnsupportedModelError(unsupported)} "
-                    'Export the estimator directly: export(pipeline.named_steps["est"], ...).'
-                ),
-            )
-        raise UnsupportedModelError(unsupported)
+from .trusted import TRUSTED_TYPES as TRUSTED_TYPES
 
 
 def _outputs(model: Any, classifier: bool) -> tuple[int, ClassLabels | None]:
@@ -96,16 +80,11 @@ class Adapter:
     model_member = MemberName.SKOPS
 
     def __init__(self) -> None:
-        # The registry creates a fresh adapter for every public export/load.
-        self._states: list[tuple[object, str]] = []
-        self._payload: bytes | None = None
-        self._digest: str | None = None
+        # Each registry call creates fresh synchronous operation state.
+        self._io = SkopsIO(self._validate, validate_payload)
 
     def _state(self, model: object) -> str:
-        for native, digest in self._states:
-            if native is model:
-                return digest
-        return validate_payload(sio.dumps(model))
+        return self._io.state(model)
 
     def recognizes(self, model: object) -> bool:
         return (
@@ -151,47 +130,10 @@ class Adapter:
         validate_tree_storage(model)
 
     def serialize(self, model: object) -> bytes:
-        try:
-            self._states = []
-            self._payload, self._digest = None, None
-            data = sio.dumps(model)
-            try:
-                digest = validate_payload(data)
-            except UnsupportedModelError:
-                _untrusted(data)
-                raise
-            _untrusted(data)
-            self._validate(model)
-            self._states = [(model, digest)]
-            self._payload, self._digest = data, digest
-            return data
-        except MLBundleError:
-            raise
-        except Exception:
-            raise UnsupportedModelError(
-                reason="Model cannot be serialized safely with skops."
-            ) from None
+        return self._io.serialize(model)
 
     def deserialize(self, data: bytes) -> object:
-        try:
-            expected_state = (
-                self._digest if data is self._payload else validate_payload(data)
-            )
-            self._payload, self._digest = None, None
-            _untrusted(data)
-            model = sio.loads(data, trusted=list(TRUSTED_TYPES))
-            self._validate(model)
-            actual_state = validate_payload(sio.dumps(model))
-            if expected_state != actual_state:
-                raise InvalidModelError(
-                    "Skops state does not survive native construction."
-                )
-            self._states = [*self._states[-1:], (model, actual_state)]
-            return model
-        except MLBundleError:
-            raise
-        except Exception:
-            raise InvalidModelError("Invalid skops model payload.") from None
+        return self._io.deserialize(data)
 
     def extract_claims(self, model: Any) -> ModelClaims:
         try:

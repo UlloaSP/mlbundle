@@ -36,13 +36,15 @@ def test_exact_classes_fitted_state_and_labels(tmp_path):
     assert not list(tmp_path.iterdir())
 
 
-def test_pipeline_rejection_lists_types_and_direct_export(tmp_path):
+def test_nested_pipeline_rejection_lists_types_and_placement(tmp_path):
     model = classifier()
     with pytest.raises(mlbundle.UnsupportedModelError) as error:
-        mlbundle.export(Pipeline([("est", model)]), tmp_path / "pipeline.mlbundle")
+        mlbundle.export(
+            Pipeline([("inner", Pipeline([("est", model)]))]),
+            tmp_path / "pipeline.mlbundle",
+        )
     assert "catboost.core.CatBoostClassifier" in error.value.untrusted_types
-    assert "Export the estimator directly" in str(error.value)
-    assert 'pipeline.named_steps["est"]' in str(error.value)
+    assert "last step of the outermost Pipeline" in str(error.value)
     mlbundle.export(model, tmp_path / "estimator.mlbundle")
 
 

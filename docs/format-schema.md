@@ -141,8 +141,10 @@ arbitrary objects and unsupported NumPy values fail without stringification.
 
 Schema and samples each have the existing 16 MiB cap and JSON depth 32, further
 lowerable through `ArchiveLimits`. Sample rows are encoded incrementally within
-the byte budget; no row is truncated. The five-member ceiling already permits
-manifest, model, schema, structure and samples together.
+the byte budget; no row is truncated. Six members permit a composite with
+manifest, skops prefix, native leaf, structure, schema and explicit samples.
+Composite schema, training dtypes and samples describe original inputs, never
+the transformed boundary; target reports use the final adapter's verified labels.
 
 ## Error boundaries
 

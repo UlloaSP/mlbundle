@@ -25,9 +25,10 @@ and independently before native load. Categorical CBM round trips work natively,
 but CTR storage has an unchecked native loader and needs its own preflight.
 There is no implicit input encoding or model conversion in this adapter.
 
-A sklearn Pipeline containing CatBoost is unsupported. The skops trust list
-does not admit CatBoost; export lists the unsupported types and instructs the
-caller to export `pipeline.named_steps["est"]` directly. No implicit unwrapping.
+An exact outer sklearn Pipeline may end in an admitted CatBoost wrapper via the
+[composite representation](format-pipeline.md). The prefix uses checked skops bytes;
+CBM passes through this adapter's unchanged preflight/claims/structure checks.
+Other native placements are rejected; CatBoost remains outside skops trust.
 `class_labels=` is rejected even if equal: native `classes_` owns the labels.
 Class arrays retain native scalar types and probability-column order and are
 output-major, including `[[0, 1]]` for binary classification. Int and string
@@ -36,7 +37,8 @@ binary/multiclass labels have tested exact round trips.
 ## Native I/O and wrapper recovery
 
 Library/serialization/member pairing is `catboost` / `cbm` / `model.cbm`.
-There is exactly one native member per bundle; no pickle or skops fallback.
+Standalone bundles have one native member; composites may also have a skops prefix.
+CBM never goes through skops; there is no pickle fallback.
 Public `save_model(path, format="cbm")` writes in an export-only temporary
 directory that is removed before publication. Public saving has no in-memory
 API. Public `load_model(blob=data)` consumes bytes without reader-side disk I/O.
