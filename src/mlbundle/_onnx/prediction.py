@@ -8,13 +8,11 @@ import numpy as np
 
 from mlbundle.adapters import ProbabilityOutput, RegressionOutput
 from mlbundle.contract import ModelKind
-from mlbundle.errors import InvalidModelError
+from mlbundle.errors import InvalidModelError, PredictionInputError
 
 from .description import Description
 
-
-class _InputShapeError(ValueError):
-    pass
+_InputShapeError = PredictionInputError
 
 
 def _array(data: Any, dtype: str) -> np.ndarray:

@@ -26,6 +26,7 @@ from .errors import (
     LimitExceededError,
     MissingOptionalDependencyError,
     MLBundleError,
+    PredictionInputError,
     UnsupportedFormatVersionError,
     UnsupportedModelError,
 )
@@ -68,6 +69,7 @@ __all__ = [
     "ModelKind",
     "OnnxInfo",
     "Opset",
+    "PredictionInputError",
     "SerializationFormat",
     "TargetInfo",
     "TrainingEnvironment",

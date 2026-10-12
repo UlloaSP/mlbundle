@@ -145,3 +145,23 @@ def test_tag_depth_and_malformed_unicode_escapes():
         canonical_dumps([math.inf], max_depth=1)
     with pytest.raises(InvalidJSONError):
         canonical_loads(b'"\\uXXXX"')
+
+
+def test_shared_json_expansion_is_bounded_before_normalization(monkeypatch):
+    from mlbundle import canonical
+
+    value = [0]
+    for _ in range(25):
+        value = [value, value]
+    monkeypatch.setattr(
+        canonical,
+        "_normalize",
+        lambda *args: pytest.fail("Expansion must be rejected before normalization"),
+    )
+    with pytest.raises(LimitExceededError, match="Expanded JSON"):
+        canonical_dumps(value, max_bytes=1024)
+
+
+def test_shared_json_within_budget_is_preserved():
+    child = [1, 2]
+    assert canonical_dumps([child, child]) == b"[[1,2],[1,2]]"

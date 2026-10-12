@@ -163,23 +163,23 @@ def test_chunked_model_and_empty_model(manifest_data):
     [
         (
             b"native model bytes",
-            "9ecfa6843fd40cb5e1f0e7dfa045990843916f5d46120a35e71f329eb02bb4bc",
+            "7349202ed42da9cbf06588566b130261bc2e09ba11a7193ae3fa3d561079e773",
         ),
         (
             random.Random(0).randbytes(200_000),
-            "70dce8cf3fde079a3b8afe2de31d45ed94d16d9b0f8f1069d42a46ced962d45b",
+            "96bad29c8a6736e010e6fd0a2b80413bb6b1c716e9970770d7e1b2b514ae368c",
         ),
         (
             b"hello world " * 10_000,
-            "86ff212d87c2fbe73f06768ccf0ea02feb2bc183f03f076d844a8e63ec2a9d42",
+            "11b89928584fa5eac0950d48cffcdbd77b2d42ead5a36b7b381c2f4e512ffa36",
         ),
         (
             bytes(range(256)) * 500,
-            "35c93d469d64d6e25a9d0f0283a4f2cef5e54f84b07a6b294d7cdfae96d66d8b",
+            "e9d931bd6cb9e0e77b9fafc66f28c2065d720167e0032f5f0f3ceff82a949014",
         ),
         (
             b"0" * 1000,
-            "60e744b7d243af13e980de7b083715d638318d090c63f2a0290fe9ee366b9d52",
+            "cf5bbd36f140cd2af5feffca7c4c67b288120bb44d33e558d927520a21f23eb7",
         ),
     ],
     ids=["native", "noise", "text", "uniform", "runs"],

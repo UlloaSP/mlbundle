@@ -26,6 +26,7 @@ from .native import (
     validate_payload,
 )
 from .prediction import Predictor
+from .state import attributes
 from .structure import extract_structure
 
 CLASSES = {"XGBClassifier": xgb.XGBClassifier, "XGBRegressor": xgb.XGBRegressor}
@@ -72,15 +73,39 @@ class Adapter:
             raise UnsupportedModelError(
                 reason="Only XGBClassifier and XGBRegressor are supported."
             )
+        allowed = set(vars(type(model)())) | {
+            "_Booster",
+            "n_classes_",
+            "evals_result_",
+            "kwargs",
+        }
+        if set(vars(model)) - allowed:
+            raise InvalidModelError("Unknown XGBoost wrapper state.")
         if not model.__sklearn_is_fitted__():
             raise UnsupportedModelError(reason="XGBoost estimator must be fitted.")
         if callable(model.objective):
             raise UnsupportedModelError(
                 reason="Custom XGBoost objectives are unsupported."
             )
+        attributes(
+            model.get_booster().attributes(), model.get_booster().num_boosted_rounds()
+        )
         learner = configuration(model.get_booster())
         kind, width, classes = dimensions(learner)
         tree_model(learner)
+        if model.objective not in (
+            None,
+            learner["objective"]["name"],
+        ) or model.booster not in (None, "gbtree", "dart"):
+            raise InvalidModelError(
+                "XGBoost wrapper and native objective/booster disagree."
+            )
+        if model.feature_types is not None and canonical_dumps(
+            model.feature_types
+        ) != canonical_dumps(model.get_booster().feature_types):
+            raise InvalidModelError(
+                "XGBoost wrapper and native feature types disagree."
+            )
         if (type(model) is xgb.XGBClassifier) != (kind == ModelKind.CLASSIFIER):
             raise UnsupportedModelError(
                 reason="XGBoost wrapper kind and native objective disagree."
@@ -198,7 +223,14 @@ class Adapter:
                 kind=ModelKind.CLASSIFIER
                 if classes is not None
                 else ModelKind.REGRESSOR,
-                hyperparameters=parameters(learner, _settings(model)),
+                hyperparameters={
+                    **parameters(learner, _settings(model)),
+                    "attributes": {
+                        key: value
+                        for key, value in attributes(booster.attributes()).items()
+                        if key != ATTRIBUTE
+                    },
+                },
                 n_features=model.n_features_in_,
                 n_classes=None if classes is None else [classes],
                 n_outputs=1,

@@ -4,10 +4,11 @@ from typing import Any, cast
 
 import numpy as np
 
+from mlbundle._prediction_input import tabular
 from mlbundle.adapters import ProbabilityOutput, RegressionOutput
 from mlbundle.claims import ModelClaims
 from mlbundle.contract import ModelKind
-from mlbundle.errors import InvalidModelError
+from mlbundle.errors import InvalidModelError, MLBundleError
 
 
 class Predictor:
@@ -17,25 +18,17 @@ class Predictor:
 
     def _call(self, data: object, *, probabilities: bool) -> tuple[np.ndarray, int]:
         try:
-            shape = getattr(data, "shape", None)
-            if shape is None:
-                data = np.asarray(data)
-                shape = data.shape
-            if len(shape) != 2 or shape[1] != self.claims.n_features:
-                raise ValueError(
-                    "Prediction input must have the model's feature width."
-                )
-            rows = int(shape[0])
+            data, rows = tabular(
+                data, self.claims.n_features, categorical=self.model.enable_categorical
+            )
             raw = (
                 self.model.predict_proba(data)
                 if probabilities
                 else self.model.predict(data)
             )
             return np.asarray(raw, dtype=float), rows
-        except ValueError as error:
-            if str(error) == "Prediction input must have the model's feature width.":
-                raise
-            raise InvalidModelError("Invalid XGBoost prediction input.") from None
+        except MLBundleError:
+            raise
         except Exception:
             raise InvalidModelError("XGBoost prediction failed.") from None
 

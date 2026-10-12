@@ -4,11 +4,13 @@ mlbundle is a Python library for packaging a trained model, a rich manifest,
 locally inferred schema and structure in one compressed `.mlbundle` file. The same package
 writes bundles on the training machine and reads them with validation in a runtime.
 
-**Status: pre-alpha, Phase 5.** The [version 1 format contract](docs/format.md),
+**Status: pre-alpha, Phase 6.** The [version 1 format contract](docs/format.md),
 strict manifest models, canonical JSON, integrity helpers, environment capture,
 adapter/result contracts, secure container reading/writing and public `inspect`
 and public sklearn/XGBoost/ONNX `export`/`load` are implemented and tested.
 Local schema inference, training dtypes and explicit samples are implemented.
+Reader hardening covers complete fitted state, unknown state rejection, bounded
+shared references/sparse storage and bounded prediction errors.
 The CLI is still missing. Nothing has been
 published to PyPI.
 
@@ -81,7 +83,8 @@ LinearRegression, Ridge and scaler/classifier pipelines are covered by round-tri
 tests. Multi-output labels and probabilities retain output-major order. Pipeline
 structure is null because v1 does not map transformed features. Custom types,
 user functions, HistGradientBoosting and XGBoost steps inside sklearn pipelines
-are rejected.
+are rejected. [Prediction-state rules](docs/format-state.md) also bind opaque
+pipelines and reject extra attributes/files before native loading.
 
 For local schema inference, install `mlbundle[sklearn,schema]` on Python 3.14.
 Use the training frame with string column names in model input order:

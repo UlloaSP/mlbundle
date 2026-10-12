@@ -66,6 +66,10 @@ class InvalidModelError(MLBundleError):
     """Native model content is malformed or violates the adapter contract."""
 
 
+class PredictionInputError(InvalidModelError, ValueError):
+    """Bounded invalid-input error retaining the shape-error ValueError contract."""
+
+
 class InvalidSchemaError(MLBundleError):
     """Training inputs or schema declarations violate the schema contract."""
 

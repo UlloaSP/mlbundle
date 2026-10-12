@@ -13,6 +13,7 @@ import mlbundle
         ("UnsupportedFormatVersionError", ()),
         ("InvalidManifestError", ()),
         ("InvalidModelError", ("Invalid native model.",)),
+        ("PredictionInputError", ("Invalid input width.",)),
         ("InvalidSchemaError", ("Invalid schema.",)),
         ("InvalidSamplesError", ("Invalid samples.",)),
         ("InvalidJSONError", ()),

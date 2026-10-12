@@ -11,6 +11,7 @@ The normative container rules are in [Container and resource limits](format-cont
 The normative structure, adapter and result rules are in [Adapters and structure](format-adapters.md).
 The implemented ONNX mapping and validation rules are in [ONNX](format-onnx.md).
 The normative schema/declaration rules are in [Schema and samples](format-schema.md).
+[Prediction state and bounded work](format-state.md) is also normative.
 These sections are part of this version 1 contract.
 
 ## Members
@@ -255,7 +256,7 @@ from recomputing claims: plausible metadata alone never verifies a model.
 The manifest's claim projection is `ModelClaims`: estimator class, kind,
 hyperparameters, feature/class/output counts, model-origin feature names (null
 otherwise), model dtypes, original output-major class labels and ONNX graph
-metadata. Classifier extraction may leave labels null only when the native model
+metadata and the optional fitted-state commitment. Classifier extraction may leave labels null only when the native model
 carries none; the shared pipeline resolves the declaration as specified above.
 Library/serialization/member pairing is validated by the closed
 registry. Structure is compared separately using the same canonical encoding.
@@ -273,6 +274,8 @@ explicit reader implementation. Tightening caller-selected resource limits does
 not change the format. Corrections to documentation that preserve wire behavior
 and implementation changes behind these contracts do not require a version bump.
 Phase 5 completes the unreleased v1 schema vocabulary and adds `declared` origin.
+Phase 6 completes unreleased v1 prediction-state records, missing tree routing,
+native XGBoost routing/dropout and closed state/work rules without a version bump.
 
 Hashes detect corruption, not deliberate tampering: an attacker can replace a
 model and update every record. Claim recomputation prevents a bundle from showing

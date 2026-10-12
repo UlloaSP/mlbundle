@@ -9,7 +9,9 @@ Structure is never embedded in the manifest. It is a JSON object with required
 `feature_importances` is null or an ordered numeric array of length `n_features`.
 Numbers use the canonical encoding, including non-finite tags. Arrays and tree
 lists preserve native order; no pruning, rounding, flattening of output/class
-dimensions or display-oriented simplification is permitted.
+dimensions or display-oriented simplification is permitted. Sklearn structures
+add required `state_sha256` and `prediction_state` fields; XGBoost adds required
+`native_model`. See [prediction state](format-state.md) for their exact rules.
 
 | `family` | Additional required fields |
 | --- | --- |
@@ -20,10 +22,11 @@ dimensions or display-oriented simplification is permitted.
 | `feature_importances` | No additional fields; the importance array must be non-null. |
 
 A scikit-learn tree object has exactly `node_count` (positive integer),
+`max_depth` (nonnegative integer, verified from reachability),
 `n_features` (positive integer), `n_outputs` (positive integer), `n_classes`
 (native per-output class-count array), and these native `tree_` arrays:
 `children_left`, `children_right`, `feature`, `threshold`, `value`, `impurity`,
-`n_node_samples`, `weighted_n_node_samples`. Except `value`, each array's length
+`n_node_samples`, `weighted_n_node_samples`, `missing_go_to_left`. Except `value`, each array's length
 is `node_count`; `value` retains its native `[node, output, class/value]` shape.
 Preserve leaf and undefined-feature sentinel values, and sklearn's native value
 normalization for the installed version. Do not reinterpret `value` as counts.
@@ -39,7 +42,8 @@ families require a deliberate future contract change.
 Sklearn `Pipeline` returns null structure in version 1. Its final estimator
 operates on transformed features; version 1 has no input transformation mapping,
 so no final-step tree or coefficient member is emitted. Claims, names and
-predictions still describe the complete pipeline. Standalone DecisionTree,
+predictions still describe the complete pipeline; `model.state_sha256` also
+binds every fitted step and transform. Standalone DecisionTree,
 RandomForest, ExtraTrees, GradientBoosting, LogisticRegression, LinearRegression
 and Ridge retain their native structures as specified above. HistGradientBoosting
 is currently rejected: its `TreePredictor` storage is not on mlbundle's trust
@@ -93,6 +97,8 @@ dtypes. Tree constructor dimensions/class counts and state-array shapes are
 bounded before native construction. Loaded tree dimensions, child/feature indices,
 reachability and depth are checked before native feature-importance traversal or
 prediction, and input/output/class counts must agree with owning estimators.
+Closed state, shared-reference work and sparse-array storage rules are specified
+in [prediction state](format-state.md) and apply identically to export and load.
 Ensemble feature mappings must address the parent input width. Every loaded root object is
 checked again for classifier/regressor identity, fitted state and probability
 support. Multilabel classifiers with independent positive-class columns and
@@ -127,17 +133,19 @@ exactly `{ "estimator_class": CLASS, "class_labels": LABELS_OR_NULL,
 (a finite binary64 value or the canonical NaN tag), `importance_type` (one of
 `gain`, `weight`, `cover`, `total_gain`, `total_cover`; omitted native option
 normalizes to `gain`), and `enable_categorical` (boolean). These settings survive
-loading and are compared with the wrapper. Other booster attributes, including
-`best_iteration`, survive unchanged; prediction respects native best iteration.
+loading and are compared with the wrapper. The only other allowed booster keys
+are `best_iteration`, `best_score`, `scikit_learn`; they are bounded and included
+in verified hyperparameters. Prediction respects the verified best iteration.
 
-`hyperparameters` has exactly these four keys:
+`hyperparameters` has exactly these five keys:
 
 ```json
 {
   "learner_model_param": {"base_score":"[5E-1]","boost_from_average":"1","num_class":"0","num_feature":"4","num_target":"1"},
   "objective": {"name":"binary:logistic","reg_loss_param":{"scale_pos_weight":"1"}},
   "gradient_booster": {"name":"gbtree","gbtree_model_param":{"num_parallel_tree":"1","num_trees":"3"}},
-  "prediction": {"missing":{"$float":"nan"},"importance_type":"gain","enable_categorical":true}
+  "prediction": {"missing":{"$float":"nan"},"importance_type":"gain","enable_categorical":true},
+  "attributes": {}
 }
 ```
 
@@ -145,6 +153,7 @@ The first three records are a projection of the parsed native `save_config()`:
 retain every field in `learner_model_param`, `objective`, and
 `gradient_booster.gbtree_model_param`, plus the booster name, with native value
 types/spellings unchanged. `prediction` is the bound wrapper settings record.
+`attributes` contains the allowed native attributes other than `mlbundle`.
 Neither `get_params()` nor the whole config survives native model I/O. Training
 settings such as learning rate, max depth, seed, threads and metrics are therefore
 not claimed or reconstructed. Export compares this projection and the complete
@@ -153,7 +162,8 @@ serialization round trip. Unsupported unrecoverable claims fail publication.
 
 Booster feature names and feature types become verified claims; absent values
 are null. Structure is exactly the `xgboost` family above, with the wrapper's
-native float32-normalized importance vector for the bound importance type.
+native float32-normalized importance vector for the bound importance type and
+the complete `native_model` record, including routing and dropout state.
 Prediction values and structure scalars promote float32 exactly to binary64.
 Claim/structure comparisons use exact canonical bytes; probability row-sum
 validation allows `rtol=1e-6`, `atol=1e-7` for float32 arithmetic.
@@ -176,7 +186,14 @@ dependency. Regressors return `list[float]` for a single output or row-major
 multiple outputs, aligned with class labels. Validate probability dimensions,
 finite probabilities, range and row sums in the adapter. Classifier prediction
 uses `predict_proba`; regressor prediction uses `predict`. Unsupported probability
-or regression contracts fail rather than synthesizing outputs.
+or regression contracts fail rather than synthesizing outputs. Inputs must have
+rank two and the native feature width. Numeric inputs reject strings, complex
+values and infinities; sklearn/XGBoost permit NaN for native missing-value handling.
+A sklearn Pipeline with a fitted OneHotEncoder/OrdinalEncoder also admits strings;
+categorical XGBoost DataFrame columns retain native recoding. ONNX requires finite
+numeric cells as specified separately. Input and remaining native failures become
+bounded `MLBundleError` subclasses without cell contents. Shape errors additionally
+retain `ValueError` compatibility through `PredictionInputError`.
 
 `MetadataView` carries `manifest`, a tuple of `MemberName` values including
 the manifest, and optional `schema` and `samples` JSON values; it has no model.
