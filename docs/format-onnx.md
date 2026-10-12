@@ -98,15 +98,36 @@ the writer's extraction code and compared by exact canonical bytes. Historical
 environment, training dtypes, supplied matrix feature names, target name and
 label-free mappings remain declarations.
 
+Producer name/version each allow 0–65,536 characters, including multiline build
+information ([CatBoost writes its build record](https://github.com/catboost/catboost/blob/master/catboost/libs/model/model_export/onnx_helpers.cpp) as the version). This bound
+also admits the short tool/release strings written by [skl2onnx](https://github.com/onnx/sklearn-onnx/blob/main/skl2onnx/__init__.py), [onnxmltools](https://github.com/onnx/onnxmltools/blob/main/onnxmltools/__init__.py) and
+[PyTorch](https://github.com/pytorch/pytorch/blob/main/torch/onnx/_internal/exporter/_core.py). Opset domains retain their 256-character ceiling and closed domain set.
+Symbolic dimensions, verified column names and string class labels retain the
+shared 1,024-character ceiling. Matrix input/output names and metadata keys/values
+have no separate character ceiling: their full projection shares the 1 MiB
+hyperparameter budget. Graph/node names, model domain and documentation are not
+claims and remain bounded by member bytes. String-limit errors identify the
+closed offending claim field and numeric limit without echoing its value;
+projection-limit errors name inputs/outputs/metadata_props and their byte/depth cap.
+
 ## Before any native session
 
 Both export and load perform the same checks, in this order:
 
 1. Bound bytes to the 512 MiB native-member ceiling (archive/caller limits also
    apply). Scan protobuf wire fields through the installed ONNX descriptors
-   before construction: depth at most 32, at most 1,000,000 fields/scalar values,
+   before construction: depth at most 32, at most 536,870,912 fields/scalar values,
    valid lengths/wire types/varints/packed fields, no unknown fields or duplicate
-   singular fields. This rejects hidden content and parser amplification tricks.
+   singular fields. Each field header and packed scalar consumes at least one
+   distinct byte, so this count cannot exceed the admitted member bytes. Unlike
+   the former 1,000,000 ceiling, it admits large unpacked tree attributes up to
+   the byte ceiling; it does not cap protobuf's decoded object memory. Repeated
+   scalars use bounded 64 KiB NumPy scans with C regex fallback for short/irregular
+   runs; equal repeated strings/bytes up to 4 KiB use C regex. Packed varints use
+   C regex with NumPy counts. A 64-byte regex probe gates vector scans, whose
+   windows grow from 128 bytes only after proportional progress to avoid
+   overlapping work on short alternating fields. Other fields use the descriptor
+   walker. Batching preserves every wire check and counts every scalar/header.
 2. Parse in-memory with ModelProto. Visit every message, including sparse tensors,
    tensor attributes, nested graphs and functions. Reject any tensor with an
    external-data entry or non-default data location, segments or unsupported
@@ -127,6 +148,13 @@ Both export and load perform the same checks, in this order:
    and constant propagation are not requested. Validate the supported tabular
    layout and build bounded strict claims before creating any runtime session.
    Terminal LinearRegressor/TreeEnsembleRegressor native target counts must be one.
+
+The immutable bytes are scanned, parsed and described once per export or load.
+Each newly created adapter retains one description by bytes-object identity for
+that operation; there is no global cache or author-supplied description. Export
+still creates and validates independent CPU sessions for preparation and its
+native round trip. Load compares the recomputed description with the manifest
+and constructs its predictor from that same validated description.
 
 Create ONNX Runtime from those bytes with CPUExecutionProvider only, sequential
 execution, one intra/inter-op thread, disabled graph optimization/prepacking,

@@ -86,7 +86,8 @@ invalidates the verified relationship with metadata.
 
 Mandatory structure is exactly `family="catboost"`, `feature_importances`
 and `native_model`. Importances are freshly computed with
-`get_feature_importance(type="PredictionValuesChange", thread_count=1)`,
+`get_feature_importance(type="PredictionValuesChange", thread_count=1)` on a
+native public `copy()`, so computation cannot overwrite the caller's importance cache;
 not copied from the fitted wrapper's cached `feature_importances_`.
 `native_model` has exactly these fields:
 

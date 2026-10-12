@@ -28,10 +28,7 @@ from .parameters import parameters
 from .payload import validate_payload
 from .prediction import Predictor
 from .structure import extract_structure, validate_tree_storage
-
-# Native numeric node storage for DecisionTree, RandomForest, ExtraTrees and
-# GradientBoosting; no functions/I/O constructors. Indices are validated on load.
-TRUSTED_TYPES = ("sklearn.tree._tree.Tree",)
+from .trusted import TRUSTED_TYPES
 
 
 def _untrusted(data: bytes) -> None:

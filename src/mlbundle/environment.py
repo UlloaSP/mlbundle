@@ -46,8 +46,8 @@ class Opset(ContractModel):
 class OnnxInfo(ContractModel):
     opsets: list[Opset] = Field(min_length=1, max_length=128)
     ir_version: int = Field(gt=0, le=2**31 - 1)
-    producer_name: Annotated[str, Field(max_length=256)]
-    producer_version: Annotated[str, Field(max_length=256)]
+    producer_name: Annotated[str, Field(max_length=65536)]
+    producer_version: Annotated[str, Field(max_length=65536)]
 
     @model_validator(mode="after")
     def unique_domains(self) -> OnnxInfo:

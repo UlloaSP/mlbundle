@@ -84,8 +84,10 @@ including a present JSON null. Malformed native payloads raise `InvalidModelErro
 an `MLBundleError` subclass, without native exception text.
 
 The sklearn adapter uses only `skops.io.dumps/loads`. Its fixed supplemental
-trusted list is exactly `["sklearn.tree._tree.Tree"]`, for numeric node storage
-in the supported tree families; it adds no callable, arbitrary class or I/O type.
+trusted list is exactly `sklearn.tree._tree.Tree`,
+`sklearn.neural_network._stochastic_optimizers.AdamOptimizer` and
+`sklearn.neural_network._stochastic_optimizers.SGDOptimizer`: numeric tree storage
+and the fitted MLP solver records. It adds no callable, arbitrary class or I/O type.
 Skops' own defaults remain part of the dependency trust boundary. Dumped bytes
 are audited with `get_untrusted_types`; every type outside the list is rejected
 at export and independently at load. XGBoost estimators inside sklearn pipelines
@@ -93,6 +95,10 @@ are rejected (`xgboost.core.Booster`, `xgboost.sklearn.XGBClassifier` are untrus
 CatBoost pipeline steps are also rejected, with unsupported types listed and
 an instruction to export `pipeline.named_steps["est"]` directly. Native adapters
 own standalone XGBoost and CatBoost loading; neither is implicitly unwrapped.
+MLPClassifier/MLPRegressor support adam, sgd and lbfgs, alone or in a Pipeline.
+MLP structure is null; layer weights and complete fitted/optimizer state are
+bound by the manifest state commitment. Optimizers permit ObjectNode only
+(plus shared CachedNode references), never a constructor/reduce loader.
 The nested skops archive is bounded before parsing; every schema-referenced
 numeric array header is checked regardless of filename suffix. Headers must
 match the stored byte sizes and cannot use object-array loading or zero-itemsize

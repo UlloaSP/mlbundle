@@ -81,7 +81,7 @@ def _shape(shape: Any) -> None:
         if dim.HasField("dim_value"):
             static.append(dim.dim_value)
         elif len(dim.dim_param) > 1024:
-            raise LimitExceededError("ONNX symbolic dimension exceeds the limit.")
+            raise LimitExceededError("ONNX dim_param exceeds the 1024-character limit.")
     _dimensions(static, allow_zero=True)
 
 

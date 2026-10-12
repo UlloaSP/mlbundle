@@ -147,8 +147,10 @@ def test_native_importance_cache_and_export_immutability(tmp_path):
     )
     model._canonized_params = None
     before = model._serialize_model()
+    cache = model._prediction_values_change
     path = tmp_path / "cache.mlbundle"
     mlbundle.export(model, path)
     assert model._canonized_params is None
+    assert model._prediction_values_change is cache
     assert model._serialize_model() == before
     assert np.array_equal(mlbundle.load(path).predict(x), model.predict(x))

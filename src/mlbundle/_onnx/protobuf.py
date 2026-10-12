@@ -5,11 +5,14 @@ from typing import Any
 from mlbundle.errors import InvalidModelError, LimitExceededError
 from mlbundle.limits import ArchiveLimits
 
-MAX_FIELDS = 1_000_000
+from ._wire_runs import packed_varints, repeated
+
+# Each field/header or packed scalar consumes at least one distinct wire byte.
+MAX_FIELDS = ArchiveLimits().max_member_bytes
 MAX_DEPTH = 32
 
 
-def _varint(data: memoryview, position: int, end: int) -> tuple[int, int]:
+def _varint(data: bytes, position: int, end: int) -> tuple[int, int]:
     value = 0
     for shift in range(0, 70, 7):
         if position >= end:
@@ -30,7 +33,7 @@ def validate_wire(data: bytes, descriptor: Any) -> None:
     if len(data) > ArchiveLimits().max_member_bytes:
         raise LimitExceededError("ONNX model exceeds the byte limit.")
     budget = [0]
-    _message(memoryview(data), 0, len(data), descriptor, depth=0, budget=budget)
+    _message(data, 0, len(data), descriptor, depth=0, budget=budget)
 
 
 def _message(data, position, end, descriptor, *, depth, budget):
@@ -41,13 +44,22 @@ def _message(data, position, end, descriptor, *, depth, budget):
         budget[0] += 1
         if budget[0] > MAX_FIELDS:
             raise LimitExceededError("ONNX protobuf field count exceeds the limit.")
+        start = position
         tag, position = _varint(data, position, end)
         number, wire = tag >> 3, tag & 7
         field = descriptor.fields_by_number.get(number)
         if field is None or (not field.is_repeated and number in seen):
             raise InvalidModelError("Unknown or duplicate ONNX protobuf field.")
         seen.add(number)
+        value_start = position
         position = _field(data, position, end, field, wire, depth=depth, budget=budget)
+        if field.is_repeated and (wire != 2 or field.type in (9, 12)):
+            position, count = repeated(
+                data, start, end, value_start=value_start, stop=position, wire=wire
+            )
+            budget[0] += count - 1
+            if budget[0] > MAX_FIELDS:
+                raise LimitExceededError("ONNX protobuf field count exceeds the limit.")
 
 
 def _field(data, position, end, field, wire, *, depth, budget):
@@ -85,8 +97,12 @@ def _packed(data, position, end, wire, budget):
         budget[0] += (end - position) // size
     else:
         while position < end:
-            _, position = _varint(data, position, end)
-            budget[0] += 1
+            stop, count = packed_varints(data, position, end)
+            if not count:
+                stop = _varint(data, position, end)[1]
+                count = 1
+            position = stop
+            budget[0] += count
             if budget[0] > MAX_FIELDS:
                 raise LimitExceededError(
                     "ONNX protobuf scalar count exceeds the limit."

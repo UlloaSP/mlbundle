@@ -52,7 +52,9 @@ def json_value(value: Any) -> Any:
 
 def feature_importances(model: Any, width: int) -> list[float]:
     values = np.asarray(
-        model.get_feature_importance(type="PredictionValuesChange", thread_count=1),
+        model.copy().get_feature_importance(
+            type="PredictionValuesChange", thread_count=1
+        ),
         dtype=float,
     )
     if values.shape != (width,) or not np.isfinite(values).all() or np.any(values < 0):

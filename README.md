@@ -1,8 +1,7 @@
 # mlbundle
 
-Package a trained model, its manifest, locally inferred schema and model
-structure in one compressed `.mlbundle` file. Use the same Python library to
-export on the training machine and validate/load in the consuming application.
+Package a trained model, manifest, locally inferred schema and structure in one `.mlbundle` file.
+Export on the training machine and validate/load in the consuming application with the same Python library.
 
 mlbundle replaces three gaps in separate model/DataFrame uploads:
 
@@ -50,9 +49,8 @@ regressors use `bundle.predict`. Results are plain lists: output-major classifie
 labels/probabilities, row-major regression values. `native_model` supports native
 inference/explanations; mutating it invalidates the metadata verification.
 
-Native names take precedence over `feature_names=`. Otherwise names are declared,
-from a DataFrame, or generated as `feature_1` through `feature_N`; origin records
-that choice. `target_name=` and `metadata=` remain author declarations.
+Native names win; otherwise origin is `declared`, `dataframe`, or `generated` (`feature_1` through `feature_N`).
+`target_name=` and `metadata=` remain author declarations.
 
 ## XGBoost
 
@@ -214,13 +212,14 @@ dependency rejection (`MLBundleError`), **2** usage/I/O failure.
 
 ## Supported models and limits
 
-Support requires a faithful round trip through the closed adapter. A catalog
-entry alone does not guarantee that every fitted configuration exports.
+Support requires a faithful closed-adapter round trip; a catalog entry does not guarantee every fitted configuration exports.
 
 - **Sklearn:** fitted classifiers exposing `predict_proba` and regressors with
   recoverable feature/output counts. Tested families include trees/ensembles,
   linear/regularized/robust/GLM models, SVMs, PLSRegression, naive Bayes, LDA/QDA,
   dense brute-force neighbors, NearestCentroid, MLP and MultiOutput/RegressorChain.
+  MLPClassifier/Regressor (adam, sgd, lbfgs) retain optimizer state, alone/in pipelines,
+  with null structure and complete commitments; see [MLP tests](tests/test_sklearn_mlp.py).
   Scaler and dense OneHotEncoder pipelines round-trip; structure stays null
   because format 1 does not map transformed features. See
   [tested configurations](tests/test_sklearn_families.py) and
@@ -252,6 +251,9 @@ entry alone does not guarantee that every fitted configuration exports.
   larger fixed batches, multiple targets, external tensors, custom domains/local
   functions and training/runtime configuration fail before CPU sessions.
   Tested with ONNX 1.23.0/Runtime 1.30.0; operators/opsets must pass both.
+  Large unpacked ensembles/ZipMap and multiline producer versions work. One wire
+  validation per export/load; field/scalar ceilings follow 512 MiB, producer strings
+  allow 65,536 characters. See [ONNX bounds](docs/format-onnx.md).
 
 Archive ceilings: **5 members**, **512 MiB** archive/compressed/member bytes,
 **1 GiB** aggregate uncompressed bytes, ratio **200**, JSON depth **32**.
@@ -282,13 +284,11 @@ maintained dependencies. See [SECURITY.md](SECURITY.md) for guarantees and repor
 
 ## Development
 
-From the repository root, use `uv python install 3.14`,
-`uv sync --locked --all-extras` and `uv run pre-commit install`.
-The default dev group installs every extra; base users can use `uv sync --no-dev`.
-Pydantic v2 is the sole core runtime dependency; model/schema imports stay lazy.
-The schema extra admits mlschema `>=0.2.1,<0.3` for the 0.2 inferred vocabulary,
-with a Python 3.14 marker because 0.2.1 excludes 3.15. `uv.lock` fixes the tested
-development versions. Dependency edits require `uv sync` and the updated lockfile.
+From the root: `uv python install 3.14`, `uv sync --locked --all-extras`,
+`uv run pre-commit install`. Default dev installs every extra; base: `uv sync --no-dev`.
+Pydantic v2 is the sole core dependency; model/schema imports are lazy. Schema uses
+mlschema `>=0.2.1,<0.3` on 3.14 only (0.2.1 excludes 3.15). `uv.lock` fixes tested
+versions; dependency edits require `uv sync` and committing the updated lockfile.
 
 Run `uv run ruff check .`, `uv run ruff format --check .`, `uv run pyright`,
 `uv run pytest` and `uv build`. Tests execute every fenced README example,
