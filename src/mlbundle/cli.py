@@ -54,9 +54,9 @@ def _summary(view: MetadataView) -> str:
         f"Counts: features={model.n_features}, outputs={model.n_outputs}, classes={_display(model.n_classes)}",
         f"Features ({manifest.features.origin.value}): {_display(manifest.features.names)}",
         f"Class labels (output-major): {_display(manifest.target.class_labels)}",
-        "Members:",
     ]
-    lines[10:10] = _pipeline_summary(view)
+    lines.extend(_pipeline_summary(view))
+    lines.append("Members:")
     for member in view.members:
         record = manifest.integrity.get(member)
         if record is None:
