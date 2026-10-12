@@ -42,8 +42,8 @@ class _BoundedBuffer(BytesIO):
 def _finish_manifest(
     manifest: Manifest | Mapping[str, object], members: dict[MemberName, bytes]
 ) -> Manifest:
-    value = (
-        manifest.model_dump(mode="json", by_alias=True)
+    value: dict[str, object] = (
+        dict(manifest._wire_fields())
         if isinstance(manifest, Manifest)
         else dict(manifest)
     )
@@ -228,7 +228,7 @@ def write_validated_container(
         raise LimitExceededError("Total member size limit exceeded.")
     finished = _finish_manifest(manifest, content)
     content[MemberName.MANIFEST] = canonical_dumps(
-        finished.model_dump(mode="json", by_alias=True),
+        finished._wire_fields(),
         max_bytes=selected.member_bytes(MemberName.MANIFEST),
     )
     if sum(map(len, content.values())) > selected.max_total_bytes:

@@ -69,6 +69,44 @@ def _base(path: Path) -> None:
         raise AssertionError("base installation unexpectedly loaded sklearn")
     assert not _OPTIONAL & sys.modules.keys()
     sys.stdout.write("base wheel: import/help/inspect OK; optional libraries absent\n")
+    composite = path.with_name(path.stem + "-composite.mlbundle")
+    if composite.exists():
+        view = mlbundle.inspect(composite)
+        assert view.manifest.model.pipeline is not None
+        assert "Boundary: input=2, transformed=2" in _console("inspect", str(composite))
+        assert json.loads(
+            _console("inspect", str(composite), "--json")
+        ) == view.manifest.model_dump(mode="json", by_alias=True)
+        try:
+            mlbundle.load(composite)
+        except mlbundle.MissingOptionalDependencyError as error:
+            assert error.extra == "sklearn"
+        else:
+            raise AssertionError("base installation unexpectedly loaded a composite")
+        assert not _OPTIONAL & sys.modules.keys()
+        sys.stdout.write(
+            "base wheel: composite inspect OK; bounded missing sklearn dependency\n"
+        )
+
+
+def _composite_fixture(path: Path) -> None:
+    from sklearn.pipeline import make_pipeline
+    from sklearn.preprocessing import StandardScaler
+    from xgboost import XGBClassifier
+
+    import mlbundle
+
+    rows = [[0, 1], [1, 0], [0, 2], [2, 0]]
+    model = make_pipeline(
+        StandardScaler(), XGBClassifier(n_estimators=2, n_jobs=1)
+    ).fit(rows, [0, 1, 0, 1])
+    composite = path.with_name(path.stem + "-composite.mlbundle")
+    mlbundle.export(model, composite)
+    assert (
+        mlbundle.load(composite).predict_proba(rows)
+        == model.predict_proba(rows).tolist()
+    )
+    sys.stdout.write("composite fixture: separate skops/native members OK\n")
 
 
 def _contents(directory: Path) -> None:
@@ -109,6 +147,8 @@ def main() -> None:
             absent = _OPTIONAL - {"sklearn", "skops", "numpy", "scipy"}
             assert all(find_spec(name) is None for name in absent)
         _sklearn(args.path)
+        if args.action == "create":
+            _composite_fixture(args.path)
 
 
 if __name__ == "__main__":

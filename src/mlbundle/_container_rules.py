@@ -42,8 +42,12 @@ def check_members(
     if MemberName.MANIFEST not in present:
         raise InvalidContainerError("Missing manifest.json.")
     models = {pair[1] for pair in MODEL_MEMBERS.values()}
-    if len(present & models) != 1:
-        raise InvalidContainerError("Exactly one model member is required.")
+    selected = present & models
+    if len(selected) != 1 and selected not in (
+        {MemberName.SKOPS, MemberName.UBJSON},
+        {MemberName.SKOPS, MemberName.CBM},
+    ):
+        raise InvalidContainerError("Invalid model member combination.")
     if manifest is not None and present != {MemberName.MANIFEST, *manifest.integrity}:
         raise InvalidContainerError("Members disagree with manifest references.")
 

@@ -21,6 +21,7 @@ def read(data: dict) -> Manifest:
 def test_round_trip_and_claim_projection(manifest_data):
     manifest = read(manifest_data)
     assert Manifest.from_bytes(manifest.to_bytes()) == manifest
+    assert manifest.model.pipeline is None  # Old wire records omit this extension.
     assert manifest.to_bytes() == canonical_dumps(manifest_data)
     claims = manifest.verified_claims()
     assert claims.feature_names == ["a", "b"]

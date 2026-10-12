@@ -11,7 +11,7 @@ from typing import TextIO
 from . import inspect, load
 from .contract import MemberName
 from .errors import MissingOptionalDependencyError, MLBundleError
-from .results import MetadataView
+from .results import LoadedBundle, MetadataView
 
 _DISPLAY_LIMIT = 512
 _NOTICE = (
@@ -56,6 +56,7 @@ def _summary(view: MetadataView) -> str:
         f"Class labels (output-major): {_display(manifest.target.class_labels)}",
         "Members:",
     ]
+    lines[10:10] = _pipeline_summary(view)
     for member in view.members:
         record = manifest.integrity.get(member)
         if record is None:
@@ -87,6 +88,21 @@ def _summary(view: MetadataView) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _pipeline_summary(view: MetadataView | LoadedBundle) -> list[str]:
+    model = view.manifest.model
+    recipe = model.pipeline
+    if recipe is None:
+        return []
+    leaf = recipe.estimator
+    boundary = recipe.transformed_features
+    return [
+        f"Steps: {_display(recipe.step_names)}",
+        f"Estimator: {leaf.library.value} {_display(leaf.claims.estimator_class)} ({leaf.serialization.value})",
+        f"Boundary: input={model.n_features}, transformed={boundary.n_features}",
+        f"Transformed features ({boundary.origin}): {_display(boundary.names)}",
+    ]
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -156,6 +172,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"Valid bundle: {bundle.library.value} {_display(bundle.class_name)}; "
                 "verified format, integrity, schema/samples and native model claims/structure."
             )
+            details = _pipeline_summary(bundle)
+            if details:
+                output += "\n" + "\n".join(details)
         _write_output(output)
     except MissingOptionalDependencyError as error:
         return _write_error(

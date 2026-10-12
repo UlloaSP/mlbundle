@@ -99,7 +99,9 @@ values and fitted selector statistics participate in `state_sha256`.
 
 `state_sha256` is a lowercase SHA-256 digest. A sklearn structure object requires
 this field. Sklearn models with null structure, including Pipeline, instead put
-the digest in `model.state_sha256`; CatBoost also requires a native commitment there. This optional
+the digest in `model.state_sha256`; CatBoost also requires a native commitment there.
+Composite prefix digests instead live in `model.pipeline.transformers.state_sha256`;
+the outer digest is null, with native leaf claims/state and structure verified separately. This optional
 manifest field defaults to null, and is part of the verified claim projection.
 Missing commitments on an opaque sklearn model fail full load comparison.
 
@@ -156,10 +158,11 @@ selection inferred from attribute suffixes. The explicit checks supplement it:
 | GLMs | Coefficients/intercepts plus loss/link are structure/composition. Fitted loss/link class and class count must agree with the parameter-derived loss. |
 | SVC / NuSVC / SVR / NuSVR | Kernel parameters, support data, native/private coefficients, sparse flag, effective gamma and calibration are committed. Linear coefficients and calibration are structure/composition when available. Public and inference dual coefficients/intercepts must agree, including sklearn's binary sign reversal. Support counts/indices, coefficient/calibration dimensions and sparse storage agree. |
 | Naive Bayes / QDA / neighbors / nearest centroid / MLP / semi-supervised / opaque meta-estimators | Their complete fitted statistics, data, class/output mappings, distance/activation state and nested models are committed in the manifest when structure is null. Statistics/likelihood/prior dimensions agree with classes/features; neighbor sample counts agree with fitted arrays. MLP layer sizes, output counts/activation and label-binarizer classes agree with public parameters/labels. Existing probability/count/trust constraints still apply. |
-| Pipeline | All fitted steps, transformations, final estimator, order, names, classes and parameters are committed/claimed. Structure stays null; no transformed-feature visualization is inferred. |
+| All-sklearn Pipeline | All fitted steps/order/names/parameters are committed; structure stays null. |
+| Composite Pipeline | Prefix skops/state/parameters use the same owners as standalone sklearn. Leaf claims and complete native structure use its adapter. Shared data-free widths/names and checked tree-boundary record describe the reconstructed Pipeline; outer options/final name are declarations. See [pipelines](format-pipeline.md). |
 
 Unsupported custom types, functions/types outside these lists, HistGradientBoosting storage,
-XGBoost/CatBoost pipeline steps, multilabel/chain probability layouts and untrusted nested internals remain
+unsupported XGBoost/CatBoost placements, multilabel/chain probability layouts and untrusted nested internals remain
 rejections. For example, actual fitted `csr_matrix` neighbor state is outside the
 unchanged trust list; merely declaring its loader as the trusted base `spmatrix`
 does not make its state survive the native construction comparison.

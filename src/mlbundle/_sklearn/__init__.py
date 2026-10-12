@@ -27,24 +27,9 @@ from mlbundle.limits import MAX_CLASSES, MAX_OUTPUTS
 from .parameters import parameters
 from .payload import validate_payload
 from .prediction import Predictor
+from .serialization import deserialize as load_skops, serialize as dump_skops
 from .structure import extract_structure, validate_tree_storage
-from .trusted import TRUSTED_TYPES
-
-
-def _untrusted(data: bytes) -> None:
-    unsupported = tuple(
-        sorted(set(sio.get_untrusted_types(data=data)) - set(TRUSTED_TYPES))
-    )
-    if unsupported:
-        if any(name.startswith("catboost.") for name in unsupported):
-            raise UnsupportedModelError(
-                unsupported,
-                reason=(
-                    f"{UnsupportedModelError(unsupported)} "
-                    'Export the estimator directly: export(pipeline.named_steps["est"], ...).'
-                ),
-            )
-        raise UnsupportedModelError(unsupported)
+from .trusted import TRUSTED_TYPES as TRUSTED_TYPES
 
 
 def _outputs(model: Any, classifier: bool) -> tuple[int, ClassLabels | None]:
@@ -139,38 +124,10 @@ class Adapter:
         validate_tree_storage(model)
 
     def serialize(self, model: object) -> bytes:
-        try:
-            data = sio.dumps(model)
-            try:
-                validate_payload(data)
-            except UnsupportedModelError:
-                _untrusted(data)
-                raise
-            _untrusted(data)
-            self._validate(model)
-            return data
-        except MLBundleError:
-            raise
-        except Exception:
-            raise UnsupportedModelError(
-                reason="Model cannot be serialized safely with skops."
-            ) from None
+        return dump_skops(model, self._validate)
 
     def deserialize(self, data: bytes) -> object:
-        try:
-            expected_state = validate_payload(data)
-            _untrusted(data)
-            model = sio.loads(data, trusted=list(TRUSTED_TYPES))
-            self._validate(model)
-            if expected_state != validate_payload(sio.dumps(model)):
-                raise InvalidModelError(
-                    "Skops state does not survive native construction."
-                )
-            return model
-        except MLBundleError:
-            raise
-        except Exception:
-            raise InvalidModelError("Invalid skops model payload.") from None
+        return load_skops(data, self._validate)
 
     def extract_claims(self, model: Any) -> ModelClaims:
         try:

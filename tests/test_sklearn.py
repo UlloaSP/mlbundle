@@ -181,7 +181,17 @@ def test_multilabel_chain_is_rejected(data, tmp_path):
         ),
         (LinearSVC(), "predict_proba"),
         (HistGradientBoostingClassifier(), "TreePredictor"),
-        (Pipeline([("xgb", XGBClassifier(n_estimators=2, n_jobs=1))]), "xgboost"),
+        (
+            Pipeline(
+                [
+                    (
+                        "inner",
+                        Pipeline([("xgb", XGBClassifier(n_estimators=2, n_jobs=1))]),
+                    )
+                ]
+            ),
+            "xgboost",
+        ),
     ],
 )
 def test_export_rejections(model, match, data, tmp_path):

@@ -30,11 +30,8 @@ from sklearn.tree import DecisionTreeClassifier
 from mlbundle import export, inspect, load
 
 rows = [[0.0, 1.0], [1.0, 0.0], [0.1, 0.9], [0.9, 0.1]]
-model = DecisionTreeClassifier(random_state=7).fit(
-    rows, ["cold", "warm", "cold", "warm"]
-)
+model = DecisionTreeClassifier(random_state=7).fit(rows, ["cold", "warm"] * 2)
 export(model, "trained.mlbundle", feature_names=["temperature", "humidity"])
-
 bundle = load("trained.mlbundle")
 assert isinstance(bundle.native_model, DecisionTreeClassifier)
 assert bundle.native_model.predict(rows).tolist() == model.predict(rows).tolist()
@@ -63,12 +60,7 @@ from mlbundle import export, load
 
 rows = [[0.0, 1.0], [1.0, 0.0], [0.1, 0.9], [0.9, 0.1]]
 model = XGBClassifier(n_estimators=3, max_depth=2, n_jobs=1).fit(rows, [0, 1, 0, 1])
-export(
-    model,
-    "xgboost.mlbundle",
-    feature_names=["temperature", "humidity"],
-    class_labels=[["cold", "warm"]],
-)
+export(model, "xgboost.mlbundle", class_labels=[["cold", "warm"]])
 bundle = load("xgboost.mlbundle")
 assert isinstance(bundle.native_model, XGBClassifier)
 assert bundle.native_model.predict(rows).tolist() == model.predict(rows).tolist()
@@ -76,10 +68,10 @@ assert bundle.predict_proba(rows) == model.predict_proba(rows).tolist()
 assert bundle.class_labels == [["cold", "warm"]]
 ```
 
-The adapter binds labels/settings to a native **copy**, leaving your model
-unchanged. Load verifies that binding, not historical truth. Omitted labels use
-encoded indices or an existing binding; native `predict` still returns indices.
-Sklearn, CatBoost and regressors reject `class_labels=`.
+Labels/settings bind to a native **copy**. Load verifies consistency, not history.
+Omitted labels use encoded indices/an existing binding; native predict stays encoded.
+Standalone sklearn, CatBoost and regressors reject `class_labels=`; composites
+delegate labels to the final native adapter.
 
 Only recoverable native configuration is recorded; learning rate, max depth,
 seed and thread count do not survive native XGBoost I/O and are not reconstructed.
@@ -103,13 +95,44 @@ assert bundle.class_labels == [["cold", "warm"]]
 assert bundle.predict_proba(rows) == model.predict_proba(rows).tolist()
 ```
 
-Export a pipeline's estimator as `export(pipeline.named_steps["est"], ...)`.
-CatBoost pipelines, `class_labels=`, categorical/text/embedding features,
+`class_labels=`, categorical/text/embedding features,
 Depthwise/Lossguide, custom Python objectives/metrics and other losses are rejected.
 Classifier losses: Logloss, CrossEntropy, MultiClass. Regressors: RMSE, MAE,
 Quantile, Huber, Poisson, MAPE. Complete trees/borders/NaN handling/importances
 are verified on load. [The CatBoost contract](docs/format-catboost.md) details
 wrapper recovery, native-parser limits and the private in-memory serializer.
+
+## Composite pipelines
+
+Install `[sklearn,xgboost]` or `[sklearn,catboost]`. Export the fitted Pipeline
+as it is; transformers use skops and the final estimator uses its native adapter:
+
+```python
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from xgboost import XGBClassifier
+from mlbundle import export, load
+
+rows = [[0.0, 1.0], [1.0, 0.0], [0.1, 0.9], [0.9, 0.1]]
+model = make_pipeline(StandardScaler(), XGBClassifier(n_estimators=3, n_jobs=1))
+model.fit(rows, [0, 1, 0, 1])
+export(model, "pipeline.mlbundle", class_labels=[["cold", "warm"]])
+bundle = load("pipeline.mlbundle")
+assert bundle.predict_proba(rows) == model.predict_proba(rows).tolist()
+assert bundle.native_model.predict(rows).tolist() == model.predict(rows).tolist()
+assert bundle.class_labels == [["cold", "warm"]]
+```
+
+Load rebuilds a real Pipeline after verifying both parts. Bundle probability labels
+use XGBoost's bound originals; native classes/predict stay encoded. CatBoost keeps
+native labels. Prefixes include scalers, PCA, SimpleImputer (indicators/empty columns),
+KBinsDiscretizer, PolynomialFeatures, univariate selectors, OneHotEncoder/OrdinalEncoder,
+identity/closed NumPy FunctionTransformer, nested native-free Pipeline and ColumnTransformer.
+Each needs a fitted, data-free width proof. Unknown widths, FeatureUnion/KNNImputer,
+slice/callable/scalar selectors, caching, metadata routing and other native placements
+remain rejected. Step names/outer options are declarations; trees address transformed
+features, without original-feature attribution. Schema/dtypes/samples describe original
+inputs; six members permit schema plus explicit samples. See [the pipeline contract](docs/format-pipeline.md).
 
 ## Existing ONNX files
 
@@ -148,11 +171,8 @@ from sklearn.tree import DecisionTreeClassifier
 from mlbundle import export, inspect, load
 
 training = pd.DataFrame(
-    {
-        "temperature": [0.0, 1.0, 0.1, 0.9],
-        "humidity": [1.0, 0.0, 0.9, 0.1],
-        "target": ["cold", "warm", "cold", "warm"],
-    }
+    [[0.0, 1.0, "cold"], [1.0, 0.0, "warm"]] * 2,
+    columns=["temperature", "humidity", "target"],
 )
 features = training.drop(columns="target")
 model = DecisionTreeClassifier(random_state=7).fit(features, training["target"])
@@ -162,15 +182,8 @@ assert view.manifest.features.dtypes == ["float64", "float64"]
 assert view.schema["reports"][0]["labels"] == ["cold", "warm"]
 assert view.samples is None
 assert load("schema.mlbundle").schema == view.schema
-
 # Samples are real data: explicitly include the first two feature rows.
-export(
-    model,
-    "sampled.mlbundle",
-    training_data=training,
-    target_name="target",
-    sample_rows=2,
-)
+export(model, "sampled.mlbundle", training_data=features, sample_rows=2)
 assert inspect("sampled.mlbundle").samples == features.head(2).to_dict("records")
 ```
 
@@ -196,8 +209,6 @@ metadata or structure matches the model. `load` additionally deserializes throug
 the closed adapter and recomputes native claims and structure before returning
 the model and predictor. Export checks the same native round trip before writing.
 
-After the sklearn example above, these commands work:
-
 ```shell
 mlbundle inspect trained.mlbundle
 mlbundle inspect trained.mlbundle --json
@@ -212,61 +223,45 @@ dependency rejection (`MLBundleError`), **2** usage/I/O failure.
 
 ## Supported models and limits
 
-Support requires a faithful closed-adapter round trip; a catalog entry does not guarantee every fitted configuration exports.
-
 - **Sklearn:** fitted classifiers exposing `predict_proba` and regressors with
   recoverable feature/output counts. Tested families include trees/ensembles,
   linear/regularized/robust/GLM models, SVMs, PLSRegression, naive Bayes, LDA/QDA,
   dense brute-force neighbors, NearestCentroid, MLP and MultiOutput/RegressorChain.
-  MLPClassifier/Regressor (adam, sgd, lbfgs) retain optimizer state, alone/in pipelines, with null structure and complete commitments; see [MLP tests](tests/test_sklearn_mlp.py).
   SimpleImputer/KNNImputer, scalers, KBinsDiscretizer, categorical encoders,
   univariate selectors and closed NumPy FunctionTransformer functions round-trip,
   including nested ColumnTransformer pipelines; see [the exact lists](docs/format-state.md).
-  Pipeline structure stays null because format 1 does not map transformed features. See
+  All-sklearn Pipeline structure stays null; composite trees expose the inner boundary. See
   [tested configurations](tests/test_sklearn_families.py) and [core round trips/rejections](tests/test_sklearn.py).
 - **Sklearn rejections:** custom estimators/subclasses, functions/types outside the
   closed lists (including lambdas and user functions), compound fitted dtypes, classifiers without
-  probabilities, multilabel/ClassifierChain layouts, XGBoost/CatBoost pipeline steps,
+  probabilities, multilabel/ClassifierChain layouts, unsupported native placements,
   and untrusted nested storage such as fitted sparse neighbor arrays.
   HistGradientBoosting uses untrusted `TreePredictor` storage and is rejected.
 - **Sklearn versions:** the closed class/attribute catalog is audited/tested
   against **1.9.1 with skops 0.16.0**, not every version allowed by `>=1.6`.
-  Unknown classes/attributes fail export/load. The committed sklearn version
-  must match at export/load; other matching-version configurations can work
-  when they satisfy the catalog. No permissive fallback or advertised broader
-  range. See [state ownership](docs/format-state.md).
-- **XGBoost:** exact XGBClassifier/XGBRegressor, one target, native `gbtree`
-  storage (including XGBoost 3.4.1 `dart` dropout normalized to gbtree).
-  Classifiers: `binary:logistic`, `multi:softprob`. Regressors:
-  `reg:squarederror`, `reg:absoluteerror`, `reg:pseudohubererror`,
-  `reg:squaredlogerror`, `reg:logistic`, `count:poisson`, `reg:gamma`,
-  `reg:tweedie`. Raw boosters, RF wrappers, subclasses, gblinear, legacy dart
-  storage, ranking/survival/custom objectives and multiple targets are rejected.
-  At most 100,000 trees and depth 14; exact native state and complete dumps are
-  required. See [the XGBoost mapping](docs/format-adapters.md#implemented-xgboost-mapping).
-- **ONNX:** rank-two numeric matrix or width-one inputs, fixed width,
-  float32/float64/int32/int64; dynamic or one-row batches. One target: float
-  regression `[batch]`/`[batch,1]` or tensor/ZipMap probabilities, optional labels.
-  Classification requires native graph evidence. Ambiguous/image/string layouts,
-  larger fixed batches, multiple targets, external tensors, custom domains/local
-  functions and training/runtime configuration fail before CPU sessions.
-  Tested with ONNX 1.23.0/Runtime 1.30.0; operators/opsets must pass both.
-  Large unpacked ensembles/ZipMap and multiline producer versions work. One wire
-  validation per export/load; field/scalar ceilings follow 512 MiB, producer strings
-  allow 65,536 characters. See [ONNX bounds](docs/format-onnx.md).
+  Unknown state fails; export/load sklearn versions must match. Configurations
+  must satisfy the catalog and round trip; see [state ownership](docs/format-state.md).
+- **XGBoost:** exact XGBClassifier/XGBRegressor, one target, native gbtree
+  (including XGBoost 3.4.1 dart normalized to gbtree). Closed probability/regression
+  objectives; raw boosters, RF wrappers, subclasses, ranking/survival/custom
+  objectives and unsupported storage are rejected. At most 100,000 trees/depth 14,
+  with complete state/dumps; see [the mapping](docs/format-adapters.md#implemented-xgboost-mapping).
+- **ONNX:** fixed-width rank-two numeric inputs; one regression/probability target,
+  optional native labels and dynamic/one-row batches. Unsupported layouts,
+  external data/custom domains/functions and runtime/training configuration fail
+  before CPU sessions. Tested with ONNX 1.23.0/Runtime 1.30.0; see [ONNX bounds](docs/format-onnx.md).
 
-Archive ceilings: **5 members**, **512 MiB** archive/compressed/member bytes,
+Archive ceilings: **6 members**, **512 MiB** archive/compressed/member bytes,
 **1 GiB** aggregate uncompressed bytes, ratio **200**, JSON depth **32**.
 Manifest: **8 MiB**; structure: **256 MiB**; schema/samples: **16 MiB each**.
 Features/classes: at most **100,000**; outputs: **1,024** (XGBoost/CatBoost/ONNX: one).
-Callers may lower `ArchiveLimits`, never raise these ceilings. Native work has
-additional [state](docs/format-state.md) and [ONNX](docs/format-onnx.md) bounds;
-these byte budgets do not cap total process memory, prediction rows or CPU.
+Callers may only lower `ArchiveLimits`. Native [state](docs/format-state.md)/[ONNX](docs/format-onnx.md)
+bounds do not cap process memory, prediction rows or CPU.
 
 ## Bundle contents and security
 
-Every bundle contains `manifest.json` and exactly one of `model.skops`,
-`model.ubj`, `model.cbm`, `model.onnx`. Optional members are `schema.json`, `structure.json`
+Every bundle contains `manifest.json` and one native member, or the declared
+`model.skops` + `model.ubj`/`model.cbm` composite pair. Single-step composites use only the leaf. Optional members are `schema.json`, `structure.json`
 (required when the adapter extracts structure) and explicitly requested
 `samples.json`. No training DataFrame or arbitrary files are included.
 The manifest records identity/time/writer, model parameters/counts/state,

@@ -56,7 +56,7 @@ One MiB is 1,048,576 bytes. `ArchiveLimits` defines these defaults and ceilings:
 
 | Limit | Maximum |
 | --- | ---: |
-| Member count, including manifest | 5 (minimum configured value 2) |
+| Member count, including manifest | 6 (minimum configured value 2) |
 | Entire archive, including headers | 512 MiB |
 | Sum of compressed member sizes | 512 MiB |
 | Any uncompressed member | 512 MiB |
@@ -78,6 +78,13 @@ forests whose native model is tens of MiB and whose JSON tree arrays are larger.
 Callers may lower archive limits, never raise the ceilings in version 1.
 Consumers still need process memory, CPU and prediction limits; a 1 GiB byte
 budget is not a guarantee that a parsed model uses at most 1 GiB of RAM.
+
+Before manifest parsing, admit one model member or the two candidates
+`model.skops` + `model.ubj`/`model.cbm`. Other combinations fail. After strict
+manifest parsing, the declared standalone/composite recipe and actual members
+must agree exactly; undeclared pairs fail. [Pipeline rules](format-pipeline.md)
+own the one-step exception and required structure. Six members accommodate
+manifest, two models, structure, schema and explicit samples.
 
 ### Container functions and inspection
 
