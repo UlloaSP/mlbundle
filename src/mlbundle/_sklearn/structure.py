@@ -1,5 +1,6 @@
 """Unmodified native structure, with tree index validation before native traversal."""
 
+import json
 import sys
 from typing import Any, cast
 
@@ -11,7 +12,7 @@ from sklearn.multioutput import RegressorChain
 from sklearn.pipeline import Pipeline
 from sklearn.tree._tree import Tree
 
-from mlbundle.canonical import canonical_value
+from mlbundle.canonical import canonical_dumps
 from mlbundle.errors import InvalidModelError, UnsupportedModelError
 from mlbundle.limits import MAX_CLASSES, MAX_FEATURES, MAX_OUTPUTS, STRUCTURE_BYTES
 
@@ -52,6 +53,9 @@ def validate_tree(tree: Tree) -> None:
         raise InvalidModelError("Invalid sklearn tree dimensions.")
     # Visit each node exactly once: reject cycles, aliases, unreachable nodes and
     # out-of-range feature/child indices before feature_importances_ or inference.
+    left_nodes = tree.children_left.tolist()
+    right_nodes = tree.children_right.tolist()
+    features = tree.feature.tolist()
     seen: set[int] = set()
     pending = [(0, 0)]
     depth = 0
@@ -61,10 +65,10 @@ def validate_tree(tree: Tree) -> None:
             raise InvalidModelError("Invalid sklearn tree child indices.")
         seen.add(node)
         depth = max(depth, level)
-        left, right = int(tree.children_left[node]), int(tree.children_right[node])
+        left, right = left_nodes[node], right_nodes[node]
         if left == right == -1:
             continue
-        if left < 0 or right < 0 or not 0 <= tree.feature[node] < tree.n_features:
+        if left < 0 or right < 0 or not 0 <= features[node] < tree.n_features:
             raise InvalidModelError("Invalid sklearn tree feature or child indices.")
         pending.extend(((left, level + 1), (right, level + 1)))
     if len(seen) != count or depth != tree.max_depth:
@@ -178,7 +182,30 @@ def _tree(tree: Tree) -> dict[str, object]:
     }
 
 
-def extract_structure(model: Any) -> dict[str, JsonValue] | None:
+def has_structure(model: Any) -> bool:
+    if isinstance(model, Pipeline):
+        return False
+    if hasattr(model, "tree_"):
+        return True
+    if hasattr(model, "estimators_"):
+        trees = [
+            hasattr(estimator, "tree_")
+            for estimator in np.asarray(model.estimators_, dtype=object).flat
+        ]
+        if all(trees):
+            return True
+        if any(trees):
+            raise UnsupportedModelError(
+                reason="Mixed tree/non-tree ensembles have no supported structure."
+            )
+    return (hasattr(model, "coef_") and hasattr(model, "intercept_")) or getattr(
+        model, "feature_importances_", None
+    ) is not None
+
+
+def extract_structure(
+    model: Any, *, state_sha256: str | None = None
+) -> dict[str, JsonValue] | None:
     # Pipeline internals address transformed inputs; v1 has no transformation
     # mapping, so it makes no visualization claim for a pipeline.
     if isinstance(model, Pipeline):
@@ -213,13 +240,17 @@ def extract_structure(model: Any) -> dict[str, JsonValue] | None:
         result["family"] = "feature_importances"
     return cast(
         dict[str, JsonValue],
-        canonical_value(
-            {
-                **result,
-                "state_sha256": validate_payload(sio.dumps(model)),
-                "prediction_state": prediction_state(model),
-            },
-            max_bytes=STRUCTURE_BYTES,
+        json.loads(
+            canonical_dumps(
+                {
+                    **result,
+                    "state_sha256": state_sha256
+                    if state_sha256 is not None
+                    else validate_payload(sio.dumps(model)),
+                    "prediction_state": prediction_state(model),
+                },
+                max_bytes=STRUCTURE_BYTES,
+            )
         ),
     )
 

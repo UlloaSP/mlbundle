@@ -10,7 +10,8 @@ from zipfile import ZipFile
 import numpy as np
 
 from mlbundle.canonical import canonical_dumps
-from mlbundle.errors import InvalidModelError, UnsupportedModelError
+from mlbundle.errors import InvalidModelError, LimitExceededError, UnsupportedModelError
+from mlbundle.limits import MANIFEST_BYTES
 
 FIELDS = json.loads(files(__package__).joinpath("state_fields.json").read_text())
 
@@ -41,7 +42,29 @@ def _numeric_digest(array: np.ndarray) -> str:
 
 
 def _hash(domain: bytes, value: Any) -> str:
-    return hashlib.sha256(domain + canonical_dumps(value)).hexdigest()
+    if domain == b"scalar:" or (isinstance(value, dict) and "$float" in value):
+        encoded = canonical_dumps(value)
+    else:
+        # These records contain only checked string keys and fixed-width hex digests.
+        size = (
+            sum(len(key) + 70 for key in value)
+            if isinstance(value, dict)
+            else len(value) * 67
+            if isinstance(value, list)
+            else 66
+        ) + 1
+        if size > MANIFEST_BYTES:
+            raise LimitExceededError("JSON exceeds the byte limit.")
+        encoded = json.dumps(
+            value,
+            sort_keys=True,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        if len(encoded) > MANIFEST_BYTES:
+            raise LimitExceededError("JSON exceeds the byte limit.")
+    return hashlib.sha256(domain + encoded).hexdigest()
 
 
 def validate_state(nodes: list[dict[str, Any]], resolve) -> None:
@@ -72,10 +95,28 @@ def validate_state(nodes: list[dict[str, Any]], resolve) -> None:
                 raise InvalidModelError("Sklearn state keys must be strings.")
 
 
+def _memoized_hash(cache, key, domain: bytes, value) -> str:
+    if key not in cache:
+        cache[key] = _hash(domain, value)
+    return cache[key]
+
+
+def _record_key(value):
+    if isinstance(value, dict):
+        return tuple(sorted(value.items()))
+    return tuple(value) if isinstance(value, list) else value
+
+
 def state_digest(schema: Any, archive, resolve) -> str:
     """Merkle hash all state and buffers, without expanding shared references."""
     memo: dict[int, str] = {}
     buffers: dict[str, str] = {}
+    scalars: dict[tuple[type, Any], str] = {}
+    records: dict[tuple, str] = {}
+
+    def record(domain: bytes, value) -> str:
+        key = (domain, _record_key(value))
+        return _memoized_hash(records, key, domain, value)
 
     def digest(value: Any) -> str:
         if isinstance(value, dict):
@@ -89,14 +130,15 @@ def state_digest(schema: Any, archive, resolve) -> str:
                 if key == "file":
                     if child not in buffers:
                         buffers[child] = _buffer_digest(archive.read(child))
-                    content[key] = _hash(b"file:", buffers[child])
+                    content[key] = record(b"file:", buffers[child])
                 else:
                     content[key] = digest(child)
-            result = _hash(b"dict:", content)
+            result = record(b"dict:", content)
             memo[id(node)] = result
             return result
         if isinstance(value, list):
-            return _hash(b"list:", [digest(child) for child in value])
-        return _hash(b"scalar:", value)
+            return record(b"list:", [digest(child) for child in value])
+        key = (type(value), value.hex() if type(value) is float else value)
+        return _memoized_hash(scalars, key, b"scalar:", value)
 
     return digest(schema)
