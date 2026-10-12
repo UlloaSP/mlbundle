@@ -2,7 +2,7 @@
 
 mlbundle v0.1 is pre-release; format version 1 is not yet frozen. It implements
 strict manifest validation, secure container reading/writing, metadata-only
-`inspect`, export/load, sklearn, XGBoost and ONNX adapters, local schema inference,
+`inspect`, export/load, sklearn, XGBoost, CatBoost and ONNX adapters, local schema inference,
 explicit samples, prediction-state verification and the inspect/verify CLI.
 The container validates ZIP/ZIP64 layout, bounds sources and actual decompression,
 checks CRC and member integrity, and rejects unsafe members and polyglot wrappers.
@@ -51,7 +51,7 @@ make a received file trustworthy.
   disagreements in visualisation structure.
 
 The supported storage formats are skops for scikit-learn, native UBJSON for
-XGBoost and the user's original ONNX file. There is no conversion or fallback
+XGBoost, native CBM for CatBoost and the user's original ONNX file. There is no conversion or fallback
 serialization path. Adapters must use lazy imports for optional dependencies.
 
 ## Implemented sklearn trust boundary
@@ -62,7 +62,7 @@ the fixed supplemental list `sklearn.tree._tree.Tree`,
 `sklearn.neural_network._stochastic_optimizers.SGDOptimizer`. Load passes exactly
 that list to `skops.io.loads`, alongside skops' built-in trusted defaults. These
 are native numeric tree storage and fitted MLP optimizer records. They add no arbitrary functions or I/O
-constructors. The bundle cannot provide additional trusted types.
+constructors. The bundle cannot provide additional trusted types; CatBoost adds none.
 
 The optimizer path was checked against skops 0.16.0/sklearn 1.9.1: ObjectNode
 uses ordinary `object.__new__` and `__dict__.update`, bypassing constructors.
@@ -136,6 +136,38 @@ can inspect its returned byte size. Server consumers must isolate loading and
 prediction and enforce process resource limits. All predictors reject invalid inputs and wrap remaining native failures
 without echoing data cells. See the exact support and
 resource boundaries in [docs/format.md](docs/format.md).
+
+## Implemented CatBoost dependency boundary
+
+Only exact fitted CatBoostClassifier/CatBoostRegressor, closed single-target
+losses and numeric symmetric trees are admitted. CBM export uses public
+`save_model` in an export-only temporary directory; load uses `load_model(blob=...)`
+in memory. Extraction uses CatBoost 1.2.10's audited private `_serialize_model`
+CBM serializer to recompute current native state without writing reader files.
+Class selection and the prediction loss come from checked native state, never
+manifest strings. Native class labels, parameters, feature order, calibration,
+tree state and the complete native metadata commitment are recomputed on load.
+The original fitted estimator is not modified. See [the contract](docs/format-catboost.md).
+
+Before native parsing, mlbundle checks the exact CBM core length, version,
+FlatBuffer offsets/fields/strings/vectors, tree and feature counts, symmetric
+depth/split offsets, leaf dimensions/values/weights, split indices and numeric
+borders/NaN routing. Metadata JSON is byte/depth-bounded. Numeric buffers remain
+views during preflight; a conservative 256 MiB structure expansion budget is
+checked before native parsing or Python list conversion. Categorical/CTR, text/embedding/calcer parts and
+non-symmetric trees are rejected before their native parsers or traversals.
+CatBoost's CTR table reader lacks its core FlatBuffer verifier; supporting it
+requires a separate complete preflight, not merely permitting categorical input.
+
+Windows 1.2.10 subprocess probes returned CatBoostError for truncated/bad-root
+models and UnicodeDecodeError for corrupted metadata, and accepted a model
+missing its final byte. mlbundle independently rejects inconsistent core lengths
+and wraps native Python exceptions in bounded errors without their content.
+These probes found no crash or timeout; they cannot prove memory safety.
+The native loader, serializer, feature-importance traversal and inference can
+still crash or allocate inside native code. Exceptions cannot contain process
+crashes, and member/count ceilings do not cap native RAM or CPU. Consumers must
+isolate these operations and enforce process limits, as for the other adapters.
 
 ## Implemented ONNX dependency boundary
 

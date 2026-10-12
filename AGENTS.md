@@ -6,7 +6,7 @@ in one compressed `.mlbundle` file. It owns both writing and validated reading
 so that the format is defined once.
 
 The pre-release v0.1 library implements strict format 1 manifests, secure container
-I/O, inspect/export/load, sklearn/XGBoost/ONNX adapters, local schema, training
+I/O, inspect/export/load, sklearn/XGBoost/CatBoost/ONNX adapters, local schema, training
 dtypes, explicit samples and prediction-state verification. The CLI provides
 metadata-only `inspect` and full `verify`. Format 1 is not yet frozen.
 Implementation claims require code and test proof. `docs/format.md` owns the wire contract.
@@ -39,11 +39,11 @@ rows only when explicitly requested: samples are real user data.
 
 ### 4. Native formats with a narrow support boundary
 
-Version 0.1 supports three libraries: scikit-learn via `skops.io.dumps/loads`,
-XGBoost via native in-memory UBJSON, and the user's ONNX
+Version 0.1 supports four libraries: scikit-learn via `skops.io.dumps/loads`,
+XGBoost via native in-memory UBJSON, CatBoost via CBM, and the user's ONNX
 file unchanged. Do not convert models. Adapters import their library lazily;
 their dependencies belong in the optional extras `mlbundle[sklearn]`,
-`mlbundle[xgboost]` and `mlbundle[onnx]`.
+`mlbundle[xgboost]`, `mlbundle[catboost]` and `mlbundle[onnx]`.
 
 The design takes ideas from MLflow's versioned manifest and native model
 storage, not its code. MLflow is Apache-2.0; mlbundle is MIT.
@@ -138,7 +138,7 @@ still preserve validation, security and reproducibility.
   Never modify, commit or run write commands inside either checkout.
 - Do not publish to PyPI, create releases or version tags, or add a publish job.
   "Tags" in this project means GitHub repository topics.
-- sklearn-to-ONNX conversion, per-model environments, bundle signing and other
+- sklearn-to-ONNX conversion, per-model environments, bundle signing and additional
   libraries (including LightGBM and PyTorch) are outside the project scope.
 - Never claim a verification that was not run; report its real output or blocker.
 
@@ -202,14 +202,13 @@ JSON-ready parts, computes integrity records and produces a deterministic ZIP.
 It enforces the same limits and validation as the container reader and publishes
 paths atomically on hard-link filesystems, requiring explicit overwrite. The
 exclusive-creation fallback removes partial destinations on failure but exposes
-the file during copying. Public sklearn/XGBoost export extracts claims/structure,
-serializes with skops/native in-memory UBJSON and verifies a native round trip
+the file during copying. Public sklearn/XGBoost/CatBoost export extracts claims/structure,
+serializes with skops/native UBJSON/CBM and verifies a native round trip
 before publication. XGBoost supports exact XGBClassifier/XGBRegressor tree
 wrappers with closed probability/regression objectives and one target. Original
 class labels supplied through output-major `class_labels=` are bound to a native
 copy through an mlbundle-owned booster attribute and verified on load. Omitted
-labels use encoded indices; sklearn rejects this option because it owns classes_.
-Local `training_data=` inference uses mlschema with `__`, excludes a named target,
+labels use encoded indices; sklearn/CatBoost reject this option because they own classes_. Local `training_data=` inference uses mlschema with `__`, excludes a named target,
 and records training dtypes. Only explicit `sample_rows=N` includes real rows.
 Schema/report and sample validation is shared by export, inspect and load.
 ONNX preserves path/bytes unchanged (ModelProto is serialized once), validates
@@ -219,8 +218,9 @@ claims. `native_model` is an OnnxModel with original bytes and a CPU session.
 Kind is inferred from supported outputs; native labels are verified, absent
 labels use count-checked declarations. Structure is null. See the normative
 ONNX section linked from `docs/format.md` for exact layouts and resource bounds.
+CatBoost supports exact numeric single-target symmetric classifiers/regressors, with native state commitments and in-memory loading.
 The closed member list is: required `manifest.json`, exactly
-one of `model.skops`, `model.ubj` or `model.onnx`, optional `schema.json`, and
+one of `model.skops`, `model.ubj`, `model.cbm` or `model.onnx`, optional `schema.json`, and
 `structure.json` when the supported model has extractable structure. Optional
 `samples.json` requires explicit user intent. No other members are allowed.
 
@@ -242,8 +242,7 @@ without importing model libraries; it cannot attest that model-derived claims
 match the model. Public `load` uses a closed adapter and recomputes claims and
 structure before returning the native model and validated predictor.
 
-An adapter module provides `Adapter` with the library and model-member identity,
-recognition, export preparation, serialization/deserialization, `ModelClaims`, structure extraction
+An adapter module provides `Adapter` with library/member identity, recognition, export preparation, serialization/deserialization, `ModelClaims`, structure extraction
 and a `Predictor`. Extraction uses only the native model, shared by export/load;
 ONNX graph fields belong in `ModelClaims.onnx`. Missing names are null claims;
 the shared pipeline owns supplied/generated names and environment declarations.
@@ -268,6 +267,7 @@ its kind/count inference remains ONNX-owned. Keep native behavior in adapters; f
 - `src/mlbundle/samples.py` — explicit feature-row selection and bounded cell conversion.
 - `src/mlbundle/_sklearn/` — skops trust/loading (including MLP adam/sgd/lbfgs state), parameter and claim extraction, native structure, nested payload bounds and validated prediction.
 - `src/mlbundle/_xgboost/` — closed wrappers/objectives, native UBJSON preflight/loading, label binding, recoverable config, complete tree structure and validated prediction.
+- `src/mlbundle/_catboost/` — closed numeric symmetric wrappers/losses, CBM preflight/in-memory loading, complete native state/structure and validated prediction.
 - `src/mlbundle/_onnx/` — bounded protobuf/graph validation, unchanged bytes, native signatures/labels, CPU sessions and tabular prediction.
 - `src/mlbundle/declarations.py` — export-time class labels and resolution for native models without labels.
 - `src/mlbundle/claims.py` — shared extracted claims and exact claim/structure comparison.
@@ -275,7 +275,7 @@ its kind/count inference remains ONNX-owned. Keep native behavior in adapters; f
 - `src/mlbundle/integrity.py` — member SHA-256/size records and verification.
 - `src/mlbundle/environment.py` — training declarations and distribution metadata capture.
 - `src/mlbundle/adapters.py` and `_prediction_input.py` — adapter/predictor protocols, output types and shared input checks.
-- `src/mlbundle/registry.py` — closed lazy resolution of implemented `_sklearn`, `_xgboost` and `_onnx` adapters.
+- `src/mlbundle/registry.py` — closed lazy resolution of `_sklearn`, `_xgboost`, `_catboost` and `_onnx` adapters.
 - `src/mlbundle/results.py` — metadata-only and loaded reader result types.
 - `src/mlbundle/_container_rules.py` — shared source type, closed member sets/order and ceilings.
 - `src/mlbundle/_zip_directory.py` — bounded ZIP/ZIP64 directory and extra-field validation.

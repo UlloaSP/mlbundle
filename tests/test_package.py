@@ -19,7 +19,7 @@ def test_base_import_does_not_touch_model_libraries():
 import sys
 class BlockOptional:
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.split('.')[0] in {'sklearn', 'xgboost', 'onnx', 'onnxruntime', 'skops', 'numpy', 'pandas', 'scipy', 'mlschema'}:
+        if fullname.split('.')[0] in {'sklearn', 'xgboost', 'catboost', 'onnx', 'onnxruntime', 'skops', 'numpy', 'pandas', 'scipy', 'mlschema'}:
             raise AssertionError(fullname)
 sys.meta_path.insert(0, BlockOptional())
 import mlbundle
