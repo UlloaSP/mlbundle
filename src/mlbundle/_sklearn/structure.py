@@ -53,9 +53,9 @@ def validate_tree(tree: Tree) -> None:
         raise InvalidModelError("Invalid sklearn tree dimensions.")
     # Visit each node exactly once: reject cycles, aliases, unreachable nodes and
     # out-of-range feature/child indices before feature_importances_ or inference.
-    left_nodes = tree.children_left.tolist()
-    right_nodes = tree.children_right.tolist()
-    features = tree.feature.tolist()
+    left_nodes = tree.children_left
+    right_nodes = tree.children_right
+    features = tree.feature
     seen: set[int] = set()
     pending = [(0, 0)]
     depth = 0
@@ -65,7 +65,7 @@ def validate_tree(tree: Tree) -> None:
             raise InvalidModelError("Invalid sklearn tree child indices.")
         seen.add(node)
         depth = max(depth, level)
-        left, right = left_nodes[node], right_nodes[node]
+        left, right = int(left_nodes[node]), int(right_nodes[node])
         if left == right == -1:
             continue
         if left < 0 or right < 0 or not 0 <= features[node] < tree.n_features:
