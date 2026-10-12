@@ -15,6 +15,7 @@ MEMBER_ORDER = (
     MemberName.MANIFEST,
     MemberName.SKOPS,
     MemberName.UBJSON,
+    MemberName.CBM,
     MemberName.ONNX,
     MemberName.SCHEMA,
     MemberName.STRUCTURE,

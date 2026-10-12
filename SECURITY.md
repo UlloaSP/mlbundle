@@ -2,7 +2,7 @@
 
 mlbundle v0.1 is pre-release; format version 1 is not yet frozen. It implements
 strict manifest validation, secure container reading/writing, metadata-only
-`inspect`, export/load, sklearn, XGBoost and ONNX adapters, local schema inference,
+`inspect`, export/load, sklearn, XGBoost, CatBoost and ONNX adapters, local schema inference,
 explicit samples, prediction-state verification and the inspect/verify CLI.
 The container validates ZIP/ZIP64 layout, bounds sources and actual decompression,
 checks CRC and member integrity, and rejects unsafe members and polyglot wrappers.
@@ -51,7 +51,7 @@ make a received file trustworthy.
   disagreements in visualisation structure.
 
 The supported storage formats are skops for scikit-learn, native UBJSON for
-XGBoost and the user's original ONNX file. There is no conversion or fallback
+XGBoost, native CBM for CatBoost and the user's original ONNX file. There is no conversion or fallback
 serialization path. Adapters must use lazy imports for optional dependencies.
 
 ## Implemented sklearn trust boundary
@@ -61,7 +61,8 @@ mlbundle's fixed supplemental list: native Tree, AdamOptimizer/SGDOptimizer,
 `numpy.dtype`, six sklearn univariate score functions and nine NumPy elementwise
 functions. Load passes exactly that list to `skops.io.loads`, alongside skops'
 built-in trusted defaults. Exact names and scalar types are in
-[the state contract](docs/format-state.md). The bundle cannot add trusted types.
+[the state contract](docs/format-state.md). The bundle cannot add trusted types;
+XGBoost and CatBoost add none to this list and use their own native adapters.
 
 Skops 0.16.0 FunctionNode resolves `getattr(import_module(module), name)` without
 calling the function. mlbundle checks exact module/name pairs and permits only
@@ -100,8 +101,9 @@ make the native parser a sandbox.
 The installed skops load path builds nodes, audits them and only then constructs
 objects; NumPy buffers use `allow_pickle=False`. No pickle/joblib loading fallback
 is used. Skops imports `pickle` only to recognize an unrelated save-side exception;
-this does not deserialize pickle bytes. Custom estimators/functions and XGBoost
-estimators inside sklearn pipelines are rejected. HistGradientBoosting's separate
+this does not deserialize pickle bytes. Custom estimators/functions and XGBoost/CatBoost
+estimators inside sklearn pipelines are rejected. CatBoost rejections name the unsupported
+type and advise exporting the estimator directly; neither adapter unwraps pipelines. HistGradientBoosting's separate
 `TreePredictor` storage is also excluded. Broadening the supplemental list requires
 source review and hostile-payload tests, never author approval or bundle metadata.
 
@@ -145,6 +147,38 @@ can inspect its returned byte size. Server consumers must isolate loading and
 prediction and enforce process resource limits. All predictors reject invalid inputs and wrap remaining native failures
 without echoing data cells. See the exact support and
 resource boundaries in [docs/format.md](docs/format.md).
+
+## Implemented CatBoost dependency boundary
+
+Only exact fitted CatBoostClassifier/CatBoostRegressor, closed single-target
+losses and numeric symmetric trees are admitted. CBM export uses public
+`save_model` in an export-only temporary directory; load uses `load_model(blob=...)`
+in memory. Extraction uses CatBoost 1.2.10's audited private `_serialize_model`
+CBM serializer to recompute current native state without writing reader files.
+Class selection and the prediction loss come from checked native state, never
+manifest strings. Native class labels, parameters, feature order, calibration,
+tree state and the complete native metadata commitment are recomputed on load.
+The original fitted estimator is not modified. See [the contract](docs/format-catboost.md).
+
+Before native parsing, mlbundle checks the exact CBM core length, version,
+FlatBuffer offsets/fields/strings/vectors, tree and feature counts, symmetric
+depth/split offsets, leaf dimensions/values/weights, split indices and numeric
+borders/NaN routing. Metadata JSON is byte/depth-bounded. Numeric buffers remain
+views during preflight; a conservative 256 MiB structure expansion budget is
+checked before native parsing or Python list conversion. Categorical/CTR, text/embedding/calcer parts and
+non-symmetric trees are rejected before their native parsers or traversals.
+CatBoost's CTR table reader lacks its core FlatBuffer verifier; supporting it
+requires a separate complete preflight, not merely permitting categorical input.
+
+Windows 1.2.10 subprocess probes returned CatBoostError for truncated/bad-root
+models and UnicodeDecodeError for corrupted metadata, and accepted a model
+missing its final byte. mlbundle independently rejects inconsistent core lengths
+and wraps native Python exceptions in bounded errors without their content.
+These probes found no crash or timeout; they cannot prove memory safety.
+The native loader, serializer, feature-importance traversal and inference can
+still crash or allocate inside native code. Exceptions cannot contain process
+crashes, and member/count ceilings do not cap native RAM or CPU. Consumers must
+isolate these operations and enforce process limits, as for the other adapters.
 
 ## Implemented ONNX dependency boundary
 

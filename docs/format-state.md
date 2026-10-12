@@ -99,7 +99,7 @@ values and fitted selector statistics participate in `state_sha256`.
 
 `state_sha256` is a lowercase SHA-256 digest. A sklearn structure object requires
 this field. Sklearn models with null structure, including Pipeline, instead put
-the digest in `model.state_sha256`; other models use null there. This optional
+the digest in `model.state_sha256`; CatBoost also requires a native commitment there. This optional
 manifest field defaults to null, and is part of the verified claim projection.
 Missing commitments on an opaque sklearn model fail full load comparison.
 
@@ -159,7 +159,7 @@ selection inferred from attribute suffixes. The explicit checks supplement it:
 | Pipeline | All fitted steps, transformations, final estimator, order, names, classes and parameters are committed/claimed. Structure stays null; no transformed-feature visualization is inferred. |
 
 Unsupported custom types, functions/types outside these lists, HistGradientBoosting storage,
-multilabel/chain probability layouts and untrusted nested internals remain
+XGBoost/CatBoost pipeline steps, multilabel/chain probability layouts and untrusted nested internals remain
 rejections. For example, actual fitted `csr_matrix` neighbor state is outside the
 unchanged trust list; merely declaring its loader as the trusted base `spmatrix`
 does not make its state survive the native construction comparison.
@@ -189,7 +189,7 @@ containers with memoization before normalization, rejecting over-budget expansio
 and cycles. Native arrays are size-checked before `tolist`. Wire JSON has no
 references and remains bounded by its stored bytes/depth.
 
-## XGBoost and ONNX
+## XGBoost, CatBoost and ONNX
 
 XGBoost's structure additionally requires `native_model`, the complete native
 gradient-booster model returned by bounded UBJSON decoding of `save_raw`.
@@ -225,6 +225,10 @@ domain or model-provided session configuration is admitted. Its descriptor scan
 has no shared-reference mechanism, bounds fields/depth before construction, and
 tensor dimensions require actual stored values before a session. See
 [the ONNX contract](format-onnx.md) for execution limits.
+
+CatBoost's complete numeric CBM snapshot and metadata use the commitment and
+preflight rules in [the CatBoost contract](format-catboost.md). Its mandatory
+structure exposes every symmetric tree without truncation.
 
 These checks are not a native-code sandbox. Runtime-computed allocations,
 dependency memory safety and prediction row/CPU/process limits remain the host's

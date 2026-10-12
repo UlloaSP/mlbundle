@@ -4,12 +4,13 @@ This document defines the wire contract for `format_name = "mlbundle"` and
 `format_version = "1"`. Format versions are independent of package versions.
 "Must" denotes a compatibility or security requirement. This pre-release
 contract is implemented by the manifest, secure container, inspect/export/load,
-sklearn/XGBoost/ONNX adapters, local schema, samples and prediction-state checks.
+sklearn/XGBoost/CatBoost/ONNX adapters, local schema, samples and prediction-state checks.
 Version 1 is not yet frozen. The inspect/verify CLI uses these public APIs.
 
 The normative container rules are in [Container and resource limits](format-container.md).
 The normative structure, adapter and result rules are in [Adapters and structure](format-adapters.md).
 The implemented ONNX mapping and validation rules are in [ONNX](format-onnx.md).
+The implemented CBM mapping and validation rules are in [CatBoost](format-catboost.md).
 The normative schema/declaration rules are in [Schema and samples](format-schema.md).
 [Prediction state and bounded work](format-state.md) is also normative.
 These sections are part of this version 1 contract.
@@ -21,6 +22,7 @@ These sections are part of this version 1 contract.
 | `manifest.json` | Required; the manifest described below. |
 | `model.skops` | Exactly one model member; scikit-learn, skops format. |
 | `model.ubj` | Exactly one model member; XGBoost native UBJSON format. |
+| `model.cbm` | Exactly one model member; CatBoost native CBM binary format. |
 | `model.onnx` | Exactly one model member; original, self-contained ONNX bytes, unchanged. |
 | `schema.json` | Optional; exact object with `schema_version`, `fields` and `reports` from local inference. See [Schema and samples](format-schema.md). No training DataFrame. |
 | `structure.json` | Optional only for families without extractable structure; object as defined below. |
@@ -35,7 +37,7 @@ byte/depth limits apply even when no rows are present.
 For version 1, structure extraction is mandatory for supported scikit-learn
 models exposing `tree_`, tree ensembles with constituent `tree_` estimators,
 models exposing `coef_`/`intercept_`, and models exposing `feature_importances_`;
-and for supported XGBoost tree boosters. A member is required whenever the
+and for supported XGBoost and CatBoost tree boosters. A member is required whenever the
 adapter's extraction returns an object. Other supported sklearn families
 return null; ONNX is opaque for visualization in version 1 and returns null.
 Do not manufacture a visualization for an opaque model. The loaded reader must
@@ -68,8 +70,8 @@ Identity fields are declarations, not proof of provenance.
 
 | Field | Type | Meaning / verification |
 | --- | --- | --- |
-| `library` | `"sklearn"`, `"xgboost"`, `"onnx"` | Closed adapter identifier; validated against serialization/member pairing. |
-| `serialization` | `"skops"`, `"ubjson"`, `"onnx"` | Must pair respectively with the three libraries and model members above. |
+| `library` | `"sklearn"`, `"xgboost"`, `"catboost"`, `"onnx"` | Closed adapter identifier; validated against serialization/member pairing. |
+| `serialization` | `"skops"`, `"ubjson"`, `"cbm"`, `"onnx"` | Must pair respectively with the four libraries and model members above. |
 | `estimator_class` | nonempty string, at most 256 characters | Verified class name (not a Python import path); ONNX uses the adapter's fixed `"ONNX"` identity. Never instantiate from this field. |
 | `kind` | `"classifier"`, `"regressor"` | Verified prediction kind. |
 | `hyperparameters` | object, at most 4,096 top-level keys | Verified JSON projection of the supported estimator's parameters. Sklearn uses `get_params(deep=True)`; other adapters use their recoverable native parameter representation. ONNX records graph signatures and metadata properties as defined in [ONNX](format-onnx.md), without inventing training settings. At most 1 MiB canonical bytes and depth 16. |
@@ -149,8 +151,8 @@ reorder them; a consumer may format them for display separately.
 `export(class_labels=...)` accepts output-major sequences, including a nested
 sequence for a single output. Supplied labels must use one scalar type per output,
 be unique by canonical bytes, and match native class/output counts. Regressors
-reject this option. Sklearn rejects it even when identical: its native `classes_`
-owns the verified labels. XGBoost wrappers expose encoded `0..N-1` classes;
+reject this option. Sklearn and CatBoost reject it even when identical: native `classes_`
+owns their verified labels. XGBoost wrappers expose encoded `0..N-1` classes;
 omitted labels use those integers (or retain an existing mlbundle binding).
 Explicit labels map those indices to original labels in probability-column order.
 The adapter binds them as canonical JSON in the native booster attribute
@@ -183,7 +185,7 @@ See [ONNX kind and labels](format-onnx.md#kind-and-labels).
 | `onnx` | optional ONNX record | Required for ONNX, null/absent otherwise; verified from the graph. |
 
 Allowed package keys are `mlbundle`, `mlschema`, `numpy`, `pandas`, `scipy`,
-`scikit-learn`, `xgboost`, `onnx`, `onnxruntime` and `skops` (maximum ten).
+`scikit-learn`, `xgboost`, `catboost`, `onnx`, `onnxruntime` and `skops` (maximum eleven).
 Capture versions using distribution metadata, without importing the libraries.
 `mlbundle` is required by the writer-version consistency rule. Other environment
 fields are unverifiable declarations about the training machine, including the

@@ -19,6 +19,7 @@ add required `state_sha256` and `prediction_state` fields; XGBoost adds required
 | `tree_ensemble` | `estimator_shape`: original shape of the ensemble's estimator collection; `trees`: row-major flattened list of tree objects. Product of shape equals list length. A one-dimensional collection uses `[N]`. |
 | `linear` | `coef`, `intercept`: native numeric arrays/scalars converted without reshaping. |
 | `xgboost` | `trees`: ordered list of parsed JSON tree dumps, each from `get_dump(dump_format="json", with_stats=True)`. Retain all native fields, including node IDs, split/leaf values, missing-child IDs, gain/cover and children. Do not embed dump strings. |
+| `catboost` | `native_model`: complete numeric symmetric-tree arrays, feature borders/NaN routing, scale/bias and repacked splits defined in [CatBoost](format-catboost.md). |
 | `feature_importances` | No additional fields; the importance array must be non-null. |
 
 A scikit-learn tree object has exactly `node_count` (positive integer),
@@ -59,8 +60,8 @@ the object to serialize and extract, leaving the caller's model unchanged.
 bind or reject declarations according to their native contracts; neither
 `deserialize` nor extraction receives manifest fields. The shared pipeline
 resolves labels only when extraction returns null labels for a classifier.
-The registry imports only the three constant mlbundle module paths `_sklearn`,
-`_xgboost`, `_onnx`, and constructs their module's `Adapter` class. Library
+The registry imports only the four constant mlbundle module paths `_sklearn`,
+`_xgboost`, `_catboost`, `_onnx`, and constructs their module's `Adapter` class. Library
 imports must be lazy, with dependency failures naming the extra to install.
 Missing adapter modules raise `AdapterNotImplementedError` on load; export skips
 unimplemented adapters while looking for one that recognizes its input. A missing
@@ -92,7 +93,9 @@ Skops' own defaults remain part of the dependency trust boundary. Dumped bytes
 are audited with `get_untrusted_types`; every type outside the list is rejected
 at export and independently at load. XGBoost estimators inside sklearn pipelines
 are rejected (`xgboost.core.Booster`, `xgboost.sklearn.XGBClassifier` are untrusted).
-The native XGBoost adapter owns standalone XGBoost loading.
+CatBoost pipeline steps are also rejected, with unsupported types listed and
+an instruction to export `pipeline.named_steps["est"]` directly. Native adapters
+own standalone XGBoost and CatBoost loading; neither is implicitly unwrapped.
 MLPClassifier/MLPRegressor support adam, sgd and lbfgs, alone or in a Pipeline.
 MLP structure is null; layer weights and complete fitted/optimizer state are
 bound by the manifest state commitment. Optimizers permit ObjectNode only

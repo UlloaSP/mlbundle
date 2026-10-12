@@ -10,6 +10,7 @@ FORMAT_VERSION = "1"
 class Library(StrEnum):
     SKLEARN = "sklearn"
     XGBOOST = "xgboost"
+    CATBOOST = "catboost"
     ONNX = "onnx"
 
 
@@ -21,6 +22,7 @@ class ModelKind(StrEnum):
 class SerializationFormat(StrEnum):
     SKOPS = "skops"
     UBJSON = "ubjson"
+    CBM = "cbm"
     ONNX = "onnx"
 
 
@@ -35,6 +37,7 @@ class MemberName(StrEnum):
     MANIFEST = "manifest.json"
     SKOPS = "model.skops"
     UBJSON = "model.ubj"
+    CBM = "model.cbm"
     ONNX = "model.onnx"
     SCHEMA = "schema.json"
     STRUCTURE = "structure.json"
@@ -45,6 +48,7 @@ MODEL_MEMBERS = MappingProxyType(
     {
         Library.SKLEARN: (SerializationFormat.SKOPS, MemberName.SKOPS),
         Library.XGBOOST: (SerializationFormat.UBJSON, MemberName.UBJSON),
+        Library.CATBOOST: (SerializationFormat.CBM, MemberName.CBM),
         Library.ONNX: (SerializationFormat.ONNX, MemberName.ONNX),
     }
 )
