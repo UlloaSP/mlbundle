@@ -93,12 +93,22 @@ Sklearn parameters preserve `None`, JSON booleans, strings, integers and floats;
 non-finite floats use the canonical tags. NumPy scalars/arrays use the canonical
 conversion below; tuples become arrays, and dictionaries require string keys.
 Nested sklearn estimators use the `$estimator` record with their class name and
-recursively projected deep parameters. Deep keys such as `classifier__C` are
+recursively projected deep parameters. In the constructor collections `steps`,
+`transformers` and `transformer_list`, estimator items instead use
+`{"$estimator_ref":CLASS_NAME}`; the owning estimator's named deep keys carry
+their complete parameter records. Collection order, names, column routing and
+other items are preserved. This avoids duplicating nested composition through
+constructor lists and keeps ordinary ColumnTransformer pipelines within depth 16.
+Deep keys such as `classifier__C` are
 retained alongside the estimator record. A NumPy `RandomState` becomes
 `{"$random_state":[ALGORITHM,STATE_ARRAY,POSITION,HAS_GAUSSIAN,CACHED_GAUSSIAN]}`
 from its current `get_state()`, after training. No initial seed is guessed.
-Callables (including built-in functions, NumPy functions, lambdas and partials),
-types, cyclic containers, byte strings, complex/datetime values and other custom
+Closed NumPy scalar classes use `{"$type":"numpy.SCALAR_NAME"}`; admitted plain
+dtype instances use `{"$dtype":DTYPE_STR}`. Closed sklearn score functions and
+NumPy functions use `{"$function":"MODULE.NAME"}`. Exact native identities,
+lists and loader restrictions are defined in [state ownership](format-state.md).
+These records are claims, never loading instructions. Other callables/types,
+lambdas, partials, cyclic containers, byte strings, complex/datetime values and other custom
 objects are rejected. There is no `repr`, identity/address or stringification
 fallback. A skops-trusted object can still be rejected if its parameters have no
 faithful projection. The round-trip comparison checks all these records.
@@ -275,7 +285,9 @@ not change the format. Corrections to documentation that preserve wire behavior
 and implementation changes behind these contracts do not require a version bump.
 The unreleased version 1 includes schema vocabulary, `declared` origin,
 prediction-state records, missing tree routing, native XGBoost routing/dropout
-and closed state/work rules. It remains subject to change before format freeze.
+and closed state/work rules, scalar dtype/type/function records and composition
+references. It remains subject to change before format freeze; older sklearn
+pipeline parameter projections require re-export under this revised v1 contract.
 
 Hashes detect corruption, not deliberate tampering: an attacker can replace a
 model and update every record. Claim recomputation prevents a bundle from showing

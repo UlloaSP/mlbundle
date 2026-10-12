@@ -13,8 +13,9 @@ estimator constructor parameters, inherited and fitted attributes, shared fit
 helpers and the admitted loss/link/MLP optimizer internals. It is package data, never supplied
 by a bundle and never used to import or construct a class. Unknown object types,
 attributes, nested estimator attributes, node keys, loaders and unreferenced files
-are rejected. The supplemental skops trusted list contains Tree, AdamOptimizer
-and SGDOptimizer only (exact paths in [the adapter contract](format-adapters.md)). A catalog
+are rejected. The supplemental skops trusted list contains Tree, AdamOptimizer,
+SGDOptimizer, `numpy.dtype` and the closed functions below (other exact paths in
+[the adapter contract](format-adapters.md)). A catalog
 entry does not extend skops' trust or guarantee that every configuration exports.
 
 The audited/tested baseline is scikit-learn 1.9.1 with skops 0.16.0; the
@@ -55,6 +56,44 @@ fields omitted from visualization and optional training-only state. Deserializat
 also compares the payload commitment with a fresh skops serialization of the
 loaded object. Ignored declarations or state that changes during construction
 are invalid models. Export applies the same rules before publication.
+
+### Closed scalar and function values
+
+`_sklearn/trusted.py` owns these lists for export, projection and load; bundle
+declarations never select or expand them. NumPy scalar type parameters are exactly
+`bool` (`bool_` alias), `int8`, `int16`, `int32`, `int64`, `uint8`, `uint16`,
+`uint32`, `uint64`, `float16`, `float32`, `float64`, `complex64`, `complex128`.
+Aliases such as `intp`/`int_` use their installed scalar identity/name. These
+classes use skops' existing TypeNode defaults; TypeNode resolves the attribute
+without calling it. Projection checks object identity, not an advertised name.
+
+Fitted dtype values admit those scalar storage representations, either byte
+order, plus object: categorical SimpleImputer stores an object `_fit_dtype`.
+String, datetime/timedelta, void, structured, sub-array and metadata-bearing
+dtypes are rejected. Numeric dtype storage must be exactly a NumPy ndarray of
+shape `(0,)` whose bounded NPY header passes the scalar list. Object dtype storage
+must be the canonical empty JSON ndarray, with a one-element TupleNode shape
+containing the JSON integer zero. DTypeNode returns the constructed array's dtype;
+only DTypeNode/CachedNode with exact `numpy.dtype` identity are permitted.
+Object cells are never loaded with pickle. Native dtype validation also rejects
+metadata/compound values that serialization could otherwise discard.
+
+Score functions are exactly `f_classif`, `f_regression`, `chi2`, `r_regression`
+in `sklearn.feature_selection._univariate_selection`, and `mutual_info_classif`,
+`mutual_info_regression` in `sklearn.feature_selection._mutual_info`.
+NumPy functions are exactly `numpy.log`, `numpy.log1p`, `numpy.log2`, `numpy.log10`,
+`numpy.exp`, `numpy.expm1`, `numpy.sqrt`, `numpy.square`, `numpy.absolute`
+(`np.abs` is the same native object and serializes as `absolute`). They support
+FunctionTransformer `func` and `inverse_func`. Other functions, including NumPy
+reductions, lambdas and user functions, remain rejected with unsupported names.
+
+Skops 0.16.0 FunctionNode stores only module/name/loader/identity. Its load path
+uses `getattr(import_module(module), name)` and never calls the function. Only
+FunctionNode/CachedNode are permitted for these names; all other function names
+and alternative constructor loaders fail before skops auditing/construction.
+The closed list includes no I/O function. Function execution remains native to
+the fitted transformer at prediction time. All names, loader identities, dtype
+values and fitted selector statistics participate in `state_sha256`.
 
 ### Commitment encoding
 
@@ -119,7 +158,7 @@ selection inferred from attribute suffixes. The explicit checks supplement it:
 | Naive Bayes / QDA / neighbors / nearest centroid / MLP / semi-supervised / opaque meta-estimators | Their complete fitted statistics, data, class/output mappings, distance/activation state and nested models are committed in the manifest when structure is null. Statistics/likelihood/prior dimensions agree with classes/features; neighbor sample counts agree with fitted arrays. MLP layer sizes, output counts/activation and label-binarizer classes agree with public parameters/labels. Existing probability/count/trust constraints still apply. |
 | Pipeline | All fitted steps, transformations, final estimator, order, names, classes and parameters are committed/claimed. Structure stays null; no transformed-feature visualization is inferred. |
 
-Unsupported custom types, callable/type parameters, HistGradientBoosting storage,
+Unsupported custom types, functions/types outside these lists, HistGradientBoosting storage,
 multilabel/chain probability layouts and untrusted nested internals remain
 rejections. For example, actual fitted `csr_matrix` neighbor state is outside the
 unchanged trust list; merely declaring its loader as the trusted base `spmatrix`

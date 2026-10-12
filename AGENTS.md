@@ -105,7 +105,7 @@ still preserve validation, security and reproducibility.
 - Never use pickle, joblib or cloudpickle, even as an option or fallback.
 - Never import or instantiate from strings in the manifest. The class to
   instantiate must come from a closed list inside mlbundle.
-- The skops trusted-types list (Tree, AdamOptimizer, SGDOptimizer) lives in mlbundle; never read it from a bundle. Optimizers admit ObjectNode/CachedNode only.
+- The skops trusted lists live in mlbundle; never read them from a bundle. Tree, optimizers, scalar dtypes and closed functions each admit only their owning loaders; see `docs/format-state.md`.
 - Export must fail on the user's machine when the model contains custom types,
   listing unsupported types from `skops.io.get_untrusted_types`. Do not defer
   discovery to upload time or offer to trust those types.
@@ -266,7 +266,7 @@ its kind/count inference remains ONNX-owned. Keep native behavior in adapters; f
 - `src/mlbundle/training.py` — lazy local DataFrame alignment and schema inference.
 - `src/mlbundle/schema.py` and `_schema_fields.py` — closed schema/report declarations and reader cross-checks without mlschema.
 - `src/mlbundle/samples.py` — explicit feature-row selection and bounded cell conversion.
-- `src/mlbundle/_sklearn/` — skops trust/loading (including MLP adam/sgd/lbfgs state), parameter and claim extraction, native structure, nested payload bounds and validated prediction.
+- `src/mlbundle/_sklearn/` — closed dtype/type/function trust, skops loading, MLP state, parameter/claim extraction, native structure, nested payload bounds and fitted categorical prediction.
 - `src/mlbundle/_xgboost/` — closed wrappers/objectives, native UBJSON preflight/loading, label binding, recoverable config, complete tree structure and validated prediction.
 - `src/mlbundle/_onnx/` — bounded protobuf/graph validation, unchanged bytes, native signatures/labels, CPU sessions and tabular prediction.
 - `src/mlbundle/declarations.py` — export-time class labels and resolution for native models without labels.

@@ -57,12 +57,21 @@ serialization path. Adapters must use lazy imports for optional dependencies.
 ## Implemented sklearn trust boundary
 
 Export and load call skops' `get_untrusted_types` and reject all types outside
-the fixed supplemental list `sklearn.tree._tree.Tree`,
-`sklearn.neural_network._stochastic_optimizers.AdamOptimizer` and
-`sklearn.neural_network._stochastic_optimizers.SGDOptimizer`. Load passes exactly
-that list to `skops.io.loads`, alongside skops' built-in trusted defaults. These
-are native numeric tree storage and fitted MLP optimizer records. They add no arbitrary functions or I/O
-constructors. The bundle cannot provide additional trusted types.
+mlbundle's fixed supplemental list: native Tree, AdamOptimizer/SGDOptimizer,
+`numpy.dtype`, six sklearn univariate score functions and nine NumPy elementwise
+functions. Load passes exactly that list to `skops.io.loads`, alongside skops'
+built-in trusted defaults. Exact names and scalar types are in
+[the state contract](docs/format-state.md). The bundle cannot add trusted types.
+
+Skops 0.16.0 FunctionNode resolves `getattr(import_module(module), name)` without
+calling the function. mlbundle checks exact module/name pairs and permits only
+FunctionNode/CachedNode for these names, rejecting arbitrary functions and
+alternative constructor loaders before skops. TypeNode resolves a NumPy scalar
+class without constructing it; parameter extraction also checks native identity.
+DTypeNode reads an empty array's dtype with `allow_pickle=False`; mlbundle bounds
+and validates that representation before loading. Only closed plain scalar dtypes
+and empty JSON object-dtype arrays are admitted; compound dtypes and hidden state
+fail. Every new reference/value participates in the complete state commitment.
 
 The optimizer path was checked against skops 0.16.0/sklearn 1.9.1: ObjectNode
 uses ordinary `object.__new__` and `__dict__.update`, bypassing constructors.

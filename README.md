@@ -200,8 +200,7 @@ or dependency rejection (`MLBundleError`), **2** usage or I/O failure.
 
 ## Supported models and limits
 
-Support requires a faithful round trip through the closed adapter. A catalog
-entry alone does not guarantee that every fitted configuration exports.
+Support requires a faithful round trip; a catalog entry alone does not guarantee export.
 
 - **Sklearn:** fitted classifiers exposing `predict_proba` and regressors with
   recoverable feature/output counts. Tested families include DecisionTree,
@@ -211,13 +210,14 @@ entry alone does not guarantee that every fitted configuration exports.
   PLSRegression, naive Bayes, LDA/QDA, dense brute-force neighbors,
   NearestCentroid, MLPClassifier/MLPRegressor (adam, sgd, lbfgs), MultiOutput
   wrappers and RegressorChain. MLPs retain optimizer state, work alone/in pipelines
-  and have null structure with complete commitments; see [MLP tests](tests/test_sklearn_mlp.py). Scaler and
-  dense OneHotEncoder pipelines round-trip; pipeline structure stays null
-  because format 1 does not map transformed features. See the
-  [tested configurations](tests/test_sklearn_families.py) and
-  [core round trips/rejections](tests/test_sklearn.py).
-- **Sklearn rejections:** custom estimators/subclasses, callable/type parameters
-  (including FunctionTransformer user functions), classifiers without
+  and have null structure with complete commitments; see [MLP tests](tests/test_sklearn_mlp.py).
+  SimpleImputer/KNNImputer, scalers, KBinsDiscretizer, categorical encoders,
+  univariate selectors and closed NumPy FunctionTransformer functions round-trip,
+  including nested ColumnTransformer pipelines; see [the exact lists](docs/format-state.md).
+  Pipeline structure stays null because v1 does not map transformed features; see
+  [tested configurations](tests/test_sklearn_families.py) and [round trips/rejections](tests/test_sklearn.py).
+- **Sklearn rejections:** custom estimators/subclasses, functions/types outside the
+  closed lists (including lambdas and user functions), compound fitted dtypes, classifiers without
   probabilities, multilabel/ClassifierChain layouts, XGBoost pipeline steps,
   and untrusted nested storage such as fitted sparse neighbor arrays.
   HistGradientBoosting uses untrusted `TreePredictor` storage and is rejected.
@@ -291,8 +291,8 @@ with a Python 3.14 marker because 0.2.1 excludes 3.15. `uv.lock` fixes the teste
 development versions. Dependency edits require `uv sync` and the updated lockfile.
 
 Run `uv run ruff check .`, `uv run ruff format --check .`, `uv run pyright`,
-`uv run pytest` and `uv build`. Tests execute every fenced README example,
-write terminal/XML coverage and enforce 80% branch-inclusive coverage.
+`uv run pytest` and `uv build`. Tests execute every fenced README example and
+write terminal/XML coverage with an 80% branch-inclusive minimum.
 CI preserves lint/types and Ubuntu/Windows tests and checks a clean base wheel
 installation on both OSes. `uv build` creates a local wheel and source archive.
 Read [AGENTS.md](AGENTS.md) before contributing. Publishing, releases, version
