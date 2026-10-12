@@ -1,6 +1,8 @@
 """Unknown estimator/nested state and unreferenced files are rejected on both paths."""
 
 import io
+import json
+import warnings
 from types import SimpleNamespace
 
 import numpy as np
@@ -77,3 +79,21 @@ def test_unused_schema_objects_are_rejected():
 
     with pytest.raises(InvalidModelError, match="node state"):
         Adapter().deserialize(alter_schema(sio.dumps(model), change))
+
+
+@pytest.mark.parametrize("version", ["1.8.0", "9.0.0"])
+def test_different_sklearn_version_fails_native_state_comparison(version):
+    model = LinearRegression().fit([[0], [1]], [0, 1])
+
+    def change(schema, entries):
+        schema["content"]["content"]["_sklearn_version"]["content"] = json.dumps(
+            version
+        )
+
+    payload = alter_schema(sio.dumps(model), change)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with pytest.raises(
+            InvalidModelError, match="does not survive native construction"
+        ):
+            Adapter().deserialize(payload)

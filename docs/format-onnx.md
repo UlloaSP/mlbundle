@@ -1,7 +1,7 @@
 # Version 1 ONNX mapping
 
-Normative section of [the format contract](format.md). Phase 4b implements this
-mapping. ONNX is opaque for visualization: extraction returns null, and load
+Normative section of [the format contract](format.md). ONNX is opaque for
+visualization: extraction returns null, and load
 rejects any `structure.json` member with `ClaimMismatchError`.
 
 ## Original model and native result
@@ -89,8 +89,7 @@ label tensors). Map output dtype is exactly `sequence<map<int64,float32>>`,
 `sequence<map<string,float32>>` or the corresponding float64 spelling; shape is null.
 `metadata_props` maps each unique model-level metadata key to its original string
 value, without interpreting it as configuration. The existing 1 MiB/depth-16
-hyperparameter ceiling applies. This completes the previously unimplemented ONNX
-projection; sklearn/XGBoost claim semantics and the manifest schema are unchanged.
+hyperparameter ceiling applies; no training parameters are inferred from it.
 
 `environment.onnx` retains exactly the existing required opsets (unique, sorted
 by original domain), IR version and producer name/version. These fields, graph

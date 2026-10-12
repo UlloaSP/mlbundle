@@ -5,12 +5,11 @@ a trained model, a rich manifest, a locally inferred schema and model structure
 in one compressed `.mlbundle` file. It owns both writing and validated reading
 so that the format is defined once.
 
-Phases 1–5 implement the version 1 format contract, strict manifest models,
-canonical JSON, integrity helpers, environment capture, adapter/result contracts,
-secure container reading/writing, public metadata-only `inspect`, export/load,
-the scikit-learn, XGBoost and ONNX adapters, local schema inference, training
-dtypes and explicit samples. The CLI remains unimplemented.
-Rules for later phases require code and test proof before claiming implementation. `docs/format.md` owns the wire contract.
+The pre-release v0.1 library implements strict format 1 manifests, secure container
+I/O, inspect/export/load, sklearn/XGBoost/ONNX adapters, local schema, training
+dtypes, explicit samples and prediction-state verification. The CLI provides
+metadata-only `inspect` and full `verify`. Format 1 is not yet frozen.
+Implementation claims require code and test proof. `docs/format.md` owns the wire contract.
 
 ## What makes mlbundle special?
 
@@ -40,11 +39,11 @@ rows only when explicitly requested: samples are real user data.
 
 ### 4. Native formats with a narrow support boundary
 
-Version 0.1 supports three libraries: scikit-learn via `skops.io.dump` and
-`skops.io.load`, XGBoost via native `save_model("model.ubj")`, and the user's ONNX
+Version 0.1 supports three libraries: scikit-learn via `skops.io.dumps/loads`,
+XGBoost via native in-memory UBJSON, and the user's ONNX
 file unchanged. Do not convert models. Adapters import their library lazily;
 their dependencies belong in the optional extras `mlbundle[sklearn]`,
-`mlbundle[xgboost]` and `mlbundle[onnx]`, declared in Phase 1.
+`mlbundle[xgboost]` and `mlbundle[onnx]`.
 
 The design takes ideas from MLflow's versioned manifest and native model
 storage, not its code. MLflow is Apache-2.0; mlbundle is MIT.
@@ -123,7 +122,7 @@ still preserve validation, security and reproducibility.
 
 ### Repository rules
 
-- No source file may exceed 300 lines. Split by responsibility before the limit.
+- No source, test or documentation file may exceed 300 lines. Split by responsibility before the limit.
 - Add no runtime dependency without a concrete reason. The sole core dependency
   is Pydantic v2 for strict manifest validation; model libraries belong in extras.
 - Keep a feature's tests in one file covering its success case and every error
@@ -146,7 +145,7 @@ still preserve validation, security and reproducibility.
 ## Development
 
 Work from the repository root using `uv` on Python 3.14. The optional `schema`
-extra uses mlschema 0.2.1 on 3.14 only. Keep `uv_build` as the build backend.
+extra admits mlschema >=0.2.1,<0.3 on 3.14 only. Keep `uv_build` as the build backend.
 
 ```shell
 uv python install 3.14
@@ -176,7 +175,7 @@ current directory: `uv run ruff check` and `uv run ruff format --check`.
 `uv run pytest` runs `tests/`, measures branch coverage and enforces the family's
 80% minimum, writing terminal and XML reports. Tests use the installed package;
 its version comes from package metadata. CI checks lint and types and runs tests
-on Ubuntu and Windows. The local build must produce a wheel and source archive.
+and a clean base-wheel smoke check on Ubuntu and Windows. The local build must produce a wheel and source archive.
 
 Start with the smallest proof of a behavior change, then broaden when needed.
 If a check cannot run, report the exact command and blocker. Never claim a test,
@@ -253,16 +252,16 @@ receives the strict `ExportDeclarations` label record and leaves the user's
 object unchanged. Classifier claims may use null labels only for a native model
 without labels; `declarations.py` then resolves count-validated supplied/generated
 labels. ONNX can use that declaration path without changing its original bytes;
-its kind/count inference remains ONNX-owned. Follow `adapters.py`; adding `_onnx`
-needs no library-specific shared pipeline edit.
+its kind/count inference remains ONNX-owned. Keep native behavior in adapters; follow `adapters.py`.
 
 ## Where code lives
 
-- `src/mlbundle/__init__.py` — public contract models, enums, errors and package version.
-- `src/mlbundle/_base.py` — strict frozen model configuration and string bounds.
+- `src/mlbundle/__init__.py` — public inspect/export/load, contract models, enums, errors and package version.
+- `src/mlbundle/cli.py` — argparse inspect/verify console entry with safe bounded display.
+- `src/mlbundle/_base.py` and `errors.py` — strict frozen model configuration, string bounds and bounded errors.
 - `src/mlbundle/contract.py` — closed identifiers and native member/format pairing.
 - `src/mlbundle/limits.py` — shared archive ceilings and specific member caps.
-- `src/mlbundle/canonical.py` — deterministic JSON encoding and bounded strict decoding.
+- `src/mlbundle/canonical.py` and `_canonical_work.py` — deterministic JSON and bounded decoding/expansion.
 - `src/mlbundle/model_io.py` — library-independent public export/load, manifest construction and round-trip verification.
 - `src/mlbundle/training.py` — lazy local DataFrame alignment and schema inference.
 - `src/mlbundle/schema.py` and `_schema_fields.py` — closed schema/report declarations and reader cross-checks without mlschema.
@@ -275,7 +274,7 @@ needs no library-specific shared pipeline edit.
 - `src/mlbundle/manifest.py` — manifest sections, cross-field validation and JSON boundaries.
 - `src/mlbundle/integrity.py` — member SHA-256/size records and verification.
 - `src/mlbundle/environment.py` — training declarations and distribution metadata capture.
-- `src/mlbundle/adapters.py` — adapter/predictor protocols and prediction output types.
+- `src/mlbundle/adapters.py` and `_prediction_input.py` — adapter/predictor protocols, output types and shared input checks.
 - `src/mlbundle/registry.py` — closed lazy resolution of implemented `_sklearn`, `_xgboost` and `_onnx` adapters.
 - `src/mlbundle/results.py` — metadata-only and loaded reader result types.
 - `src/mlbundle/_container_rules.py` — shared source type, closed member sets/order and ceilings.
@@ -286,6 +285,7 @@ needs no library-specific shared pipeline edit.
 - `src/mlbundle/inspection.py` — public metadata-only inspection without adapter resolution.
 - `docs/format.md` — version 1 wire specification; linked container, adapter/structure, ONNX and schema/sample sections are normative.
 - `tests/` — one file per feature, with success and error cases together.
+- `scripts/package_smoke.py` — fixture, isolated install and artifact-content checks.
 - `pyproject.toml` and `uv.lock` — package metadata, tool configuration and lock.
 - `.github/workflows/ci.yml` — lint, types and cross-platform tests.
 - `.pre-commit-config.yaml` — Ruff, Pyright and basic file hygiene.

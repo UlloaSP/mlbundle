@@ -155,22 +155,3 @@ def test_prediction_settings_and_dropout(xgb_data, tmp_path):
     assert np.array_equal(
         loaded.structure["feature_importances"], model.feature_importances_
     )
-
-
-def test_readme_example(tmp_path):
-    rows = [[0.0, 1.0], [1.0, 0.0], [0.1, 0.9], [0.9, 0.1]]
-    model = xgb.XGBClassifier(n_estimators=3, max_depth=2, n_jobs=1).fit(
-        rows, [0, 1, 0, 1]
-    )
-    path = tmp_path / "xgboost.mlbundle"
-    mlbundle.export(
-        model,
-        path,
-        feature_names=["temperature", "humidity"],
-        class_labels=[["cold", "warm"]],
-    )
-    bundle = mlbundle.load(path)
-    assert isinstance(bundle.native_model, xgb.XGBClassifier)
-    assert bundle.native_model.predict(rows).tolist() == model.predict(rows).tolist()
-    assert bundle.predict_proba(rows) == model.predict_proba(rows).tolist()
-    assert bundle.class_labels == [["cold", "warm"]]

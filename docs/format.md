@@ -2,10 +2,10 @@
 
 This document defines the wire contract for `format_name = "mlbundle"` and
 `format_version = "1"`. Format versions are independent of package versions.
-"Must" denotes a compatibility or security requirement. Phases 1–5 implement
-the manifest, encoding, limits, secure container, metadata-only inspection,
-public export/load and the sklearn, XGBoost and ONNX adapters.
-Local schema inference and explicit samples are implemented; the CLI is missing.
+"Must" denotes a compatibility or security requirement. This pre-release
+contract is implemented by the manifest, secure container, inspect/export/load,
+sklearn/XGBoost/ONNX adapters, local schema, samples and prediction-state checks.
+Version 1 is not yet frozen. The inspect/verify CLI uses these public APIs.
 
 The normative container rules are in [Container and resource limits](format-container.md).
 The normative structure, adapter and result rules are in [Adapters and structure](format-adapters.md).
@@ -36,7 +36,7 @@ For version 1, structure extraction is mandatory for supported scikit-learn
 models exposing `tree_`, tree ensembles with constituent `tree_` estimators,
 models exposing `coef_`/`intercept_`, and models exposing `feature_importances_`;
 and for supported XGBoost tree boosters. A member is required whenever the
-adapter's extraction returns an object. Other supported sklearn/XGBoost families
+adapter's extraction returns an object. Other supported sklearn families
 return null; ONNX is opaque for visualization in version 1 and returns null.
 Do not manufacture a visualization for an opaque model. The loaded reader must
 extract structure even when the member is absent: non-null extraction with a
@@ -273,9 +273,9 @@ encoding or mandatory structure shapes requires a new format version and an
 explicit reader implementation. Tightening caller-selected resource limits does
 not change the format. Corrections to documentation that preserve wire behavior
 and implementation changes behind these contracts do not require a version bump.
-Phase 5 completes the unreleased v1 schema vocabulary and adds `declared` origin.
-Phase 6 completes unreleased v1 prediction-state records, missing tree routing,
-native XGBoost routing/dropout and closed state/work rules without a version bump.
+The unreleased version 1 includes schema vocabulary, `declared` origin,
+prediction-state records, missing tree routing, native XGBoost routing/dropout
+and closed state/work rules. It remains subject to change before format freeze.
 
 Hashes detect corruption, not deliberate tampering: an attacker can replace a
 model and update every record. Claim recomputation prevents a bundle from showing

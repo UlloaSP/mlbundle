@@ -10,6 +10,43 @@ permissions:
   contents: read
 
 jobs:
+  base-install:
+    name: Base wheel smoke (${{ matrix.os }}, Python 3.14)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install UV CLI
+        run: python -m pip install uv==0.12.19
+      - name: Build wheel and source archive
+        run: uv build
+      - name: Install fixture producer from lockfile
+        run: uv sync --locked --group dev --all-extras
+      - name: Produce bundle and check artifact contents
+        shell: bash
+        run: |
+          uv run python scripts/package_smoke.py create "$RUNNER_TEMP/smoke.mlbundle"
+          uv run python scripts/package_smoke.py contents dist
+      - name: Install base wheel in a clean environment and check lazy imports
+        shell: bash
+        run: |
+          uv venv --python 3.14 "$RUNNER_TEMP/mlbundle-base"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            smoke_python="$RUNNER_TEMP/mlbundle-base/Scripts/python.exe"
+          else
+            smoke_python="$RUNNER_TEMP/mlbundle-base/bin/python"
+          fi
+          uv pip install --python "$smoke_python" dist/*.whl
+          "$smoke_python" -I scripts/package_smoke.py base "$RUNNER_TEMP/smoke.mlbundle"
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
