@@ -20,7 +20,7 @@ from ._container_rules import (
 )
 from ._zip_directory import CENTRAL, END, LOCAL
 from .canonical import canonical_dumps
-from .container import read_container
+from .container import ValidatedContainer, read_validated_container
 from .contract import MemberName
 from .errors import InvalidContainerError, LimitExceededError
 from .integrity import hash_member
@@ -198,14 +198,14 @@ def _archive_bytes(content: dict[MemberName, bytes], limits: ArchiveLimits) -> b
         return buffer.getvalue()
 
 
-def write_container(
+def write_validated_container(
     manifest: Manifest | Mapping[str, object],
     members: Mapping[MemberName, bytes],
     *,
     destination: str | PathLike[str] | None = None,
     overwrite: bool = False,
     limits: ArchiveLimits | None = None,
-) -> bytes:
+) -> tuple[bytes, ValidatedContainer]:
     """Finish integrity, encode a deterministic ZIP and optionally publish it.
 
     Supply only non-manifest member bytes and a manifest or its JSON-ready parts.
@@ -236,7 +236,21 @@ def write_container(
     check_members(content, finished)
     result = _archive_bytes(content, selected)
     # One owner for all ZIP/integrity/JSON checks, including actual compressed sizes.
-    read_container(result, limits=selected)
+    validated = read_validated_container(result, limits=selected)
     if destination is not None:
         _atomic_write(Path(destination), result, overwrite)
-    return result
+    return result, validated
+
+
+def write_container(
+    manifest: Manifest | Mapping[str, object],
+    members: Mapping[MemberName, bytes],
+    *,
+    destination: str | PathLike[str] | None = None,
+    overwrite: bool = False,
+    limits: ArchiveLimits | None = None,
+) -> bytes:
+    """Write and validate once, preserving the byte-only container contract."""
+    return write_validated_container(
+        manifest, members, destination=destination, overwrite=overwrite, limits=limits
+    )[0]

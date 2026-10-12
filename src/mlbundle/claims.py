@@ -7,7 +7,7 @@ from typing import Annotated
 from pydantic import Field, JsonValue, field_validator, model_validator
 
 from ._base import ContractModel, Name, ShortString
-from .canonical import canonical_dumps
+from .canonical import DecodedJSON, canonical_dumps
 from .contract import ModelKind
 from .environment import OnnxInfo
 from .errors import ClaimMismatchError
@@ -106,8 +106,19 @@ def verify_claims(expected: ModelClaims, actual: ModelClaims) -> None:
             raise ClaimMismatchError(name)
 
 
-def verify_structure(expected: JsonValue, actual: JsonValue) -> None:
-    if canonical_dumps(expected, max_bytes=STRUCTURE_BYTES) != canonical_dumps(
-        actual, max_bytes=STRUCTURE_BYTES
-    ):
+def verify_structure(expected: JsonValue, actual: JsonValue) -> bytes:
+    encoded = canonical_dumps(expected, max_bytes=STRUCTURE_BYTES)
+    verify_structure_bytes(encoded, actual)
+    return encoded
+
+
+def verify_structure_bytes(expected: bytes | DecodedJSON, actual: JsonValue) -> None:
+    encoded = canonical_dumps(actual, max_bytes=STRUCTURE_BYTES)
+    if isinstance(expected, DecodedJSON):
+        # Equality to freshly recomputed canonical bytes proves this checked
+        # wire value is canonical too; other wire spellings still re-encode.
+        if expected.source == encoded:
+            return
+        expected = expected.canonical
+    if expected != encoded:
         raise ClaimMismatchError("structure")

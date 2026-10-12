@@ -4,6 +4,22 @@ from typing import Any
 
 from .errors import LimitExceededError
 
+_SCALARS = (str, int, float, bool, type(None))
+_NUMBERS = {int, float, bool, type(None)}
+
+
+def _sequence_cost(item):
+    # C map/set classify flat numeric arrays without Python calls per element.
+    if len(item) >= 64 and set(map(type, item)) <= _NUMBERS:
+        return 1 + 2 * len(item), ()
+    return 1, item
+
+
+def _child_cost(child: Any, measure) -> tuple[int, int]:
+    if type(child) in _SCALARS:
+        return (len(child) + 2 if type(child) is str else 1), 0
+    return measure(child)
+
 
 def _array_cost(value: Any) -> tuple[int, int, Any]:
     return value.ndim, value.size, value.flat if value.dtype.kind == "O" else ()
@@ -33,11 +49,11 @@ def bound_work(value: Any, max_bytes: int, max_depth: int) -> None:
             size += sum(len(key) + 3 for key in item if isinstance(key, str))
             children = item.values()
         else:
-            children = item
+            size, children = _sequence_cost(item)
         if size > max_bytes or depth > max_depth:
             raise LimitExceededError("Expanded JSON size or depth exceeds the limit.")
         for child in children:
-            child_size, child_depth = measure(child)
+            child_size, child_depth = _child_cost(child, measure)
             size += child_size + 1
             depth = max(depth, child_depth + 1)
             if size > max_bytes or depth > max_depth:

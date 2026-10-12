@@ -10,9 +10,14 @@ from uuid import uuid4
 from pydantic import JsonValue
 
 from ._container_rules import MEMBER_ORDER, BundleSource, effective_limits
-from .canonical import canonical_dumps, canonical_loads
-from .claims import Label, ModelClaims, verify_claims, verify_structure
-from .container import read_container
+from .claims import (
+    Label,
+    ModelClaims,
+    verify_claims,
+    verify_structure,
+    verify_structure_bytes,
+)
+from .container import read_validated_container
 from .contract import (
     FORMAT_NAME,
     FORMAT_VERSION,
@@ -25,13 +30,13 @@ from .contract import (
 from .declarations import ExportDeclarations, export_declarations, resolve_labels
 from .environment import capture_environment
 from .errors import ClaimMismatchError, LimitExceededError
-from .inspection import inspect
+from .inspection import metadata_view
 from .limits import ArchiveLimits
 from .registry import find_adapter, get_adapter
 from .results import LoadedBundle, MetadataView
 from .schema import read_declarations
 from .training import TrainingDeclaration, prepare_training
-from .writing import write_container
+from .writing import write_validated_container
 
 
 def _manifest_parts(
@@ -143,12 +148,10 @@ def export(
     verify_claims(
         claims, resolve_labels(adapter.extract_claims(restored), declarations)
     )
-    verify_structure(structure, adapter.extract_structure(restored))
+    structure_bytes = verify_structure(structure, adapter.extract_structure(restored))
     members = {adapter.model_member: data}
     if structure is not None:
-        members[MemberName.STRUCTURE] = canonical_dumps(
-            structure, max_bytes=selected.member_bytes(MemberName.STRUCTURE)
-        )
+        members[MemberName.STRUCTURE] = structure_bytes
     if training is not None:
         members[MemberName.SCHEMA] = training.schema
         if training.samples is not None:
@@ -163,25 +166,18 @@ def export(
         target_name=target_name,
         metadata=metadata,
     )
-    result = write_container(
+    _, validated = write_validated_container(
         parts, members, destination=destination, overwrite=overwrite, limits=selected
     )
-    return inspect(result, limits=selected)
-
-
-def _optional_json(
-    members: dict[MemberName, bytes], name: MemberName, limits: ArchiveLimits
-) -> JsonValue:
-    if name not in members:
-        return None
-    return canonical_loads(members[name], max_bytes=limits.member_bytes(name))
+    return metadata_view(validated, selected)
 
 
 def load(source: BundleSource, *, limits: ArchiveLimits | None = None) -> LoadedBundle:
     """Verify format, integrity and recomputed native claims before returning a model."""
     selected = effective_limits(limits)
-    manifest, members = read_container(source, limits=selected)
-    schema, samples = read_declarations(manifest, members, selected)
+    container = read_validated_container(source, limits=selected)
+    manifest, members = container.manifest, container.members
+    schema, samples = read_declarations(manifest, container.json, selected)
     adapter = get_adapter(manifest.model.library)
     model = adapter.deserialize(members[adapter.model_member])
     actual = adapter.extract_claims(model)
@@ -199,11 +195,12 @@ def load(source: BundleSource, *, limits: ArchiveLimits | None = None) -> Loaded
         ),
     )
     verify_claims(expected, actual)
-    structure = _optional_json(members, MemberName.STRUCTURE, selected)
+    decoded = container.json.get(MemberName.STRUCTURE)
+    structure = None if decoded is None else decoded.value
     extracted = adapter.extract_structure(model)
     if (MemberName.STRUCTURE in members) != (extracted is not None):
         raise ClaimMismatchError("structure")
-    verify_structure(structure, extracted)
+    verify_structure_bytes(b"null" if decoded is None else decoded, extracted)
     return LoadedBundle(
         manifest=manifest,
         members=tuple(name for name in MEMBER_ORDER if name in members),

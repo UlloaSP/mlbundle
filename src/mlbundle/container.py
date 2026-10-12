@@ -2,13 +2,14 @@
 
 import struct
 import zlib
+from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 
 from ._container_rules import CHUNK_BYTES, BundleSource, check_members, effective_limits
 from ._zip_directory import directory
 from ._zip_members import decompress, payloads
-from .canonical import canonical_loads
+from .canonical import DecodedJSON, decode_json
 from .contract import MemberName
 from .errors import InvalidContainerError, LimitExceededError
 from .integrity import verify_integrity
@@ -37,9 +38,16 @@ def _read_source(source: BundleSource, cap: int) -> bytes:
     return bytes(content)
 
 
-def read_container(
+@dataclass
+class ValidatedContainer:
+    manifest: Manifest
+    members: dict[MemberName, bytes]
+    json: dict[MemberName, DecodedJSON]
+
+
+def read_validated_container(
     source: BundleSource, *, limits: ArchiveLimits | None = None
-) -> tuple[Manifest, dict[MemberName, bytes]]:
+) -> ValidatedContainer:
     """Validate ZIP records, bounded decompression, manifest and member integrity.
 
     Streams are consumed from their current position and are never closed here.
@@ -58,6 +66,7 @@ def read_container(
         manifest = Manifest.from_bytes(manifest_bytes)
         check_members(by_name, manifest)
         members = {MemberName.MANIFEST: manifest_bytes}
+        decoded = {}
         for entry in entries:
             if entry.name != MemberName.MANIFEST:
                 value = decompress(packed[entry.name], entry)
@@ -67,8 +76,18 @@ def read_container(
                     MemberName.STRUCTURE,
                     MemberName.SAMPLES,
                 ):
-                    canonical_loads(value, max_bytes=selected.member_bytes(entry.name))
+                    decoded[entry.name] = decode_json(
+                        value, max_bytes=selected.member_bytes(entry.name)
+                    )
                 members[entry.name] = value
     except (struct.error, zlib.error, OverflowError):
         raise InvalidContainerError("Corrupt ZIP container.") from None
-    return manifest, members
+    return ValidatedContainer(manifest, members, decoded)
+
+
+def read_container(
+    source: BundleSource, *, limits: ArchiveLimits | None = None
+) -> tuple[Manifest, dict[MemberName, bytes]]:
+    """Return the validated manifest and original bytes, without loading a model."""
+    result = read_validated_container(source, limits=limits)
+    return result.manifest, result.members

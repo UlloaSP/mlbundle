@@ -187,7 +187,21 @@ bypass this bound. All these are fixed ceilings in addition to archive limits.
 Canonical JSON preflight calculates expanded minimum size/depth of shared native
 containers with memoization before normalization, rejecting over-budget expansion
 and cycles. Native arrays are size-checked before `tolist`. Wire JSON has no
-references and remains bounded by its stored bytes/depth.
+references and remains bounded by its stored bytes/depth. Lexical depth and
+Unicode escape checks precede decoding; object hooks reject duplicate keys and
+invalid float tags. The C decoder handles ordinary numbers, followed by finite
+float checks (bulk checks for flat arrays); integers retain the 4,096-digit check.
+No native-value normalization or shared-container expansion pass is needed for
+decoded wire values.
+
+Canonical encoding may be deferred until comparison when its byte budget is
+already proven: strings/integers cannot grow from their wire spelling, and a
+finite binary64 float has at most 24 canonical bytes for at least three wire
+token bytes. Thus eight times the stored byte length is a conservative bound.
+Otherwise the canonical encoder checks the exact size immediately. This does
+not raise any ceiling. Equality of validated stored bytes to freshly recomputed
+canonical bytes already proves exact canonical equality; otherwise comparison
+encodes the decoded value with the same sorted keys, types and numeric spellings.
 
 ## XGBoost, CatBoost and ONNX
 

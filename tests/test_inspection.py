@@ -58,7 +58,7 @@ import sys
 from mlbundle import inspect
 view = inspect(sys.argv[1])
 assert view.manifest.model.library == "sklearn"
-for name in ("sklearn", "skops", "xgboost", "onnx", "onnxruntime", "numpy", "pandas", "mlschema"):
+for name in ("sklearn", "skops", "xgboost", "catboost", "onnx", "onnxruntime", "numpy", "pandas", "mlschema"):
     assert not any(key == name or key.startswith(name + ".") for key in sys.modules), name
 print("inspect imported no model libraries")
 """
