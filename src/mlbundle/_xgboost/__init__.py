@@ -17,17 +17,10 @@ from mlbundle.declarations import (
 from mlbundle.errors import InvalidModelError, MLBundleError, UnsupportedModelError
 from mlbundle.limits import HYPERPARAMETER_BYTES
 
-from .native import (
-    ATTRIBUTE,
-    configuration,
-    dimensions,
-    parameters,
-    tree_model,
-    validate_payload,
-)
+from .native import ATTRIBUTE, configuration, dimensions, parameters, tree_model
 from .prediction import Predictor
+from .snapshots import Snapshots
 from .state import attributes
-from .structure import extract_structure
 
 CLASSES = {"XGBClassifier": xgb.XGBClassifier, "XGBRegressor": xgb.XGBRegressor}
 
@@ -64,6 +57,9 @@ def _native_settings(value: dict[str, Any]) -> dict[str, Any]:
 class Adapter:
     library = Library.XGBOOST
     model_member = MemberName.UBJSON
+
+    def __init__(self) -> None:
+        self._snapshots = Snapshots()
 
     def recognizes(self, model: object) -> bool:
         return isinstance(model, (xgb.XGBModel, xgb.Booster))
@@ -165,7 +161,7 @@ class Adapter:
         try:
             self._validate(model)
             data = bytes(model.get_booster().save_raw(raw_format="ubj"))
-            validate_payload(data)
+            self._snapshots.payload(data)
             return data
         except MLBundleError:
             raise
@@ -176,7 +172,7 @@ class Adapter:
 
     def deserialize(self, data: bytes) -> object:
         try:
-            validate_payload(data)
+            self._snapshots.payload(data)
             booster = xgb.Booster()
             booster.load_model(bytearray(data))
             binding = _binding(booster)
@@ -246,7 +242,7 @@ class Adapter:
     def extract_structure(self, model: Any) -> dict[str, JsonValue]:
         try:
             self._validate(model)
-            return extract_structure(model)
+            return self._snapshots.structure(model)
         except MLBundleError:
             raise
         except Exception:

@@ -70,12 +70,15 @@ def validate_payload(data: bytes) -> str:
             sparse_sizes[name] = sparse_headers(archive.read(name), remaining)
             remaining -= sparse_sizes[name]
         _buffer_budget(references, archive, sparse_sizes)
+        headers = {}
         for name in arrays:
             if name not in names:
                 raise InvalidModelError("Missing skops numeric array member.")
-            _array_header(archive, name, archive.getinfo(name).file_size)
+            headers[name] = _array_header(
+                archive, name, archive.getinfo(name).file_size
+            )
         validate_dtypes(references.nodes, references.resolve, archive)
-        _tree_constructors(references, archive)
+        _tree_constructors(references, archive, headers)
         files = _array_references(schema) | sparse | {"schema.json"}
         if set(names) != files:
             raise InvalidModelError("Unreferenced skops member.")
@@ -122,7 +125,7 @@ def _buffer_budget(
 _array_header = array_header
 
 
-def _tree_constructors(references: References, archive: ZipFile) -> None:
+def _tree_constructors(references: References, archive: ZipFile, headers) -> None:
     seen: set[int] = set()
     for node in references.nodes:
         identity = node.get("__id__", id(node))
@@ -137,6 +140,7 @@ def _tree_constructors(references: References, archive: ZipFile) -> None:
                 {**node, "__reduce__": {"args": args}, "content": state},
                 references.memo,
                 archive,
+                headers,
             )
 
 
@@ -169,7 +173,7 @@ def _integer(value: JsonValue, memo: dict[int, dict[str, JsonValue]]) -> int:
 
 
 def _numeric_header(
-    value: JsonValue, memo: dict[int, dict[str, JsonValue]], archive: ZipFile
+    value: JsonValue, memo: dict[int, dict[str, JsonValue]], headers
 ) -> tuple[str, tuple[int, ...], np.dtype]:
     node = _resolve(value, memo)
     name = node.get("file")
@@ -179,12 +183,15 @@ def _numeric_header(
         or not isinstance(name, str)
     ):
         raise InvalidModelError("Invalid skops tree numeric storage.")
-    shape, dtype = _array_header(archive, name, archive.getinfo(name).file_size)
+    shape, dtype = headers[name]
     return name, shape, dtype
 
 
 def _tree_constructor(
-    node: dict[str, JsonValue], memo: dict[int, dict[str, JsonValue]], archive: ZipFile
+    node: dict[str, JsonValue],
+    memo: dict[int, dict[str, JsonValue]],
+    archive: ZipFile,
+    headers,
 ) -> None:
     reduced = node.get("__reduce__")
     arguments = reduced.get("args") if isinstance(reduced, dict) else None
@@ -200,7 +207,7 @@ def _tree_constructor(
     width, outputs = _integer(args[0], memo), _integer(args[2], memo)
     if not 1 <= width <= MAX_FEATURES or not 1 <= outputs <= MAX_OUTPUTS:
         raise InvalidModelError("Unsafe skops tree constructor dimensions.")
-    name, shape, dtype = _numeric_header(args[1], memo, archive)
+    name, shape, dtype = _numeric_header(args[1], memo, headers)
     if shape != (outputs,) or dtype != np.dtype(np.intp):
         raise InvalidModelError("Invalid skops tree class-count dimensions.")
     classes = np.load(BytesIO(archive.read(name)), allow_pickle=False)
@@ -216,8 +223,8 @@ def _tree_constructor(
         raise InvalidModelError("Unknown skops tree state.")
     count = _integer(attributes.get("node_count"), memo)
     depth = _integer(attributes.get("max_depth"), memo)
-    _, nodes_shape, _ = _numeric_header(attributes.get("nodes"), memo, archive)
-    _, values_shape, _ = _numeric_header(attributes.get("values"), memo, archive)
+    _, nodes_shape, _ = _numeric_header(attributes.get("nodes"), memo, headers)
+    _, values_shape, _ = _numeric_header(attributes.get("values"), memo, headers)
     if (
         count < 1
         or not 0 <= depth < count

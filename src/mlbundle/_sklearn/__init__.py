@@ -27,7 +27,7 @@ from mlbundle.limits import MAX_CLASSES, MAX_OUTPUTS
 from .parameters import parameters
 from .payload import validate_payload
 from .prediction import Predictor
-from .structure import extract_structure, validate_tree_storage
+from .structure import extract_structure, has_structure, validate_tree_storage
 from .trusted import TRUSTED_TYPES
 
 
@@ -95,6 +95,18 @@ class Adapter:
     library = Library.SKLEARN
     model_member = MemberName.SKOPS
 
+    def __init__(self) -> None:
+        # The registry creates a fresh adapter for every public export/load.
+        self._states: list[tuple[object, str]] = []
+        self._payload: bytes | None = None
+        self._digest: str | None = None
+
+    def _state(self, model: object) -> str:
+        for native, digest in self._states:
+            if native is model:
+                return digest
+        return validate_payload(sio.dumps(model))
+
     def recognizes(self, model: object) -> bool:
         return (
             isinstance(model, BaseEstimator)
@@ -140,14 +152,18 @@ class Adapter:
 
     def serialize(self, model: object) -> bytes:
         try:
+            self._states = []
+            self._payload, self._digest = None, None
             data = sio.dumps(model)
             try:
-                validate_payload(data)
+                digest = validate_payload(data)
             except UnsupportedModelError:
                 _untrusted(data)
                 raise
             _untrusted(data)
             self._validate(model)
+            self._states = [(model, digest)]
+            self._payload, self._digest = data, digest
             return data
         except MLBundleError:
             raise
@@ -158,14 +174,19 @@ class Adapter:
 
     def deserialize(self, data: bytes) -> object:
         try:
-            expected_state = validate_payload(data)
+            expected_state = (
+                self._digest if data is self._payload else validate_payload(data)
+            )
+            self._payload, self._digest = None, None
             _untrusted(data)
             model = sio.loads(data, trusted=list(TRUSTED_TYPES))
             self._validate(model)
-            if expected_state != validate_payload(sio.dumps(model)):
+            actual_state = validate_payload(sio.dumps(model))
+            if expected_state != actual_state:
                 raise InvalidModelError(
                     "Skops state does not survive native construction."
                 )
+            self._states = [*self._states[-1:], (model, actual_state)]
             return model
         except MLBundleError:
             raise
@@ -186,9 +207,7 @@ class Adapter:
                 estimator_class=type(model).__name__,
                 kind=ModelKind.CLASSIFIER if classifier else ModelKind.REGRESSOR,
                 hyperparameters=parameters(model),
-                state_sha256=validate_payload(sio.dumps(model))
-                if isinstance(model, Pipeline) or extract_structure(model) is None
-                else None,
+                state_sha256=self._state(model) if not has_structure(model) else None,
                 n_features=int(model.n_features_in_),
                 n_classes=None
                 if labels is None
@@ -212,7 +231,7 @@ class Adapter:
     def extract_structure(self, model: object) -> dict[str, JsonValue] | None:
         try:
             self._validate(model)
-            return extract_structure(model)
+            return extract_structure(model, state_sha256=self._state(model))
         except MLBundleError:
             raise
         except Exception:
