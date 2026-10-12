@@ -92,6 +92,7 @@ def test_missing_adapter_module(monkeypatch, library):
         (Library.SKLEARN, "skops"),
         (Library.XGBOOST, "sklearn"),
         (Library.ONNX, "onnxruntime"),
+        (Library.CATBOOST, "catboost"),
     ],
 )
 def test_missing_optional_dependency(monkeypatch, library, dependency):

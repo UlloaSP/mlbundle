@@ -39,6 +39,14 @@ def _untrusted(data: bytes) -> None:
         sorted(set(sio.get_untrusted_types(data=data)) - set(TRUSTED_TYPES))
     )
     if unsupported:
+        if any(name.startswith("catboost.") for name in unsupported):
+            raise UnsupportedModelError(
+                unsupported,
+                reason=(
+                    f"{UnsupportedModelError(unsupported)} "
+                    'Export the estimator directly: export(pipeline.named_steps["est"], ...).'
+                ),
+            )
         raise UnsupportedModelError(unsupported)
 
 
@@ -93,7 +101,7 @@ class Adapter:
     def recognizes(self, model: object) -> bool:
         return (
             isinstance(model, BaseEstimator)
-            and not type(model).__module__.startswith("xgboost.")
+            and not type(model).__module__.startswith(("xgboost.", "catboost."))
             and (is_classifier(model) or is_regressor(model))
         )
 
@@ -136,7 +144,11 @@ class Adapter:
     def serialize(self, model: object) -> bytes:
         try:
             data = sio.dumps(model)
-            validate_payload(data)
+            try:
+                validate_payload(data)
+            except UnsupportedModelError:
+                _untrusted(data)
+                raise
             _untrusted(data)
             self._validate(model)
             return data

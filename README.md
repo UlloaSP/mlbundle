@@ -6,8 +6,8 @@ export on the training machine and validate/load in the consuming application.
 
 mlbundle replaces three gaps in separate model/DataFrame uploads:
 
-- **Pickle code execution:** closed adapters use skops, native XGBoost UBJSON
-  or an existing ONNX file, with no pickle/joblib/cloudpickle loading path.
+- **Pickle code execution:** closed adapters use skops, native XGBoost UBJSON,
+  CatBoost CBM or an existing ONNX file, without pickle/joblib/cloudpickle.
 - **Missing training versions:** the manifest records Python, OS, architecture
   and installed package versions alongside model and feature metadata.
 - **Training data leaving the machine:** schema inference runs locally;
@@ -21,7 +21,7 @@ Windows and Linux; the schema extra currently works only on Python 3.14.
 
 Install from Git with
 `python -m pip install "mlbundle[sklearn] @ git+https://github.com/UlloaSP/mlbundle.git@develop"`.
-Replace `[sklearn]` with `[xgboost]`, `[onnx]`, `[schema]` or `[all]` for the
+Replace `[sklearn]` with `[xgboost]`, `[catboost]`, `[onnx]`, `[schema]` or `[all]` for the
 corresponding dependencies. Combine extras as `[sklearn,schema]` for local
 DataFrame inference. Omit the brackets for a base install that can inspect
 every bundle without model libraries. Load/verify needs the matching model extra.
@@ -44,18 +44,15 @@ print(bundle.predict_proba([[0.0, 1.0]]))  # [[1.0, 0.0]]
 assert inspect("trained.mlbundle").manifest.model.library == "sklearn"
 ```
 
-`export` returns a metadata view and refuses an existing destination unless
-`overwrite=True`. `load` accepts a path, bytes or a binary stream. Classifiers
-use `bundle.predict_proba`; regressors use `bundle.predict`. Results are plain
-lists. For multiple targets, classifier labels/probabilities are output-major,
-while regression values are row-major. `native_model` exposes the loaded native
-object for explanations and native inference. Do not mutate it and continue
-treating the original metadata as verified.
+`export` returns metadata and requires `overwrite=True` for existing destinations.
+`load` accepts paths, bytes or streams. Classifiers use `bundle.predict_proba`;
+regressors use `bundle.predict`. Results are plain lists: output-major classifier
+labels/probabilities, row-major regression values. `native_model` supports native
+inference/explanations; mutating it invalidates the metadata verification.
 
-Native feature names take precedence over `feature_names=`. Otherwise supplied
-names have origin `declared`; omitted names become `feature_1` through
-`feature_N` with origin `generated`. DataFrame names have origin `dataframe`
-when the model has none. `target_name=` and `metadata=` are author declarations.
+Native names take precedence over `feature_names=`. Otherwise names are declared,
+from a DataFrame, or generated as `feature_1` through `feature_N`; origin records
+that choice. `target_name=` and `metadata=` remain author declarations.
 
 ## XGBoost
 
@@ -81,15 +78,40 @@ assert bundle.predict_proba(rows) == model.predict_proba(rows).tolist()
 assert bundle.class_labels == [["cold", "warm"]]
 ```
 
-The adapter binds labels and prediction settings to a native **copy**, leaving
-your model unchanged. Load checks agreement with that binding, not the historical
-truth of the label mapping. Without `class_labels=`, labels are encoded indices
-or an existing mlbundle binding. Native `predict` still returns encoded indices.
-Sklearn and regressors reject `class_labels=`.
+The adapter binds labels/settings to a native **copy**, leaving your model
+unchanged. Load verifies that binding, not historical truth. Omitted labels use
+encoded indices or an existing binding; native `predict` still returns indices.
+Sklearn, CatBoost and regressors reject `class_labels=`.
 
-Only recoverable native configuration is recorded. Training settings such as
-learning rate, max depth, seed and thread count do not survive native XGBoost
-I/O and are not reconstructed from the manifest.
+Only recoverable native configuration is recorded; learning rate, max depth,
+seed and thread count do not survive native XGBoost I/O and are not reconstructed.
+
+## CatBoost
+
+Install the `catboost` extra (>=1.2.10; includes matplotlib/plotly). Numeric,
+single-target symmetric classifiers/regressors use native CBM and native labels:
+
+```python
+from catboost import CatBoostClassifier
+from mlbundle import export, load
+
+rows = [[0.0, 1.0], [1.0, 0.0], [0.1, 0.9], [0.9, 0.1]]
+model = CatBoostClassifier(
+    iterations=3, depth=2, verbose=False, allow_writing_files=False
+).fit(rows, ["cold", "warm"] * 2)
+export(model, "catboost.mlbundle")
+bundle = load("catboost.mlbundle")
+assert bundle.class_labels == [["cold", "warm"]]
+assert bundle.predict_proba(rows) == model.predict_proba(rows).tolist()
+```
+
+Export a pipeline's estimator as `export(pipeline.named_steps["est"], ...)`.
+CatBoost pipelines, `class_labels=`, categorical/text/embedding features,
+Depthwise/Lossguide, custom Python objectives/metrics and other losses are rejected.
+Classifier losses: Logloss, CrossEntropy, MultiClass. Regressors: RMSE, MAE,
+Quantile, Huber, Poisson, MAPE. Complete trees/borders/NaN handling/importances
+are verified on load. [The CatBoost contract](docs/format-catboost.md) details
+wrapper recovery, native-parser limits and the private in-memory serializer.
 
 ## Existing ONNX files
 
@@ -158,19 +180,15 @@ assert inspect("sampled.mlbundle").samples == features.head(2).to_dict("records"
 per target output. `color__red`/`color__blue` binary columns can become one
 category field using mlschema's `__` convention. Frame names must match native
 names in order; `feature_names=` cannot rename/reorder a supplied frame.
-Training dtypes are declarations, separate from verified model-exposed dtypes.
-Inspect/load validate schema mappings, report kinds/labels and sample row keys
-without pandas or mlschema.
+Training dtypes are declarations, separate from verified model dtypes. Inspect/load
+validate schema mappings, reports and sample keys without pandas or mlschema.
 
-**What data-derived information leaves the machine:** column names, dtypes,
-field kinds, nullability, dtype-based numeric steps, categorical values (including
-unused categories), one-hot suffixes, pair-axis metadata and class labels.
-Inference adds no numeric/date ranges, means, counts, arbitrary text row values
-or example rows. Categories and names can be sensitive. Models and structure
-can themselves retain training information; omitting samples does not prevent
-memorization. Explicit `sample_rows=N` adds exactly the first N feature rows,
-without target/index; N must be positive and no larger than the frame.
-See [schema and samples](docs/format-schema.md) for conversions and limits.
+**Data leaving the machine:** names/dtypes, field kinds/nullability, dtype-based
+steps, categories (including unused), one-hot suffixes, pair-axis metadata and
+class labels. No inferred ranges, means, counts or arbitrary text/example rows.
+Names/categories and learned models/structure can reveal training information.
+Explicit `sample_rows=N` includes the first N feature rows, without target/index;
+N must be positive and within the frame. See [schema and samples](docs/format-schema.md).
 
 ## Inspect, load and the CLI
 
@@ -188,15 +206,11 @@ mlbundle inspect trained.mlbundle --json
 mlbundle verify trained.mlbundle
 ```
 
-Inspection prints identity, model/counts, feature origin/names, output-major
-labels, member sizes/hashes, training environment and optional-member presence.
-The manifest has no self-integrity record. Human display values are escaped and
-truncated to 512 characters; `--json` prints the complete validated manifest with
-ASCII JSON escaping and the format's size limits. This escapes terminal controls
-without changing the decoded JSON. `verify` prints one valid-bundle line or an
-error, and requires the matching extra. Errors use one bounded stderr line
-without bundle content or traceback. Exit codes are **0** success, **1** bundle
-or dependency rejection (`MLBundleError`), **2** usage or I/O failure.
+Inspection prints metadata, members/hashes and declarations. Human values escape
+terminal controls and truncate at 512 characters; `--json` is lossless ASCII-escaped
+manifest JSON. `verify` requires the model extra. Errors are one bounded stderr
+line without bundle content/traceback. Exit codes: **0** success, **1** bundle or
+dependency rejection (`MLBundleError`), **2** usage/I/O failure.
 
 ## Supported models and limits
 
@@ -204,29 +218,24 @@ Support requires a faithful round trip through the closed adapter. A catalog
 entry alone does not guarantee that every fitted configuration exports.
 
 - **Sklearn:** fitted classifiers exposing `predict_proba` and regressors with
-  recoverable feature/output counts. Tested families include DecisionTree,
-  ExtraTree, RandomForest, ExtraTrees, GradientBoosting, AdaBoost and Bagging;
-  LogisticRegression, LinearRegression, Ridge, Bayesian/ARD, ElasticNet/Lasso,
-  Huber, Poisson/Gamma, SGD; SVC with probabilities, SVR/NuSVR/LinearSVR;
-  PLSRegression, naive Bayes, LDA/QDA, dense brute-force neighbors,
-  NearestCentroid, MLP, MultiOutput wrappers and RegressorChain. Scaler and
-  dense OneHotEncoder pipelines round-trip; pipeline structure stays null
-  because format 1 does not map transformed features. See the
+  recoverable feature/output counts. Tested families include trees/ensembles,
+  linear/regularized/robust/GLM models, SVMs, PLSRegression, naive Bayes, LDA/QDA,
+  dense brute-force neighbors, NearestCentroid, MLP and MultiOutput/RegressorChain.
+  Scaler and dense OneHotEncoder pipelines round-trip; structure stays null
+  because format 1 does not map transformed features. See
   [tested configurations](tests/test_sklearn_families.py) and
   [core round trips/rejections](tests/test_sklearn.py).
 - **Sklearn rejections:** custom estimators/subclasses, callable/type parameters
   (including FunctionTransformer user functions), classifiers without
-  probabilities, multilabel/ClassifierChain layouts, XGBoost pipeline steps,
+  probabilities, multilabel/ClassifierChain layouts, XGBoost/CatBoost pipeline steps,
   and untrusted nested storage such as fitted sparse neighbor arrays.
   HistGradientBoosting uses untrusted `TreePredictor` storage and is rejected.
 - **Sklearn versions:** the closed class/attribute catalog is audited/tested
   against **1.9.1 with skops 0.16.0**, not every version allowed by `>=1.6`.
-  Unknown classes/attributes fail export/load. The embedded sklearn version is
-  committed too: loading with a different sklearn version fails native state
-  comparison. Use the same sklearn version for export and load. Other versions
-  may work when both ends match and their state satisfies the catalog, but are
-  not an advertised compatibility range. There is no manifest-driven restoration
-  or permissive fallback. See [state ownership](docs/format-state.md).
+  Unknown classes/attributes fail export/load. The committed sklearn version
+  must match at export/load; other matching-version configurations can work
+  when they satisfy the catalog. No permissive fallback or advertised broader
+  range. See [state ownership](docs/format-state.md).
 - **XGBoost:** exact XGBClassifier/XGBRegressor, one target, native `gbtree`
   storage (including XGBoost 3.4.1 `dart` dropout normalized to gbtree).
   Classifiers: `binary:logistic`, `multi:softprob`. Regressors:
@@ -236,20 +245,18 @@ entry alone does not guarantee that every fitted configuration exports.
   storage, ranking/survival/custom objectives and multiple targets are rejected.
   At most 100,000 trees and depth 14; exact native state and complete dumps are
   required. See [the XGBoost mapping](docs/format-adapters.md#implemented-xgboost-mapping).
-- **ONNX:** one numeric matrix input, or multiple width-one numeric inputs;
-  rank two, fixed feature width, float32/float64/int32/int64. Batch is dynamic
-  or one. One target: float regression `[batch]`/`[batch,1]`, or tensor/ZipMap
-  probabilities with an optional int64/string label output. Classification must
-  be inferable from supported graph evidence, including terminal Softmax or
-  native classifier labels. Ambiguous shapes, images/string inputs, fixed
-  batches above one, multiple targets, external tensors, custom domains/local
-  functions and training/runtime configuration are rejected before a CPU session.
-  Tested with ONNX 1.23.0/Runtime 1.30.0; actual operators/opsets must pass both.
+- **ONNX:** rank-two numeric matrix or width-one inputs, fixed width,
+  float32/float64/int32/int64; dynamic or one-row batches. One target: float
+  regression `[batch]`/`[batch,1]` or tensor/ZipMap probabilities, optional labels.
+  Classification requires native graph evidence. Ambiguous/image/string layouts,
+  larger fixed batches, multiple targets, external tensors, custom domains/local
+  functions and training/runtime configuration fail before CPU sessions.
+  Tested with ONNX 1.23.0/Runtime 1.30.0; operators/opsets must pass both.
 
 Archive ceilings: **5 members**, **512 MiB** archive/compressed/member bytes,
 **1 GiB** aggregate uncompressed bytes, ratio **200**, JSON depth **32**.
 Manifest: **8 MiB**; structure: **256 MiB**; schema/samples: **16 MiB each**.
-Features/classes: at most **100,000**; outputs: **1,024** (XGBoost/ONNX: one).
+Features/classes: at most **100,000**; outputs: **1,024** (XGBoost/CatBoost/ONNX: one).
 Callers may lower `ArchiveLimits`, never raise these ceilings. Native work has
 additional [state](docs/format-state.md) and [ONNX](docs/format-onnx.md) bounds;
 these byte budgets do not cap total process memory, prediction rows or CPU.
@@ -257,7 +264,7 @@ these byte budgets do not cap total process memory, prediction rows or CPU.
 ## Bundle contents and security
 
 Every bundle contains `manifest.json` and exactly one of `model.skops`,
-`model.ubj`, `model.onnx`. Optional members are `schema.json`, `structure.json`
+`model.ubj`, `model.cbm`, `model.onnx`. Optional members are `schema.json`, `structure.json`
 (required when the adapter extracts structure) and explicitly requested
 `samples.json`. No training DataFrame or arbitrary files are included.
 The manifest records identity/time/writer, model parameters/counts/state,
@@ -270,9 +277,8 @@ limits, strict JSON/manifest and hashes; adapters use closed trust/loading paths
 and recompute claims. **Hashes detect corruption, not deliberate tampering**;
 there is no signing or proof of authorship, training history, quality or fairness.
 Schema, samples and training-environment declarations are not authenticated.
-Native parsers and inference remain dependency boundaries. Consumers should
-isolate the loading/prediction process, enforce memory/CPU/row limits and maintain
-dependencies. See [SECURITY.md](SECURITY.md) for guarantees, limits and reporting.
+Native parsers/inference require process isolation, memory/CPU/row limits and
+maintained dependencies. See [SECURITY.md](SECURITY.md) for guarantees and reporting.
 
 ## Development
 
@@ -290,5 +296,5 @@ write terminal/XML coverage and enforce 80% branch-inclusive coverage.
 CI preserves lint/types and Ubuntu/Windows tests and checks a clean base wheel
 installation on both OSes. `uv build` creates a local wheel and source archive.
 Read [AGENTS.md](AGENTS.md) before contributing. Publishing, releases, version
-tags, conversions, per-model environments, signing and other model libraries
+tags, conversions, per-model environments, signing and additional model libraries
 remain outside scope. The project is MIT licensed.

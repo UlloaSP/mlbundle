@@ -15,6 +15,7 @@ keywords = [
     "security",
     "scikit-learn",
     "xgboost",
+    "catboost",
     "onnx",
     "skops",
 ]
@@ -42,11 +43,13 @@ mlbundle = "mlbundle.cli:main"
 # sklearn's floor provides get_tags; other floors match the runtime baseline.
 sklearn = ["scikit-learn>=1.6", "skops>=0.16.0"]
 xgboost = ["xgboost>=3.4.1", "scikit-learn>=1.2"]
+# Audited CBM schema and Python 3.14 wheels on Windows/Linux.
+catboost = ["catboost>=1.2.10"]
 onnx = ["onnx>=1.23.0", "onnxruntime>=1.30.0"]
 # The reader validates the 0.2 inferred vocabulary; 0.2.1 requires Python <3.15.
 schema = ["mlschema>=0.2.1,<0.3; python_version == '3.14'"]
 all = [
-    "scikit-learn>=1.6", "skops>=0.16.0", "xgboost>=3.4.1",
+    "scikit-learn>=1.6", "skops>=0.16.0", "xgboost>=3.4.1", "catboost>=1.2.10",
     "onnx>=1.23.0", "onnxruntime>=1.30.0",
     "mlschema>=0.2.1,<0.3; python_version == '3.14'",
 ]

@@ -26,6 +26,19 @@ _ADAPTERS = MappingProxyType(
             {"xgboost", "sklearn", "numpy", "scipy"},
         ),
         Library.ONNX: ("mlbundle._onnx", "onnx", {"onnx", "onnxruntime", "numpy"}),
+        Library.CATBOOST: (
+            "mlbundle._catboost",
+            "catboost",
+            {
+                "catboost",
+                "numpy",
+                "scipy",
+                "pandas",
+                "matplotlib",
+                "plotly",
+                "graphviz",
+            },
+        ),
     }
 )
 

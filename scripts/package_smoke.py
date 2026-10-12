@@ -13,6 +13,7 @@ _OPTIONAL = {
     "sklearn",
     "skops",
     "xgboost",
+    "catboost",
     "onnx",
     "onnxruntime",
     "numpy",

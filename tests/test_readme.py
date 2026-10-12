@@ -18,7 +18,7 @@ PYTHON = [code for language, code in BLOCKS if language == "python"]
 
 
 @pytest.mark.parametrize(
-    "code", PYTHON, ids=["sklearn", "xgboost", "onnx", "schema-samples"]
+    "code", PYTHON, ids=["sklearn", "xgboost", "catboost", "onnx", "schema-samples"]
 )
 def test_python_example(code, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -29,7 +29,7 @@ def test_python_example(code, tmp_path, monkeypatch):
 
 
 def test_console_examples(tmp_path, monkeypatch):
-    assert len(PYTHON) == 4
+    assert len(PYTHON) == 5
     assert all(language in {"python", "shell"} for language, _ in BLOCKS)
     monkeypatch.chdir(tmp_path)
     exec(compile(PYTHON[0], str(README), "exec"), {})
