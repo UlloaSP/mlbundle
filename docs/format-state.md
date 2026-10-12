@@ -10,10 +10,11 @@ Skops' type audit is necessary but does not define which attributes belong to an
 estimator. mlbundle additionally owns a closed class/attribute catalog in
 `_sklearn/state_fields.json`, audited against scikit-learn 1.9.1. It covers public
 estimator constructor parameters, inherited and fitted attributes, shared fit
-helpers and the admitted loss/link internals. It is package data, never supplied
+helpers and the admitted loss/link/MLP optimizer internals. It is package data, never supplied
 by a bundle and never used to import or construct a class. Unknown object types,
 attributes, nested estimator attributes, node keys, loaders and unreferenced files
-are rejected. The supplemental skops trusted list remains Tree only. A catalog
+are rejected. The supplemental skops trusted list contains Tree, AdamOptimizer
+and SGDOptimizer only (exact paths in [the adapter contract](format-adapters.md)). A catalog
 entry does not extend skops' trust or guarantee that every configuration exports.
 
 The audited/tested baseline is scikit-learn 1.9.1 with skops 0.16.0; the
@@ -34,6 +35,20 @@ equal node count; maximum depth is recomputed, and maximum class width is derive
 from the per-output class counts. Missing directions are zero or one.
 Estimator classes must be the exact installed native class, rather than a subclass
 impersonating its module and name. This rule also applies before export.
+
+MLPClassifier and MLPRegressor retain their native fitted state for all three
+solvers, standalone and in pipelines. AdamOptimizer fields are `beta_1`, `beta_2`,
+`epsilon`, `learning_rate`, `learning_rate_init`, `ms`, `t`, `vs`; SGDOptimizer
+fields are `learning_rate`, `learning_rate_init`, `lr_schedule`, `momentum`,
+`nesterov`, `power_t`, `velocities`. Every field uses the same schema/reference/
+array budgets and complete commitment as other sklearn state; extra fields fail.
+Skops 0.16.0 ObjectNode uses `object.__new__` then `__dict__.update` for these
+classes. They have no custom allocation, `__setstate__` or reduce hook; their
+constructors and training update methods are never called on load. Other loaders
+for these classes are rejected before skops construction. MLP structure remains
+null, with coefficients, intercepts, layer/output/activation state, label binarizer,
+random state, optimizer buffers and training/validation histories committed in
+`model.state_sha256`. Pipelines commit their complete nested state the same way.
 
 Every admitted state field participates in a complete state commitment, including
 fields omitted from visualization and optional training-only state. Deserialization

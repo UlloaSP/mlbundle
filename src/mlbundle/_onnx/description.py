@@ -9,8 +9,8 @@ from mlbundle.canonical import canonical_dumps
 from mlbundle.claims import ClassLabels, ModelClaims
 from mlbundle.contract import ModelKind
 from mlbundle.environment import OnnxInfo, Opset
-from mlbundle.errors import InvalidModelError
-from mlbundle.limits import MAX_CLASSES
+from mlbundle.errors import InvalidModelError, LimitExceededError
+from mlbundle.limits import HYPERPARAMETER_BYTES, MAX_CLASSES
 
 from .signatures import _batch, _inputs, signature
 
@@ -215,13 +215,22 @@ def describe(model: Any) -> Description:
     metadata = {item.key: item.value for item in model.metadata_props}
     if len(metadata) != len(model.metadata_props):
         raise InvalidModelError("Duplicate ONNX metadata keys.")
+    projection = {
+        "inputs": list(inputs),
+        "outputs": outputs,
+        "metadata_props": metadata,
+    }
+    try:
+        canonical_dumps(projection, max_bytes=HYPERPARAMETER_BYTES, max_depth=16)
+    except LimitExceededError:
+        raise LimitExceededError(
+            "ONNX hyperparameters (inputs/outputs/metadata_props) exceed the "
+            f"{HYPERPARAMETER_BYTES}-byte or depth-16 limit."
+        ) from None
     claims = ModelClaims(
         estimator_class="ONNX",
         kind=kind,
-        hyperparameters=cast(
-            dict[str, JsonValue],
-            {"inputs": list(inputs), "outputs": outputs, "metadata_props": metadata},
-        ),
+        hyperparameters=cast(dict[str, JsonValue], projection),
         n_features=width,
         n_classes=None if count is None else [count],
         n_outputs=1,

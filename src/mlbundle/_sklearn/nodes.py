@@ -4,6 +4,8 @@ from typing import Any
 
 from mlbundle.errors import InvalidModelError, UnsupportedModelError
 
+from .trusted import OPTIMIZER_TYPES
+
 FIELDS = {
     "ObjectNode": {"content"},
     "TreeNode": {"content", "__reduce__"},
@@ -32,6 +34,9 @@ COMMON = {"__class__", "__module__", "__loader__", "__id__"}
 def validate_nodes(nodes: list[dict[str, Any]], root: Any) -> None:
     for node in nodes:
         loader = node["__loader__"]
+        name = node.get("__module__", "") + "." + node.get("__class__", "")
+        if name in OPTIMIZER_TYPES and loader not in ("ObjectNode", "CachedNode"):
+            raise InvalidModelError("Invalid skops optimizer loader.")
         if (
             node.get("__module__") == "sklearn.tree._tree"
             and node.get("__class__") == "Tree"

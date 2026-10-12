@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import onnx
-from pydantic import JsonValue
+from pydantic import JsonValue, ValidationError
 
 from mlbundle.claims import ModelClaims
 from mlbundle.contract import Library, MemberName
@@ -33,6 +33,17 @@ def _description(data: bytes) -> Description:
         return describe(parse_model(data))
     except MLBundleError:
         raise
+    except ValidationError as error:
+        failure = error.errors(include_input=False, include_url=False)[0]
+        # Disclose closed field names, never author-supplied keys or values.
+        fields = {"producer_name", "producer_version", "feature_names", "class_labels"}
+        field = next((part for part in failure["loc"] if part in fields), None)
+        if field is not None and failure["type"] == "string_too_long":
+            limit = failure.get("ctx", {})["max_length"]
+            raise InvalidModelError(
+                f"ONNX {field} exceeds the {limit}-character limit."
+            ) from None
+        raise InvalidModelError("Invalid ONNX model claims.") from None
     except Exception:
         raise InvalidModelError("Invalid ONNX model claims.") from None
 
@@ -40,6 +51,17 @@ def _description(data: bytes) -> Description:
 class Adapter:
     library = Library.ONNX
     model_member = MemberName.ONNX
+
+    def __init__(self) -> None:
+        self._data: bytes | None = None
+        self._validated: Description | None = None
+
+    def _describe(self, data: bytes) -> Description:
+        # An adapter belongs to one export/load, never a global cache or bundle.
+        if data is not self._data or self._validated is None:
+            description = _description(data)
+            self._data, self._validated = data, description
+        return self._validated
 
     def recognizes(self, model: object) -> bool:
         return isinstance(model, (bytes, onnx.ModelProto, OnnxModel)) or (
@@ -63,7 +85,7 @@ class Adapter:
                     raise LimitExceededError("ONNX model exceeds the byte limit.")
                 with path.open("rb") as stream:
                     data = stream.read(cap + 1)
-            description = _description(data)
+            description = self._describe(data)
             resolve_labels(description.claims, declarations)
             return self.deserialize(data)
         except MLBundleError:
@@ -75,7 +97,7 @@ class Adapter:
         return model.data
 
     def deserialize(self, data: bytes) -> OnnxModel:
-        description = _description(data)
+        description = self._describe(data)
         try:
             return OnnxModel(data, create_session(data, description))
         except MLBundleError:
@@ -84,10 +106,10 @@ class Adapter:
             raise InvalidModelError("ONNX CPU session creation failed.") from None
 
     def extract_claims(self, model: Any) -> ModelClaims:
-        return _description(model.data).claims
+        return self._describe(model.data).claims
 
     def extract_structure(self, model: object) -> dict[str, JsonValue] | None:  # noqa: ARG002
         return None
 
     def predictor(self, model: Any) -> Predictor:
-        return Predictor(model.session, _description(model.data))
+        return Predictor(model.session, self._describe(model.data))
