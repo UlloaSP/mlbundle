@@ -200,7 +200,7 @@ def load(source: BundleSource, *, limits: ArchiveLimits | None = None) -> Loaded
     extracted = adapter.extract_structure(model)
     if (MemberName.STRUCTURE in members) != (extracted is not None):
         raise ClaimMismatchError("structure")
-    verify_structure_bytes(b"null" if decoded is None else decoded.canonical, extracted)
+    verify_structure_bytes(b"null" if decoded is None else decoded, extracted)
     return LoadedBundle(
         manifest=manifest,
         members=tuple(name for name in MEMBER_ORDER if name in members),

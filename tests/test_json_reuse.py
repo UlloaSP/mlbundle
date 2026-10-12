@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 import mlbundle
-from mlbundle import claims, container, model_io
+from mlbundle import canonical, claims, container, model_io
 from mlbundle.canonical import canonical_dumps
 from mlbundle.contract import MemberName
 from mlbundle.schema import reports_for
@@ -120,3 +120,14 @@ def test_noncanonical_structure_keeps_original_hash_and_canonical_comparison(
     assert loaded.structure == native[0]
     assert container.read_container(bundle)[1][MemberName.STRUCTURE] == wire
     assert loaded.manifest.integrity[MemberName.STRUCTURE].size == len(wire)
+
+
+def test_canonical_stored_structure_needs_no_comparison_reencoding(
+    native, tmp_path, monkeypatch
+):
+    destination = tmp_path / "model.mlbundle"
+    mlbundle.export("native", destination)
+    monkeypatch.setattr(
+        canonical, "_encode_json", lambda *args: pytest.fail("reencoded")
+    )
+    assert mlbundle.load(destination).structure == native[0]

@@ -98,7 +98,8 @@ Metadata inspection does not infer whether a model requires structure.
 
 Internally, optional JSON members retain their validated values within one
 operation. Inspect/load reuse that decode for schema/sample checks, and load
-encodes the retained structure once for exact comparison with native extraction.
+compares freshly encoded native extraction with stored structure bytes. Equality
+proves canonical identity; other wire spellings encode the retained value once.
 There is no global cache or bundle-supplied validation record. Public export
 reuses the writer's complete container validation when returning metadata.
 

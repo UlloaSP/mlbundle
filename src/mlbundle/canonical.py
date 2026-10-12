@@ -243,6 +243,7 @@ class DecodedJSON:
     """Operation-local decoded value and its checked canonical comparison bytes."""
 
     value: JsonValue
+    source: bytes
     _encoded: bytes | None
 
     @cached_property
@@ -269,7 +270,7 @@ def decode_json(
         encoded = _bounded_encoding(value, len(data), max_bytes)
     except (ValueError, TypeError, UnicodeError, RecursionError):
         raise InvalidJSONError from None
-    return DecodedJSON(cast(JsonValue, value), encoded)
+    return DecodedJSON(cast(JsonValue, value), data, encoded)
 
 
 def canonical_loads(

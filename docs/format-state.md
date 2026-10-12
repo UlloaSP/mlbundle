@@ -199,8 +199,9 @@ already proven: strings/integers cannot grow from their wire spelling, and a
 finite binary64 float has at most 24 canonical bytes for at least three wire
 token bytes. Thus eight times the stored byte length is a conservative bound.
 Otherwise the canonical encoder checks the exact size immediately. This does
-not raise any ceiling. Comparison still encodes the decoded value with the same
-sorted keys, scalar types and numeric spellings, never compares raw wire bytes.
+not raise any ceiling. Equality of validated stored bytes to freshly recomputed
+canonical bytes already proves exact canonical equality; otherwise comparison
+encodes the decoded value with the same sorted keys, types and numeric spellings.
 
 ## XGBoost, CatBoost and ONNX
 
