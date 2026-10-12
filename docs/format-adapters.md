@@ -122,7 +122,7 @@ Only native `gbtree` storage is admitted. In XGBoost 3.4.1, the deprecated `dart
 option uses `gbtree` storage with dropout; that representation is supported and
 all native dump statistics are retained. Legacy native `dart` storage is rejected.
 `gblinear` is rejected: its multi-class coefficient/importance dimensions and
-deprecated format are outside this phase's tree contract. There is no silently
+deprecated format are outside the version 1 tree contract. There is no silently
 omitted structure for an admitted XGBoost model.
 
 Serialization is exclusively `bytes(booster.save_raw(raw_format="ubj"))` and

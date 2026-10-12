@@ -1,9 +1,9 @@
 # Security policy
 
-mlbundle is pre-alpha. Phases 1–5 implement strict manifest validation,
-contract helpers, secure container reading/writing, metadata-only `inspect`,
-public export/load, the sklearn, XGBoost and ONNX adapters, local schema inference
-and explicitly requested sample rows.
+mlbundle v0.1 is pre-release; format version 1 is not yet frozen. It implements
+strict manifest validation, secure container reading/writing, metadata-only
+`inspect`, export/load, sklearn, XGBoost and ONNX adapters, local schema inference,
+explicit samples, prediction-state verification and the inspect/verify CLI.
 The container validates ZIP/ZIP64 layout, bounds sources and actual decompression,
 checks CRC and member integrity, and rejects unsafe members and polyglot wrappers.
 The writer publishes complete validated files atomically where hard links work;
@@ -93,6 +93,12 @@ compares the original and reloaded native models before publication. Loaded resu
 contain the native model for runtime explanations; mutating it invalidates the
 relationship to the verified metadata. Pipeline structure is null because v1
 does not describe its input transformations.
+
+The closed sklearn class/attribute catalog is audited against 1.9.1 with skops
+0.16.0. Other versions/configurations can be rejected for unknown state. The
+embedded sklearn version is committed too; different export/load sklearn
+versions fail native state comparison. Dependency version floors are not a
+cross-version compatibility guarantee. See [state ownership](docs/format-state.md).
 
 ## Implemented XGBoost dependency boundary
 
@@ -186,6 +192,12 @@ kind/labels without mlschema. Load also verifies native model claims; label-free
 ONNX original labels remain declarations. Consumers must treat schema and sample
 values as untrusted display/input data, never executable instructions.
 See [the exact data-derived contract](docs/format-schema.md) and review what is shared.
+
+The CLI uses the same inspect/load boundary. Human summary values escape
+terminal controls and are truncated; JSON output is lossless ASCII-escaped
+manifest data within format limits. Errors are one bounded stderr line with a
+failure category, not bundle values. Inspect still does not attest model claims;
+verify requires the matching extra and performs full loading and comparison.
 
 ## Reporting a vulnerability
 

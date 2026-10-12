@@ -1,7 +1,7 @@
 # Version 1 schema and samples
 
-Normative section of [the format contract](format.md). Phase 5 implements local
-mlschema 0.2.1 inference. Schema and samples are declarations from data the
+Normative section of [the format contract](format.md). Local inference uses
+the mlschema 0.2 vocabulary, tested with 0.2.1. Schema and samples come from data the
 reader never sees. Integrity does not authenticate that data or its history.
 
 ## Export inputs
@@ -31,7 +31,7 @@ field's `field1`/`field2` into `columns` with those IDs and removes nested
 `mappedTo`; this is presentation mapping and needs no DataFrame. Consumers may
 format typed class labels for display and select reports by output index.
 
-`mlbundle[schema]` optionally installs mlschema 0.2.1 from PyPI, transitively
+`mlbundle[schema]` optionally installs mlschema >=0.2.1,<0.3 from PyPI, transitively
 pandas; it is included in `all`. The dependency is marked for Python 3.14 because
 that mlschema version requires `>=3.14,<3.15`. mlbundle's own `>=3.14` range and
 sole core dependency (Pydantic) are unchanged. Training export with missing

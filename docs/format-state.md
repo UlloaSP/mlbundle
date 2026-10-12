@@ -1,8 +1,8 @@
 # Version 1 prediction state and bounded native work
 
-Normative section of [the format contract](format.md). Phase 6 completes the
-unreleased version 1 contract; it does not increment the format version. Earlier
-unreleased bundles lacking the new state records fail full claim comparison.
+Normative section of [the format contract](format.md). Version 1 is pre-release
+and not yet frozen. Bundles lacking the required prediction-state records
+fail full claim comparison.
 
 ## Sklearn state ownership
 
@@ -15,6 +15,15 @@ by a bundle and never used to import or construct a class. Unknown object types,
 attributes, nested estimator attributes, node keys, loaders and unreferenced files
 are rejected. The supplemental skops trusted list remains Tree only. A catalog
 entry does not extend skops' trust or guarantee that every configuration exports.
+
+The audited/tested baseline is scikit-learn 1.9.1 with skops 0.16.0; the
+dependency floor is not a promise of compatibility with every later version.
+There is no version whitelist. Other versions can introduce unknown classes or
+state fields and fail export/load. `_sklearn_version` also participates in the
+commitment: a different installed sklearn version changes reserialized state,
+so full loading rejects it as `InvalidModelError`. Export and load should use
+the same sklearn version. Other matching-version configurations must satisfy
+all catalog, trust, dimensions and round-trip checks; they are not a tested range.
 
 Object state must be a dictionary with one string key type per attribute; skops
 may otherwise truncate attributes silently. Stateless admitted objects may use

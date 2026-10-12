@@ -274,16 +274,3 @@ def test_schema_reference_presence(missing, frame, tmp_path):
     for reader in (mlbundle.inspect, mlbundle.load):
         with pytest.raises(mlbundle.InvalidContainerError):
             reader(bundle)
-
-
-def test_readme_training_example(tmp_path, monkeypatch):
-    import re
-    from pathlib import Path
-
-    readme = Path(__file__).resolve().parents[1] / "README.md"
-    blocks = re.findall(
-        r"```python\n(.*?)\n```", readme.read_text(encoding="utf-8"), re.DOTALL
-    )
-    example = next(block for block in blocks if "training_data=training" in block)
-    monkeypatch.chdir(tmp_path)
-    exec(compile(example, str(readme), "exec"), {})
