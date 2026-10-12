@@ -105,7 +105,7 @@ still preserve validation, security and reproducibility.
 - Never use pickle, joblib or cloudpickle, even as an option or fallback.
 - Never import or instantiate from strings in the manifest. The class to
   instantiate must come from a closed list inside mlbundle.
-- The skops trusted-types list (Tree, AdamOptimizer, SGDOptimizer) lives in mlbundle; never read it from a bundle. Optimizers admit ObjectNode/CachedNode only.
+- The skops trusted lists live in mlbundle; never read them from a bundle or add XGBoost/CatBoost types. Tree, optimizers, scalar dtypes and closed functions each admit only their owning loaders; see `docs/format-state.md`.
 - Export must fail on the user's machine when the model contains custom types,
   listing unsupported types from `skops.io.get_untrusted_types`. Do not defer
   discovery to upload time or offer to trust those types.
@@ -208,7 +208,7 @@ before publication. XGBoost supports exact XGBClassifier/XGBRegressor tree
 wrappers with closed probability/regression objectives and one target. Original
 class labels supplied through output-major `class_labels=` are bound to a native
 copy through an mlbundle-owned booster attribute and verified on load. Omitted
-labels use encoded indices; sklearn/CatBoost reject this option because they own classes_. Local `training_data=` inference uses mlschema with `__`, excludes a named target,
+labels use encoded indices; sklearn/CatBoost reject `class_labels=` because they own classes_. Local `training_data=` inference uses mlschema with `__`, excludes a named target,
 and records training dtypes. Only explicit `sample_rows=N` includes real rows.
 Schema/report and sample validation is shared by export, inspect and load.
 ONNX preserves path/bytes unchanged (ModelProto is serialized once), validates
@@ -218,7 +218,7 @@ claims. `native_model` is an OnnxModel with original bytes and a CPU session.
 Kind is inferred from supported outputs; native labels are verified, absent
 labels use count-checked declarations. Structure is null. See the normative
 ONNX section linked from `docs/format.md` for exact layouts and resource bounds.
-CatBoost supports exact numeric single-target symmetric classifiers/regressors, with native state commitments and in-memory loading.
+CatBoost supports exact numeric single-target symmetric classifiers/regressors, with native state commitments and in-memory loading. Sklearn pipelines containing XGBoost/CatBoost estimators are rejected; export the estimator directly.
 The closed member list is: required `manifest.json`, exactly
 one of `model.skops`, `model.ubj`, `model.cbm` or `model.onnx`, optional `schema.json`, and
 `structure.json` when the supported model has extractable structure. Optional
@@ -265,7 +265,7 @@ its kind/count inference remains ONNX-owned. Keep native behavior in adapters; f
 - `src/mlbundle/training.py` — lazy local DataFrame alignment and schema inference.
 - `src/mlbundle/schema.py` and `_schema_fields.py` — closed schema/report declarations and reader cross-checks without mlschema.
 - `src/mlbundle/samples.py` — explicit feature-row selection and bounded cell conversion.
-- `src/mlbundle/_sklearn/` — skops trust/loading (including MLP adam/sgd/lbfgs state), parameter and claim extraction, native structure, nested payload bounds and validated prediction.
+- `src/mlbundle/_sklearn/` — closed dtype/type/function trust, skops loading, MLP state, parameter/claim extraction, native structure, nested payload bounds and fitted categorical prediction.
 - `src/mlbundle/_xgboost/` — closed wrappers/objectives, native UBJSON preflight/loading, label binding, recoverable config, complete tree structure and validated prediction.
 - `src/mlbundle/_catboost/` — closed numeric symmetric wrappers/losses, CBM preflight/in-memory loading, complete native state/structure and validated prediction.
 - `src/mlbundle/_onnx/` — bounded protobuf/graph validation, unchanged bytes, native signatures/labels, CPU sessions and tabular prediction.

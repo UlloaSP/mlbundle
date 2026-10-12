@@ -4,8 +4,9 @@ import warnings
 from typing import Any, cast
 
 import numpy as np
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import FeatureUnion, Pipeline
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, TargetEncoder
 
 from mlbundle._prediction_input import tabular
 from mlbundle.adapters import ProbabilityOutput, RegressionOutput
@@ -14,15 +15,32 @@ from mlbundle.contract import ModelKind
 from mlbundle.errors import InvalidModelError, MLBundleError
 
 
+def _string_inputs(model: Any) -> bool:
+    pending = [model]
+    seen: set[int] = set()
+    while pending:
+        value = pending.pop()
+        if id(value) in seen:
+            continue
+        seen.add(id(value))
+        if isinstance(
+            value, (OneHotEncoder, OrdinalEncoder, TargetEncoder)
+        ) and hasattr(value, "categories_"):
+            return True
+        if isinstance(value, Pipeline):
+            pending.extend(step for _, step in value.steps)
+        elif isinstance(value, ColumnTransformer):
+            pending.extend(step for _, step, _ in getattr(value, "transformers_", []))
+        elif isinstance(value, FeatureUnion):
+            pending.extend(step for _, step in value.transformer_list)
+    return False
+
+
 class Predictor:
     def __init__(self, model: Any, claims: ModelClaims) -> None:
         self.model = model
         self.claims = claims
-        self.strings = isinstance(self.model, Pipeline) and any(
-            isinstance(value, (OneHotEncoder, OrdinalEncoder))
-            and hasattr(value, "categories_")
-            for value in self.model.get_params(deep=True).values()
-        )
+        self.strings = isinstance(self.model, Pipeline) and _string_inputs(self.model)
 
     def _data(self, data: object) -> tuple[object, int]:
         return tabular(data, self.claims.n_features, strings=self.strings)

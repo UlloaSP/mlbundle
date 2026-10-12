@@ -218,14 +218,14 @@ Support requires a faithful closed-adapter round trip; a catalog entry does not 
   recoverable feature/output counts. Tested families include trees/ensembles,
   linear/regularized/robust/GLM models, SVMs, PLSRegression, naive Bayes, LDA/QDA,
   dense brute-force neighbors, NearestCentroid, MLP and MultiOutput/RegressorChain.
-  MLPClassifier/Regressor (adam, sgd, lbfgs) retain optimizer state, alone/in pipelines,
-  with null structure and complete commitments; see [MLP tests](tests/test_sklearn_mlp.py).
-  Scaler and dense OneHotEncoder pipelines round-trip; structure stays null
-  because format 1 does not map transformed features. See
-  [tested configurations](tests/test_sklearn_families.py) and
-  [core round trips/rejections](tests/test_sklearn.py).
-- **Sklearn rejections:** custom estimators/subclasses, callable/type parameters
-  (including FunctionTransformer user functions), classifiers without
+  MLPClassifier/Regressor (adam, sgd, lbfgs) retain optimizer state, alone/in pipelines, with null structure and complete commitments; see [MLP tests](tests/test_sklearn_mlp.py).
+  SimpleImputer/KNNImputer, scalers, KBinsDiscretizer, categorical encoders,
+  univariate selectors and closed NumPy FunctionTransformer functions round-trip,
+  including nested ColumnTransformer pipelines; see [the exact lists](docs/format-state.md).
+  Pipeline structure stays null because format 1 does not map transformed features. See
+  [tested configurations](tests/test_sklearn_families.py) and [core round trips/rejections](tests/test_sklearn.py).
+- **Sklearn rejections:** custom estimators/subclasses, functions/types outside the
+  closed lists (including lambdas and user functions), compound fitted dtypes, classifiers without
   probabilities, multilabel/ClassifierChain layouts, XGBoost/CatBoost pipeline steps,
   and untrusted nested storage such as fitted sparse neighbor arrays.
   HistGradientBoosting uses untrusted `TreePredictor` storage and is rejected.
@@ -291,8 +291,8 @@ mlschema `>=0.2.1,<0.3` on 3.14 only (0.2.1 excludes 3.15). `uv.lock` fixes test
 versions; dependency edits require `uv sync` and committing the updated lockfile.
 
 Run `uv run ruff check .`, `uv run ruff format --check .`, `uv run pyright`,
-`uv run pytest` and `uv build`. Tests execute every fenced README example,
-write terminal/XML coverage and enforce 80% branch-inclusive coverage.
+`uv run pytest` and `uv build`. Tests execute every fenced README example and
+write terminal/XML coverage with an 80% branch-inclusive minimum.
 CI preserves lint/types and Ubuntu/Windows tests and checks a clean base wheel
 installation on both OSes. `uv build` creates a local wheel and source archive.
 Read [AGENTS.md](AGENTS.md) before contributing. Publishing, releases, version

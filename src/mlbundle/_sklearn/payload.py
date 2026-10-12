@@ -18,6 +18,7 @@ from mlbundle.limits import (
 
 from .archive import bounded_zip
 from .arrays import MAX_FILES, array_header, sparse_headers
+from .dtypes import validate_dtypes
 from .nodes import validate_nodes
 from .references import References
 from .state import state_digest, validate_state
@@ -73,6 +74,7 @@ def validate_payload(data: bytes) -> str:
             if name not in names:
                 raise InvalidModelError("Missing skops numeric array member.")
             _array_header(archive, name, archive.getinfo(name).file_size)
+        validate_dtypes(references.nodes, references.resolve, archive)
         _tree_constructors(references, archive)
         files = _array_references(schema) | sparse | {"schema.json"}
         if set(names) != files:
