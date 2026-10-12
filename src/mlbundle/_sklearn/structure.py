@@ -1,8 +1,10 @@
 """Unmodified native structure, with tree index validation before native traversal."""
 
+import sys
 from typing import Any, cast
 
 import numpy as np
+import skops.io as sio
 from pydantic import JsonValue
 from sklearn.base import BaseEstimator, is_classifier
 from sklearn.multioutput import RegressorChain
@@ -13,6 +15,12 @@ from mlbundle.canonical import canonical_value
 from mlbundle.errors import InvalidModelError, UnsupportedModelError
 from mlbundle.limits import MAX_CLASSES, MAX_FEATURES, MAX_OUTPUTS, STRUCTURE_BYTES
 
+from .consistency import validate_consistency
+from .fitted import validate_fitted
+from .labels import validate_classes as _validate_classes
+from .payload import validate_payload
+from .prediction_state import prediction_state
+
 _ARRAYS = (
     "children_left",
     "children_right",
@@ -22,6 +30,7 @@ _ARRAYS = (
     "impurity",
     "n_node_samples",
     "weighted_n_node_samples",
+    "missing_go_to_left",
 )
 
 
@@ -36,6 +45,8 @@ def validate_tree(tree: Tree) -> None:
         or np.any(tree.n_classes > MAX_CLASSES)
         or tree.value.shape != (count, tree.n_outputs, int(max(tree.n_classes)))
         or any(len(getattr(tree, name)) != count for name in _ARRAYS)
+        or np.any(tree.missing_go_to_left > 1)
+        or tree.capacity != count
     ):
         raise InvalidModelError("Invalid sklearn tree dimensions.")
     # Visit each node exactly once: reject cycles, aliases, unreachable nodes and
@@ -69,6 +80,10 @@ def validate_tree_storage(model: object) -> None:
             continue
         seen.add(id(value))
         if isinstance(value, Tree):
+            if type(value) is not Tree:
+                raise UnsupportedModelError(
+                    reason="Only exact native Tree storage is supported."
+                )
             validate_tree(value)
         elif isinstance(value, dict):
             pending.extend(value.values())
@@ -98,7 +113,10 @@ def _width(model: Any) -> int | None:
 
 
 def _validate_owner(model: Any) -> None:
+    _exact_class(model)
+    validate_consistency(model)
     width = _width(model)
+    validate_fitted(model, width)
     if hasattr(model, "tree_") and (
         not isinstance(model.tree_, Tree) or model.tree_.n_features != width
     ):
@@ -113,9 +131,7 @@ def _validate_owner(model: Any) -> None:
         raise InvalidModelError(
             "Sklearn tree and owning estimator output counts disagree."
         )
-    if is_classifier(model) and (
-        hasattr(model, "tree_") or hasattr(model, "estimators_")
-    ):
+    if is_classifier(model) and hasattr(model, "classes_"):
         _validate_classes(model)
     if width is None or not hasattr(model, "estimators_"):
         return
@@ -143,30 +159,10 @@ def _validate_owner(model: Any) -> None:
             )
 
 
-def _validate_classes(model: Any) -> None:
-    classes = model.classes_ if isinstance(model.classes_, list) else [model.classes_]
-    if not classes or any(np.asarray(labels).ndim != 1 for labels in classes):
-        raise InvalidModelError("Invalid classifier label dimensions.")
-    counts = np.asarray([len(labels) for labels in classes])
-    if hasattr(model, "n_outputs_") and model.n_outputs_ != len(classes):
-        raise InvalidModelError("Classifier labels and native output counts disagree.")
-    if hasattr(model, "n_classes_"):
-        native = np.asarray(model.n_classes_)
-        if (
-            native.dtype.kind not in "iu"
-            or native.ndim != (0 if len(classes) == 1 else 1)
-            or not np.array_equal(np.atleast_1d(native), counts)
-        ):
-            raise InvalidModelError(
-                "Classifier labels and native class counts disagree."
-            )
-    if hasattr(model, "tree_") and not np.array_equal(model.tree_.n_classes, counts):
-        raise InvalidModelError("Classifier labels and tree class counts disagree.")
-
-
 def _tree(tree: Tree) -> dict[str, object]:
     return {
         "node_count": tree.node_count,
+        "max_depth": tree.max_depth,
         "n_features": tree.n_features,
         "n_outputs": tree.n_outputs,
         "n_classes": tree.n_classes,
@@ -208,5 +204,23 @@ def extract_structure(model: Any) -> dict[str, JsonValue] | None:
             return None
         result["family"] = "feature_importances"
     return cast(
-        dict[str, JsonValue], canonical_value(result, max_bytes=STRUCTURE_BYTES)
+        dict[str, JsonValue],
+        canonical_value(
+            {
+                **result,
+                "state_sha256": validate_payload(sio.dumps(model)),
+                "prediction_state": prediction_state(model),
+            },
+            max_bytes=STRUCTURE_BYTES,
+        ),
     )
+
+
+def _exact_class(model: Any) -> None:
+    native_module = sys.modules.get(type(model).__module__)
+    if native_module is None or vars(native_module).get(
+        type(model).__name__
+    ) is not type(model):
+        raise UnsupportedModelError(
+            reason="Only exact supported sklearn classes are admitted."
+        )

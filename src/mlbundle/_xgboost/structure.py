@@ -8,7 +8,9 @@ from mlbundle.canonical import canonical_loads, canonical_value
 from mlbundle.errors import LimitExceededError
 from mlbundle.limits import STRUCTURE_BYTES
 
-from .native import MAX_TREES, configuration, tree_model
+from .native import MAX_TREES, configuration, tree_model, validate_payload
+from .state import projection
+from .ubjson import decode
 
 
 def extract_structure(model: Any) -> dict[str, JsonValue]:
@@ -17,6 +19,9 @@ def extract_structure(model: Any) -> dict[str, JsonValue]:
     count = int(native["gbtree_model_param"]["num_trees"])
     if not 1 <= count <= MAX_TREES:
         raise LimitExceededError("XGBoost tree count exceeds the limit.")
+    data = bytes(booster.save_raw(raw_format="ubj"))
+    validate_payload(data)
+    native_model = decode(data)["learner"]["gradient_booster"]["model"]
     dumps = booster.get_dump(dump_format="json", with_stats=True)
     if (
         len(dumps) != count
@@ -28,6 +33,7 @@ def extract_structure(model: Any) -> dict[str, JsonValue]:
         canonical_value(
             {
                 "family": "xgboost",
+                "native_model": projection(native_model),
                 "trees": [
                     canonical_loads(tree.encode(), max_bytes=STRUCTURE_BYTES)
                     for tree in dumps

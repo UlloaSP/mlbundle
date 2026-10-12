@@ -30,6 +30,7 @@ def manifest_data() -> dict:
             "n_features": 2,
             "n_classes": [2],
             "n_outputs": 1,
+            "state_sha256": None,
         },
         "features": {
             "names": ["a", "b"],

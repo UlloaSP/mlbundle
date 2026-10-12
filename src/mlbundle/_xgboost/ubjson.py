@@ -20,6 +20,7 @@ class Decoder:
     def __init__(self, data: bytes) -> None:
         self.data = memoryview(data)
         self.position = 0
+        self.values = 0
 
     def take(self, count: int) -> memoryview:
         if count < 0 or count > len(self.data) - self.position:
@@ -45,6 +46,9 @@ class Decoder:
         return bytes(self.take(self.integer())).decode("utf-8")
 
     def value(self, depth: int = 0, marker: str | None = None) -> Any:
+        self.values += 1
+        if self.values > 1_000_000:
+            raise InvalidModelError("UBJSON value count exceeds the limit.")
         if depth > 32:
             raise InvalidModelError("UBJSON nesting exceeds the limit.")
         marker = self.marker() if marker is None else marker

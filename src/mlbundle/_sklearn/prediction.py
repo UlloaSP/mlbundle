@@ -4,30 +4,40 @@ import warnings
 from typing import Any, cast
 
 import numpy as np
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
 
+from mlbundle._prediction_input import tabular
 from mlbundle.adapters import ProbabilityOutput, RegressionOutput
 from mlbundle.claims import ModelClaims
 from mlbundle.contract import ModelKind
-from mlbundle.errors import InvalidModelError
+from mlbundle.errors import InvalidModelError, MLBundleError
 
 
 class Predictor:
     def __init__(self, model: Any, claims: ModelClaims) -> None:
         self.model = model
         self.claims = claims
+        self.strings = isinstance(self.model, Pipeline) and any(
+            isinstance(value, (OneHotEncoder, OrdinalEncoder))
+            and hasattr(value, "categories_")
+            for value in self.model.get_params(deep=True).values()
+        )
 
     def _data(self, data: object) -> tuple[object, int]:
-        shape = getattr(data, "shape", None)
-        if shape is None:
-            data = np.asarray(data)
-            shape = data.shape
-        if len(shape) != 2 or shape[1] != self.claims.n_features:
-            raise ValueError("Prediction input must have the model's feature width.")
-        return data, int(shape[0])
+        return tabular(data, self.claims.n_features, strings=self.strings)
 
     def _call(self, data: object, *, probabilities: bool) -> Any:
         # Positional arrays/lists remain supported for named models; sklearn
         # still enforces DataFrame name/order when those names are supplied.
+        try:
+            return self._native_call(data, probabilities=probabilities)
+        except MLBundleError:
+            raise
+        except Exception:
+            raise InvalidModelError("Sklearn prediction failed.") from None
+
+    def _native_call(self, data: object, *, probabilities: bool) -> Any:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
@@ -37,11 +47,18 @@ class Predictor:
             warnings.filterwarnings(
                 "ignore", message="X has feature names, but .*", category=UserWarning
             )
-            return (
+            raw = (
                 self.model.predict_proba(data)
                 if probabilities
                 else self.model.predict(data)
             )
+            if probabilities:
+                return (
+                    [np.asarray(item, dtype=float) for item in raw]
+                    if isinstance(raw, list)
+                    else np.asarray(raw, dtype=float)
+                )
+            return np.asarray(raw, dtype=float)
 
     def predict(self, data: object) -> RegressionOutput:
         if self.claims.kind != ModelKind.REGRESSOR:

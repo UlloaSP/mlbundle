@@ -6,6 +6,7 @@ from typing import cast
 
 from pydantic import JsonValue
 
+from ._canonical_work import bound_work
 from .errors import InvalidJSONError, LimitExceededError
 from .limits import JSON_DEPTH, MANIFEST_BYTES
 
@@ -65,6 +66,7 @@ def _normalize(value: object, depth: int, max_depth: int) -> JsonValue:
 def canonical_dumps(
     value: object, *, max_bytes: int = MANIFEST_BYTES, max_depth: int = JSON_DEPTH
 ) -> bytes:
+    bound_work(value, max_bytes, max_depth)
     try:
         encoded = json.dumps(
             _normalize(value, 0, max_depth),

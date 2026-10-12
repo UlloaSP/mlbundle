@@ -58,7 +58,15 @@ def test_real_skops_and_supported_array_headers():
     validate_payload(sio.dumps(model))
     for version in [(1, 0), (2, 0)]:
         validate_payload(
-            _archive([("schema.json", b"{}"), ("array.npy", _array(version=version))])
+            _archive(
+                [
+                    (
+                        "schema.json",
+                        b'{"__loader__":"NdArrayNode","type":"numpy","file":"array.npy"}',
+                    ),
+                    ("array.npy", _array(version=version)),
+                ]
+            )
         )
 
 

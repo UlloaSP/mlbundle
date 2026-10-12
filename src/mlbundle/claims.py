@@ -39,6 +39,7 @@ class EstimatorInfo(ContractModel):
     n_features: int = Field(gt=0, le=MAX_FEATURES)
     n_classes: ClassCounts | None
     n_outputs: int = Field(gt=0, le=MAX_OUTPUTS)
+    state_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None = None
 
     @field_validator("hyperparameters")
     @classmethod
@@ -63,6 +64,10 @@ def validate_labels(info: EstimatorInfo, labels: ClassLabels | None) -> None:
         return
     if labels is None or info.n_classes != [len(output) for output in labels]:
         raise ValueError("Class labels must match the output class counts.")
+    validate_label_sets(labels)
+
+
+def validate_label_sets(labels: ClassLabels) -> None:
     for output in labels:
         encoded = [canonical_dumps(label) for label in output]
         if len(encoded) != len(set(encoded)):

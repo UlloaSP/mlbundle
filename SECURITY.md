@@ -72,7 +72,11 @@ native construction, and checks state-array shapes against those dimensions.
 It also bounds the inner skops ZIP and validates every schema-referenced numeric
 array header, including renamed files, before skops reads it. Zero-itemsize
 arrays are rejected; object arrays never use pickle loading. Malformed native
-payloads are wrapped in bounded `InvalidModelError` messages. These checks do not
+payloads are wrapped in bounded `InvalidModelError` messages. Closed state catalogs and native construction comparisons reject extra or ignored
+state and unreferenced files. Complete fitted-state commitments additionally bind
+opaque pipelines and inference state outside tree/linear visualization. Shared-node
+audit visits and materialized buffers are bounded before skops. Sparse NPZ headers
+are checked against actual storage before NumPy allocation. These checks do not
 make the native parser a sandbox.
 
 The installed skops load path builds nodes, audits them and only then constructs
@@ -98,7 +102,8 @@ code. Export rejects custom objectives, other wrappers, raw boosters, unsupporte
 objectives/boosters and multi-target models. A native copy holds the canonical
 mlbundle attribute binding class labels, wrapper identity and prediction settings;
 the caller's model is never mutated. Load requires and recomputes that binding,
-recoverable config fields, names/types and the complete tree dumps/importances.
+recoverable config fields, names/types, closed booster attributes and complete
+native tree/routing/category/dropout state alongside dumps/importances.
 Label agreement proves consistency with the native file, not the historical
 truth of a user-supplied label mapping.
 
@@ -113,7 +118,8 @@ XGBoost's native parser and native inference remain a dependency boundary:
 mlbundle cannot guarantee their memory safety or bound their internal memory/CPU
 use. Native tree dump generation also allocates inside XGBoost before mlbundle
 can inspect its returned byte size. Server consumers must isolate loading and
-prediction and enforce process resource limits. See the exact support and
+prediction and enforce process resource limits. All predictors reject invalid inputs and wrap remaining native failures
+without echoing data cells. See the exact support and
 resource boundaries in [docs/format.md](docs/format.md).
 
 ## Implemented ONNX dependency boundary

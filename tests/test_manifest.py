@@ -65,6 +65,8 @@ def test_unknown_fields(manifest_data, section):
         ("library", "pytorch"),
         ("serialization", "unknown"),
         ("serialization", "onnx"),
+        ("state_sha256", "short"),
+        ("state_sha256", True),
     ],
 )
 def test_bad_model_fields(manifest_data, field, value):

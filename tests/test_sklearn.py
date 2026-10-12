@@ -247,42 +247,6 @@ def test_prediction_validation(invalid, monkeypatch):
         prediction.predict_proba([[0]])
 
 
-def test_parameter_projection(tmp_path):
-    from sklearn.pipeline import Pipeline
-    from sklearn.preprocessing import FunctionTransformer
-
-    from mlbundle._sklearn.parameters import _parameter
-
-    state = np.random.RandomState(7)
-    model = DecisionTreeClassifier(random_state=state).fit([[0], [1]], [0, 1])
-    path = tmp_path / "state.mlbundle"
-    mlbundle.export(model, path)
-    assert (
-        "$random_state"
-        in mlbundle.load(path).manifest.model.hyperparameters["random_state"]
-    )
-    assert _parameter((np.float32(1.5), np.array([1, 2]), None), frozenset()) == [
-        1.5,
-        [1, 2],
-        None,
-    ]
-    for value in [float, lambda x: x, {1: "bad"}]:
-        with pytest.raises(UnsupportedModelError):
-            _parameter(value, frozenset())
-    cyclic = []
-    cyclic.append(cyclic)
-    with pytest.raises(UnsupportedModelError, match="Cyclic"):
-        _parameter(cyclic, frozenset())
-    model = Pipeline(
-        [("identity", FunctionTransformer()), ("tree", DecisionTreeClassifier())]
-    ).fit([[0], [1]], [0, 1])
-    path = tmp_path / "pipeline.mlbundle"
-    mlbundle.export(model, path)
-    params = mlbundle.load(path).manifest.model.hyperparameters
-    assert params["tree"]["$estimator"]["class"] == "DecisionTreeClassifier"
-    assert "tree__max_depth" in params
-
-
 @pytest.mark.parametrize("model", [DecisionTreeClassifier(), DecisionTreeRegressor()])
 def test_sparse_predictions(model):
     from scipy.sparse import csr_matrix

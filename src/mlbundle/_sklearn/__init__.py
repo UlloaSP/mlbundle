@@ -149,10 +149,14 @@ class Adapter:
 
     def deserialize(self, data: bytes) -> object:
         try:
-            validate_payload(data)
+            expected_state = validate_payload(data)
             _untrusted(data)
             model = sio.loads(data, trusted=list(TRUSTED_TYPES))
             self._validate(model)
+            if expected_state != validate_payload(sio.dumps(model)):
+                raise InvalidModelError(
+                    "Skops state does not survive native construction."
+                )
             return model
         except MLBundleError:
             raise
@@ -173,6 +177,9 @@ class Adapter:
                 estimator_class=type(model).__name__,
                 kind=ModelKind.CLASSIFIER if classifier else ModelKind.REGRESSOR,
                 hyperparameters=parameters(model),
+                state_sha256=validate_payload(sio.dumps(model))
+                if isinstance(model, Pipeline) or extract_structure(model) is None
+                else None,
                 n_features=int(model.n_features_in_),
                 n_classes=None
                 if labels is None
