@@ -142,8 +142,10 @@ the binding is independently checked. Best iteration is a decimal integer with
 at most six digits, in `[0, native_round_count)`. Best score is finite and at most
 256 characters; sklearn identity has only the native classifier/regressor key.
 Unknown wrapper attributes and unknown/missing native record fields fail. Native
-wrapper objective, booster kind and supplied feature types must agree with native
-state; wrapper declarations cannot reinterpret the native predictor. Native
+wrapper objective and supplied feature types must agree with native state. The
+wrapper booster is null or a supported tree alias (`gbtree`, or `dart`, which
+XGBoost 3.4 normalizes to gbtree). Wrapper declarations cannot reinterpret the
+native predictor. Native
 iteration increments equal `num_parallel_tree * max(1,num_class)`. Objective
 and learner class counts agree; dropout weights have native tree count, are
 finite and nonnegative. Category indices are at most 1,000,000; split segments
