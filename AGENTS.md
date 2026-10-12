@@ -105,7 +105,7 @@ still preserve validation, security and reproducibility.
 - Never use pickle, joblib or cloudpickle, even as an option or fallback.
 - Never import or instantiate from strings in the manifest. The class to
   instantiate must come from a closed list inside mlbundle.
-- The skops trusted-types list lives in mlbundle. Never read it from a bundle.
+- The skops trusted-types list (Tree, AdamOptimizer, SGDOptimizer) lives in mlbundle; never read it from a bundle. Optimizers admit ObjectNode/CachedNode only.
 - Export must fail on the user's machine when the model contains custom types,
   listing unsupported types from `skops.io.get_untrusted_types`. Do not defer
   discovery to upload time or offer to trust those types.
@@ -212,9 +212,9 @@ labels use encoded indices; sklearn rejects this option because it owns classes_
 Local `training_data=` inference uses mlschema with `__`, excludes a named target,
 and records training dtypes. Only explicit `sample_rows=N` includes real rows.
 Schema/report and sample validation is shared by export, inspect and load.
-ONNX preserves path/bytes unchanged (ModelProto is serialized once), rejects
-external tensors, custom domains, functions and training/runtime configuration
-before a CPU session, and verifies graph signatures, metadata and environment
+ONNX preserves path/bytes unchanged (ModelProto is serialized once), validates
+bytes once per export/load with bounded scalar scans, and rejects external tensors,
+custom domains, functions and training/runtime configuration before a CPU session. It verifies graph signatures, metadata and environment
 claims. `native_model` is an OnnxModel with original bytes and a CPU session.
 Kind is inferred from supported outputs; native labels are verified, absent
 labels use count-checked declarations. Structure is null. See the normative
@@ -266,7 +266,7 @@ its kind/count inference remains ONNX-owned. Keep native behavior in adapters; f
 - `src/mlbundle/training.py` — lazy local DataFrame alignment and schema inference.
 - `src/mlbundle/schema.py` and `_schema_fields.py` — closed schema/report declarations and reader cross-checks without mlschema.
 - `src/mlbundle/samples.py` — explicit feature-row selection and bounded cell conversion.
-- `src/mlbundle/_sklearn/` — skops trust/loading, parameter and claim extraction, native structure, nested payload bounds and validated prediction.
+- `src/mlbundle/_sklearn/` — skops trust/loading (including MLP adam/sgd/lbfgs state), parameter and claim extraction, native structure, nested payload bounds and validated prediction.
 - `src/mlbundle/_xgboost/` — closed wrappers/objectives, native UBJSON preflight/loading, label binding, recoverable config, complete tree structure and validated prediction.
 - `src/mlbundle/_onnx/` — bounded protobuf/graph validation, unchanged bytes, native signatures/labels, CPU sessions and tabular prediction.
 - `src/mlbundle/declarations.py` — export-time class labels and resolution for native models without labels.

@@ -181,7 +181,7 @@ ONNX/ONNX Runtime package versions; they are not evidence of compatibility.
 
 The ONNX record contains required fields: `opsets` (1–128 objects with `domain`,
 a string of 0–256 characters, and `version`, an integer 1–2^31−1), `ir_version`
-(integer 1–2^31−1), `producer_name` and `producer_version` (strings 0–256).
+(integer 1–2^31−1), `producer_name` and `producer_version` (strings 0–65,536).
 Opset domains are unique and sorted by Unicode code point. All these graph
 fields are verified claims. Matching producer text proves agreement with the
 file, not who produced or trained it.

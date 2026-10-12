@@ -57,11 +57,20 @@ serialization path. Adapters must use lazy imports for optional dependencies.
 ## Implemented sklearn trust boundary
 
 Export and load call skops' `get_untrusted_types` and reject all types outside
-the fixed supplemental list `["sklearn.tree._tree.Tree"]`. Load passes exactly
-that list to `skops.io.loads`, alongside skops' built-in trusted defaults. This
-entry is native numeric tree storage required by DecisionTree, RandomForest,
-ExtraTrees and GradientBoosting. It does not add arbitrary functions or I/O
+the fixed supplemental list `sklearn.tree._tree.Tree`,
+`sklearn.neural_network._stochastic_optimizers.AdamOptimizer` and
+`sklearn.neural_network._stochastic_optimizers.SGDOptimizer`. Load passes exactly
+that list to `skops.io.loads`, alongside skops' built-in trusted defaults. These
+are native numeric tree storage and fitted MLP optimizer records. They add no arbitrary functions or I/O
 constructors. The bundle cannot provide additional trusted types.
+
+The optimizer path was checked against skops 0.16.0/sklearn 1.9.1: ObjectNode
+uses ordinary `object.__new__` and `__dict__.update`, bypassing constructors.
+Neither optimizer defines allocation, setstate or reduce hooks. Only ObjectNode
+and shared CachedNode references are admitted for them; alternative constructor
+loaders fail before skops. Their closed attributes and numeric buffers use the
+existing pre-load resource bounds and full state commitment. MLP weights and all
+fitted state remain committed, with no MLP visualization member.
 
 Skops 0.16.0 deliberately distrusts tree storage because unchecked child and
 feature indices can crash native inference. mlbundle checks loaded tree dimensions,
@@ -132,7 +141,13 @@ resource boundaries in [docs/format.md](docs/format.md).
 
 Original self-contained ONNX bytes are parsed and loaded in memory. Before any
 ONNX Runtime session, a descriptor-driven protobuf scan bounds nesting and field
-counts, validates lengths and rejects unknown/duplicate singular fields. A full
+counts, validates lengths and rejects unknown/duplicate singular fields. The
+count ceiling is 536,870,912 (formerly 1,000,000), derived from the 512 MiB byte
+ceiling: each header/packed scalar costs at least one distinct byte. It permits
+large unpacked ensembles and does not bound decoded protobuf object memory.
+Repeated scalars use bounded 64 KiB NumPy/C regex scans with the same wire checks; every
+header/scalar still counts. One description is retained per export/load by
+immutable bytes identity, never globally or from bundle metadata. A full
 message traversal rejects every external tensor reference, including initializers,
 attributes, sparse tensors, nested graphs and functions; checker and runtime never
 receive external-data models. Tensor dimensions/storage and graph ranks/nodes are
@@ -152,6 +167,9 @@ Graph signatures, metadata, kind/counts, model dtypes, producer/opsets/IR and na
 labels are recomputed and canonically compared. A label-free graph's original
 class mapping remains an author declaration, checked only against native counts.
 ONNX structure is null; an added visualization member is a claim mismatch.
+Producer strings allow 65,536 characters each; bound failures identify a closed
+field and its limit without exposing author text. Other string/projection bounds
+remain as specified in the ONNX contract.
 
 The protobuf parser, ONNX checker and ONNX Runtime execute native code. Resource
 checks reduce malformed inputs; they do not establish memory safety or cap native

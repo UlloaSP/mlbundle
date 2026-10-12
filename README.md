@@ -209,7 +209,9 @@ entry alone does not guarantee that every fitted configuration exports.
   LogisticRegression, LinearRegression, Ridge, Bayesian/ARD, ElasticNet/Lasso,
   Huber, Poisson/Gamma, SGD; SVC with probabilities, SVR/NuSVR/LinearSVR;
   PLSRegression, naive Bayes, LDA/QDA, dense brute-force neighbors,
-  NearestCentroid, MLP, MultiOutput wrappers and RegressorChain. Scaler and
+  NearestCentroid, MLPClassifier/MLPRegressor (adam, sgd, lbfgs), MultiOutput
+  wrappers and RegressorChain. MLPs retain optimizer state, work alone/in pipelines
+  and have null structure with complete commitments; see [MLP tests](tests/test_sklearn_mlp.py). Scaler and
   dense OneHotEncoder pipelines round-trip; pipeline structure stays null
   because format 1 does not map transformed features. See the
   [tested configurations](tests/test_sklearn_families.py) and
@@ -245,6 +247,10 @@ entry alone does not guarantee that every fitted configuration exports.
   batches above one, multiple targets, external tensors, custom domains/local
   functions and training/runtime configuration are rejected before a CPU session.
   Tested with ONNX 1.23.0/Runtime 1.30.0; actual operators/opsets must pass both.
+  Large unpacked TreeEnsembleClassifier/ZipMap exports and multiline producer
+  versions work. Wire validation runs once per export/load; the field/scalar
+  ceiling follows the 512 MiB member bound, producer strings allow 65,536 characters.
+  See [the ONNX bounds](docs/format-onnx.md).
 
 Archive ceilings: **5 members**, **512 MiB** archive/compressed/member bytes,
 **1 GiB** aggregate uncompressed bytes, ratio **200**, JSON depth **32**.
