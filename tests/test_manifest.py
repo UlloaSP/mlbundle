@@ -18,7 +18,7 @@ def read(data: dict) -> Manifest:
     return Manifest.from_bytes(canonical_dumps(data))
 
 
-@pytest.mark.parametrize("writer_version", ["0.1.0", "0.1.0a1"])
+@pytest.mark.parametrize("writer_version", ["0.1.0", "0.1.0a2"])
 def test_writer_version_is_independent_of_reader(manifest_data, writer_version):
     manifest_data["writer_version"] = writer_version
     manifest_data["environment"]["packages"]["mlbundle"] = writer_version
@@ -156,9 +156,10 @@ def test_bad_labels(manifest_data, labels):
 
 def test_multioutput_and_nonmodel_features(manifest_data):
     manifest_data["model"].update(n_outputs=2, n_classes=[2, 3])
+    manifest_data["target"]["names"] = ["first", "second"]
     manifest_data["target"]["class_labels"] = [[False, True], [0.0, 1.0, "other"]]
     manifest_data["features"].update(
-        names=["feature_1", "feature_2"], origin="generated"
+        names=["feature_0", "feature_1"], origin="generated"
     )
     manifest = read(manifest_data)
     assert manifest.verified_claims().feature_names is None
@@ -247,7 +248,8 @@ def test_environment_invariants_and_onnx(manifest_data):
         "writer_version"
     ]
     manifest_data["model"].update(library="onnx", serialization="onnx")
-    manifest_data["integrity"] = {"model.onnx": hash_member(b"onnx").model_dump()}
+    manifest_data["integrity"].pop("model.skops")
+    manifest_data["integrity"]["model.onnx"] = hash_member(b"onnx").model_dump()
     with pytest.raises(InvalidManifestError):
         read(manifest_data)
     manifest_data["environment"]["onnx"] = {

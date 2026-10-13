@@ -54,7 +54,7 @@ def test_inspect_and_verify(bundle_path, capsys):
         "Class labels (output-major):",
         "Training:",
         "Packages:",
-        "schema=no",
+        "schema=yes",
         "samples=no",
     ):
         assert text in output.out
@@ -128,7 +128,7 @@ def test_io_and_rejected_bundle(command, tmp_path, capsys):
 
 def test_verify_rejects_lie_that_inspect_accepts(bundle_path, capsys):
     manifest, members = read_container(bundle_path)
-    parts = manifest.model_dump(mode="json")
+    parts = manifest.model_dump(mode="json", by_alias=True)
     parts["model"]["estimator_class"] = "secret\x1b[31m"
     del members[MemberName.MANIFEST]
     bundle_path.write_bytes(write_container(parts, members))

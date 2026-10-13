@@ -75,7 +75,7 @@ def test_roundtrip(model, data, tmp_path):
     x, y = data
     model.fit(x, y)
     path = tmp_path / "model.mlbundle"
-    view = mlbundle.export(model, path, target_name="species", metadata={"run": 1})
+    view = mlbundle.export(model, path, target_names=["species"], metadata={"run": 1})
     loaded = mlbundle.load(path)
     assert type(loaded.native_model) is type(model)
     assert np.array_equal(model.predict(x), loaded.native_model.predict(x))
@@ -89,11 +89,10 @@ def test_roundtrip(model, data, tmp_path):
     assert canonical_dumps(loaded.structure) == canonical_dumps(
         adapter.extract_structure(model)
     )
-    assert loaded.feature_names == tuple(f"feature_{i}" for i in range(1, 5))
-    assert (
-        loaded.manifest.target.name == "species"
-        and loaded.manifest.user_metadata == {"run": 1}
-    )
+    assert loaded.feature_names == tuple(f"feature_{i}" for i in range(4))
+    assert loaded.manifest.target.names == [
+        "species"
+    ] and loaded.manifest.user_metadata == {"run": 1}
 
 
 @pytest.mark.parametrize(

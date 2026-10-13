@@ -12,13 +12,18 @@ from ._native_io import prepare_native
 from .claims import Label, verify_claims, verify_structure_bytes
 from .container import read_validated_container
 from .contract import Library, MemberName
-from .declarations import ExportDeclarations, export_declarations, resolve_labels
+from .declarations import (
+    ExportDeclarations,
+    export_declarations,
+    export_target_names,
+    resolve_labels,
+)
 from .errors import ClaimMismatchError
 from .inspection import metadata_view
 from .limits import ArchiveLimits
 from .registry import find_adapter, get_adapter, is_composite
 from .results import LoadedBundle, MetadataView
-from .schema import read_declarations
+from .schema import read_declarations, validate_separator
 from .training import prepare_training
 from .writing import write_validated_container
 
@@ -30,8 +35,9 @@ def export(
     training_data: object | None = None,
     feature_names: Sequence[str] | None = None,
     class_labels: Sequence[Sequence[Label]] | None = None,
-    target_name: str | None = None,
+    target_names: Sequence[str] | None = None,
     sample_rows: int | None = None,
+    onehot_separator: str = "__",
     metadata: Mapping[str, JsonValue] | None = None,
     overwrite: bool = False,
     limits: ArchiveLimits | None = None,
@@ -39,12 +45,15 @@ def export(
     """Publish a native bundle only after its claims survive serialization/reloading.
 
     Model-exposed feature names take precedence over supplied names. Otherwise
-    supplied names are declarations; omitted names become feature_1 … feature_N.
+    supplied names are declarations; omitted names become feature_0 … feature_{N-1}.
     Class labels are output-major declarations handled by the native adapter;
     omitted labels use native labels or generated encoded indices.
-    training_data requires mlbundle[schema] and a nonempty pandas DataFrame.
+    Export requires mlbundle[schema]. With no training_data, mlschema infers a
+    default schema from one row of 1.0 values; training dtypes remain null.
+    training_data must be a nonempty pandas DataFrame.
     Its columns must match native names and order; feature_names must agree.
-    With a frame, target_name must name its target column, which is excluded;
+    target_names declares one unique name per output, in output order.
+    With a frame, all target columns must exist and are excluded;
     otherwise the frame contains features only. Dtypes and locally inferred
     schema fields are declarations. Category values and nullability leave the
     training machine in the schema, but rows stay local by default.
@@ -54,6 +63,7 @@ def export(
     categorical/NumPy scalars JSON scalars and infinities canonical float tags.
     """
     selected = effective_limits(limits)
+    separator = validate_separator(onehot_separator)
     declarations = export_declarations(class_labels)
     composite = None
     if is_composite(model):
@@ -63,28 +73,28 @@ def export(
     else:
         prepared = prepare_native(model, find_adapter(model), declarations, selected)
     claims = prepared.claims
+    targets = export_target_names(target_names, claims.n_outputs)
     training = prepare_training(
         training_data,
         claims,
         feature_names=feature_names,
-        target_name=target_name,
+        target_names=targets,
         sample_rows=sample_rows,
+        onehot_separator=separator,
         limits=selected,
     )
     members = prepared.members
     structure = prepared.structure
-    if training is not None:
-        members[MemberName.SCHEMA] = training.schema
-        if training.samples is not None:
-            members[MemberName.SAMPLES] = training.samples
+    members[MemberName.SCHEMA] = training.schema
+    if training.samples is not None:
+        members[MemberName.SAMPLES] = training.samples
     parts = manifest_parts(
         claims,
         prepared.library,
         prepared.serialization,
         structure=structure,
-        feature_names=feature_names,
         training=training,
-        target_name=target_name,
+        target_names=targets,
         metadata=metadata,
     )
     if composite is not None:

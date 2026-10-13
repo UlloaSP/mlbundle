@@ -97,13 +97,13 @@ deserializes a native model or resolves an adapter.
 
 Writing accepts a `Manifest` or JSON-ready manifest parts, plus non-manifest
 member bytes. The writer computes and replaces all integrity records; callers
-must already set the model pairing and optional references. JSON-ready parts
+must already set the model pairing, required schema reference and optional references. JSON-ready parts
 may omit integrity. Optional JSON members pass the bounded canonical decoder;
 their original bytes are preserved. The container validates JSON syntax and
 bounds, while later model/schema APIs own semantic structure and schema checks.
 Metadata inspection does not infer whether a model requires structure.
 
-Internally, optional JSON members retain their validated values within one
+Internally, schema and optional JSON members retain their validated values within one
 operation. Inspect/load reuse that decode for schema/sample checks, and load
 compares freshly encoded native extraction with stored structure bytes. Equality
 proves canonical identity; other wire spellings encode the retained value once.
@@ -148,6 +148,6 @@ Container/layout/CRC inconsistencies raise `InvalidContainerError`; resource
 ceilings raise `LimitExceededError`. Invalid manifest JSON or typed fields raise
 `InvalidManifestError`; unknown version strings under the mlbundle identity
 raise `UnsupportedFormatVersionError` before validating version-specific fields.
-Invalid optional JSON raises `InvalidJSONError`. Member hash or integrity-size
+Invalid member JSON raises `InvalidJSONError`. Member hash or integrity-size
 disagreement raises `IntegrityMismatchError` naming the allowed member.
 Messages do not include untrusted names, JSON blobs or ZIP exception text.

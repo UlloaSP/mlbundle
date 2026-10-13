@@ -70,10 +70,10 @@ A single-step composite has only its native member and null `transformers`.
 Passthrough/None preceding steps still require the prefix member to preserve
 the recipe. A pair without its declaration, a missing declared member, ONNX
 pairs, two boosters or three model members fail. Manifest integrity covers
-exactly the declared model members and referenced optional members.
+exactly the declared model members, required schema and referenced optional members.
 
-Composite `structure.json` is required. Schema and explicit samples are optional;
-six members permit both with the two model members and manifest. Every other
+Composite `structure.json` and schema are required; explicit samples are optional.
+Six members permit all with the two model members and manifest. Every other
 archive ceiling is unchanged. Callers may lower member count and other limits.
 
 Export gates scope/options before serialization. The leaf adapter receives

@@ -41,6 +41,10 @@ def check_members(
     present = set(names)
     if MemberName.MANIFEST not in present:
         raise InvalidContainerError("Missing manifest.json.")
+    if MemberName.SCHEMA not in present:
+        raise InvalidContainerError(
+            "Bundle predates the required schema.json and must be re-exported."
+        )
     models = {pair[1] for pair in MODEL_MEMBERS.values()}
     selected = present & models
     if len(selected) != 1 and selected not in (

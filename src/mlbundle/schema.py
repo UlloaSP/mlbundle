@@ -2,41 +2,53 @@
 
 from typing import Annotated, Literal, cast
 
-from pydantic import Field, JsonValue, ValidationError
+from pydantic import Field, JsonValue, TypeAdapter, ValidationError
 
 from ._base import ContractModel
 from ._schema_fields import OneHotField, SchemaField, SeriesField
 from .canonical import DecodedJSON, canonical_dumps
-from .claims import Label, ModelClaims
-from .contract import MemberName, ModelKind
+from .claims import ModelClaims
+from .contract import FeatureOrigin, MemberName, ModelKind
 from .errors import InvalidSamplesError, InvalidSchemaError
 from .limits import MAX_CLASSES, MAX_FEATURES, MAX_OUTPUTS, ArchiveLimits
 from .manifest import Manifest
 
-ONEHOT_SEPARATOR = "__"
+OneHotSeparator = Annotated[str, Field(min_length=1, max_length=16, strict=True)]
+OutputPosition = Annotated[int, Field(ge=0, lt=MAX_OUTPUTS)]
+ReportLabel = Annotated[str, Field(min_length=1, max_length=32)]
+DisplayLabel = Annotated[str, Field(max_length=1024)]
+
+
+def validate_separator(value: object) -> str:
+    try:
+        return TypeAdapter(OneHotSeparator).validate_python(value)
+    except ValidationError:
+        raise InvalidSchemaError(
+            "onehot_separator must be a nonempty string of at most 16 characters."
+        ) from None
 
 
 class ClassifierReport(ContractModel):
     kind: Literal["classifier"]
-    label: Literal["Predicted class"]
-    mappedTo: Literal["classifier"]
-    output: Annotated[int, Field(ge=0, lt=MAX_OUTPUTS)]
-    labels: Annotated[list[Label], Field(min_length=1, max_length=MAX_CLASSES)]
+    label: ReportLabel
+    mappedTo: OutputPosition
+    labels: Annotated[list[DisplayLabel], Field(min_length=1, max_length=MAX_CLASSES)]
     showClassProbabilities: Literal[True]
 
 
 class RegressorReport(ContractModel):
     kind: Literal["regressor"]
-    label: Literal["Predicted value"]
-    mappedTo: Literal["regressor"]
-    output: Annotated[int, Field(ge=0, lt=MAX_OUTPUTS)]
+    label: ReportLabel
+    mappedTo: OutputPosition
 
 
 Report = Annotated[ClassifierReport | RegressorReport, Field(discriminator="kind")]
 
 
 class SchemaDeclaration(ContractModel):
-    schema_version: Literal["1"]
+    schema_version: Literal["2"]
+    source: Literal["training_data", "default"]
+    onehot_separator: OneHotSeparator
     fields: Annotated[list[SchemaField], Field(min_length=1, max_length=MAX_FEATURES)]
     reports: Annotated[list[Report], Field(min_length=1, max_length=MAX_OUTPUTS)]
 
@@ -44,58 +56,115 @@ class SchemaDeclaration(ContractModel):
 def reports_for(claims: ModelClaims) -> list[dict[str, JsonValue]]:
     classifier = claims.kind == ModelKind.CLASSIFIER
     reports: list[dict[str, JsonValue]] = []
+    label = "Predicted class" if classifier else "Predicted value"
     for output in range(claims.n_outputs):
         report: dict[str, JsonValue] = {
             "kind": claims.kind.value,
-            "label": "Predicted class" if classifier else "Predicted value",
-            "mappedTo": claims.kind.value,
-            "output": output,
+            "label": label if claims.n_outputs == 1 else f"{label} {output}",
+            "mappedTo": output,
         }
         if classifier:
+            labels = [str(value) for value in (claims.class_labels or [])[output]]
+            if len(set(labels)) != len(labels):
+                raise InvalidSchemaError(
+                    "Class labels must have unique string forms per output."
+                )
             report.update(
-                labels=list((claims.class_labels or [])[output]),
-                showClassProbabilities=True,
+                labels=cast(list[JsonValue], labels), showClassProbabilities=True
             )
         reports.append(report)
     return reports
 
 
-def _field_names(field: SchemaField) -> list[str]:
+def positional_fields(fields: list[dict], names: list[str]) -> None:
+    """Rewrite inferred name mappings, retaining mlschema's labels and grouping."""
+    positions = {name: index for index, name in enumerate(names)}
+
+    def rewrite(field: dict) -> None:
+        if "mappedTo" in field:
+            field["mappedTo"] = positions[field["mappedTo"]]
+        for key in ("field1", "field2"):
+            if key in field:
+                rewrite(field[key])
+        for option in field.get("options", []):
+            if isinstance(option, dict):
+                rewrite(option)
+
+    for field in fields:
+        rewrite(field)
+
+
+def _mapping_index(
+    mapping: str | int, positions: dict[str, int], origin: FeatureOrigin
+) -> int:
+    if origin == FeatureOrigin.MODEL:
+        if type(mapping) is not str:
+            raise ValueError
+        return positions[mapping]
+    if type(mapping) is not int or not 0 <= mapping < len(positions):
+        raise ValueError
+    return mapping
+
+
+def _field_indices(
+    field: SchemaField,
+    names: list[str],
+    positions: dict[str, int],
+    origin: FeatureOrigin,
+    separator: str,
+) -> list[int]:
     if isinstance(field, OneHotField):
-        names = []
+        indices = []
         for option in field.options:
-            if option.mappedTo.split(ONEHOT_SEPARATOR, 1) != [
-                field.label,
-                option.value,
-            ]:
+            index = _mapping_index(option.mappedTo, positions, origin)
+            if names[index].split(separator, 1) != [field.label, option.value]:
                 raise ValueError
             if option.label != option.value:
                 raise ValueError
-            names.append(option.mappedTo)
-        return names
-    if field.label != field.mappedTo:
+            indices.append(index)
+        return indices
+    index = _mapping_index(field.mappedTo, positions, origin)
+    if field.label != names[index]:
         raise ValueError
     if isinstance(field, SeriesField) and any(
-        sub.mappedTo != field.mappedTo for sub in (field.field1, field.field2)
+        _mapping_index(sub.mappedTo, positions, origin) != index
+        for sub in (field.field1, field.field2)
     ):
         raise ValueError
-    return [field.mappedTo]
+    return [index]
 
 
 def validate_schema(
-    value: JsonValue, names: list[str], claims: ModelClaims, *, max_bytes: int
+    value: JsonValue,
+    names: list[str],
+    claims: ModelClaims,
+    *,
+    origin: FeatureOrigin,
+    target_names: list[str] | None,
+    max_bytes: int,
 ) -> dict[str, JsonValue]:
     """Check declarations against resolved claims, without inferring historical truth."""
+    if set(target_names or []) & set(names):
+        raise InvalidSchemaError("Schema features cannot contain declared targets.")
+    if isinstance(value, dict) and value.get("schema_version") != "2":
+        raise InvalidSchemaError(
+            "Unsupported schema version; bundle must be re-exported."
+        )
     try:
         declaration = SchemaDeclaration.model_validate(value)
         positions = {name: index for index, name in enumerate(names)}
-        mappings = [_field_names(field) for field in declaration.fields]
-        flattened = [name for group in mappings for name in group]
-        if len(flattened) != len(names) or set(flattened) != set(names):
+        mappings = [
+            _field_indices(
+                field, names, positions, origin, declaration.onehot_separator
+            )
+            for field in declaration.fields
+        ]
+        flattened = [index for group in mappings for index in group]
+        if len(flattened) != len(names) or set(flattened) != set(range(len(names))):
             raise ValueError
-        if any(group != sorted(group, key=positions.__getitem__) for group in mappings):
+        if any(group != sorted(group) for group in mappings):
             raise ValueError
-        first_positions = [positions[group[0]] for group in mappings]
+        first_positions = [group[0] for group in mappings]
         if first_positions != sorted(first_positions):
             raise ValueError
         schema = cast(dict[str, JsonValue], value)
@@ -119,24 +188,20 @@ def validate_samples(value: JsonValue, names: list[str]) -> list[dict[str, JsonV
 
 def read_declarations(
     manifest: Manifest, members: dict[MemberName, DecodedJSON], limits: ArchiveLimits
-) -> tuple[dict[str, JsonValue] | None, list[dict[str, JsonValue]] | None]:
-    schema = samples = None
-    if (
-        MemberName.SAMPLES in members
-        and manifest.target.name in manifest.features.names
+) -> tuple[dict[str, JsonValue], list[dict[str, JsonValue]] | None]:
+    samples = None
+    if MemberName.SAMPLES in members and set(manifest.target.names or []) & set(
+        manifest.features.names
     ):
         raise InvalidSamplesError("Samples cannot contain the declared target.")
-    if MemberName.SCHEMA in members:
-        if manifest.target.name in manifest.features.names:
-            raise InvalidSchemaError(
-                "Schema features cannot contain the declared target."
-            )
-        schema = validate_schema(
-            members[MemberName.SCHEMA].value,
-            manifest.features.names,
-            manifest.verified_claims(),
-            max_bytes=limits.member_bytes(MemberName.SCHEMA),
-        )
+    schema = validate_schema(
+        members[MemberName.SCHEMA].value,
+        manifest.features.names,
+        manifest.verified_claims(),
+        origin=manifest.features.origin,
+        target_names=manifest.target.names,
+        max_bytes=limits.member_bytes(MemberName.SCHEMA),
+    )
     if MemberName.SAMPLES in members:
         samples = validate_samples(
             members[MemberName.SAMPLES].value,

@@ -42,11 +42,15 @@ def regressor(loss="RMSE", **params):
     ).fit(x, y + 1.0)
 
 
-def rewrite(path, change):
+def rewrite(path, change, *, schema=False):
     manifest, members = read_container(path)
     parts = manifest.model_dump(mode="json", by_alias=True)
     del members[MemberName.MANIFEST]
     change(parts, members)
+    if schema:
+        from conftest import align_schema
+
+        align_schema(parts, members)
     return write_container(parts, members)
 
 

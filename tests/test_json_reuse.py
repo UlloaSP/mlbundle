@@ -34,7 +34,9 @@ def native(monkeypatch, manifest_data):
     monkeypatch.setattr(model_io, "find_adapter", lambda model: adapter)
     monkeypatch.setattr(model_io, "get_adapter", lambda library: adapter)
     schema = {
-        "schema_version": "1",
+        "schema_version": "2",
+        "source": "training_data",
+        "onehot_separator": "__",
         "fields": [
             {"kind": "text", "label": name, "mappedTo": name, "required": True}
             for name in extracted.feature_names
@@ -47,6 +49,7 @@ def native(monkeypatch, manifest_data):
         ["object", "object"],
         canonical_dumps(schema),
         canonical_dumps(samples),
+        mlbundle.FeatureOrigin.MODEL,
     )
     monkeypatch.setattr(model_io, "prepare_training", lambda *args, **kw: training)
     return structure, schema, samples

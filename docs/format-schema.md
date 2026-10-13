@@ -1,43 +1,56 @@
-# Version 1 schema and samples
+# Format 1 schema v2 and samples
 
 Normative section of [the format contract](format.md). Local inference uses
-the mlschema 0.2 vocabulary, tested with 0.2.1. Schema and samples come from data the
-reader never sees. Integrity does not authenticate that data or its history.
+mlschema >=0.2.1,<0.3, tested with 0.2.1. Fields, source and separator are untrusted
+declarations; integrity cannot authenticate the training data or its history.
 
-## Export inputs
+## Export inputs and defaults
 
-`export(training_data=frame)` accepts a nonempty pandas DataFrame. Without
-`target_name`, all columns are features. With `target_name`, that column must
-exist and is excluded before inference, dtype capture and sample selection.
-Without a frame, `target_name` remains a metadata declaration as before.
-Index values are never included. The input frame is not modified.
+Every export writes `schema.json`. `export(training_data=frame)` accepts a
+nonempty pandas DataFrame. `target_names` is an output-major sequence: one unique
+nonempty bounded name per verified output, each at most 1,024 characters. A bare
+string is rejected with a bounded error requiring a list. Without `target_names`,
+all columns are features; otherwise every target column must exist and is excluded
+from inference, dtype capture and samples. Without a frame they are declarations.
+Index values never leave through inference/samples; the frame is not modified.
 
-Column names must be unique, nonempty strings of at most 1,024 characters.
-Their count must equal the native feature count. When native names exist,
-columns must match those names **in order**, after target exclusion. Supplying
-`feature_names` with a frame requires exactly those feature columns in order;
-it cannot rename or reorder them. Frame errors raise `InvalidSchemaError` before
-publication. Names remain model-origin when the model exposes them; otherwise
-the frame yields dataframe-origin names. Training dtypes are `str(dtype)` in
+Training columns must be unique, nonempty strings of at most 1,024 characters,
+with count equal to the native feature count. Native names must match columns
+in order after target exclusion. `feature_names=` with a frame must equal its
+feature columns in order; it cannot rename or reorder them. Errors raise
+`InvalidSchemaError` before publication. Native names retain model origin;
+otherwise a frame gives dataframe origin. Training dtypes are `str(dtype)` in
 feature order, separate from verified `model_dtypes`.
 
-Export calls exactly `mlschema.infer_schema(feature_frame, onehot_separator="__")`,
-without builders, overrides or custom kinds. It uses the same separator as
-MLSuite's `schema_service.py`. Unlike MLSuite's older positional fallback, named
-frame columns are preserved even when a model has no names; inferred mappings
-therefore always refer to manifest names, never integer positions. Fields retain
-the direct mlschema output. MLSuite's MLForm integration still converts a `series`
-field's `field1`/`field2` into `columns` with those IDs and removes nested
-`mappedTo`; this is presentation mapping and needs no DataFrame. Consumers may
-format typed class labels for display and select reports by output index.
+Without `training_data`, inference uses a synthetic one-row pandas DataFrame of
+float `1.0` values, one column per feature. Native or declared names are its
+columns; generated origin uses columns `range(n_features)`. mlschema supplies
+all field shapes, including numeric `step: 0.1` and one-hot grouping for named
+binary columns. Synthetic dtypes are not training evidence: manifest training
+dtypes remain null. Generated names/labels are `feature_0` through `feature_{N-1}`.
 
-`mlbundle[schema]` optionally installs mlschema >=0.2.1,<0.3 from PyPI, transitively
-pandas; it is included in `all`. The dependency is marked for Python 3.14 because
-that mlschema version requires `>=3.14,<3.15`. mlbundle's own `>=3.14` range and
-sole core dependency (Pydantic) are unchanged. Training export with missing
-pandas/mlschema raises `MissingOptionalDependencyError` naming `schema`.
-mlbundle import and inspection do not import either library. Loading does not
-require them, although native sklearn imports an installed pandas opportunistically.
+`export(..., onehot_separator="__")` accepts a strict nonempty string of at most
+16 characters. Inference calls `mlschema.infer_schema(frame, onehot_separator=...)`
+without builders, overrides or custom kinds. The separator is stored and read
+from the schema; consumers must not assume the default.
+
+Model-origin fields retain name mappings. Dataframe/declared inference preserves
+named columns for grouping, then rewrites every `mappedTo`, including series
+subfields and one-hot options, to its zero-based feature position. Generated
+origin is inferred on positional columns directly. Labels remain feature names.
+For models without native names, prediction accepts 2-D NumPy arrays or nested
+numeric rows in manifest feature order. Adapter-supported sparse arrays and
+DataFrames retain native restrictions; supplied names do not add name-based
+selection or reordering. Positional schema mappings do not change predictor inputs.
+
+Export requires `mlbundle[schema]` even without training data. This separate extra
+installs mlschema and transitively pandas on Python 3.14; it is included in `all`,
+not the core or model extras. Missing pandas/mlschema raises
+`MissingOptionalDependencyError` naming `schema`, before publication.
+Import, inspect and schema validation on load do not import these libraries.
+Load needs only the matching model extra; native libraries can opportunistically
+import an installed pandas. mlschema requires Python >=3.14,<3.15; mlbundle's own
+Python range and sole core dependency, Pydantic, are unchanged.
 
 ## `schema.json`
 
@@ -45,64 +58,79 @@ The exact top-level object is:
 
 ```json
 {
-  "schema_version": "1",
+  "schema_version": "2",
+  "source": "training_data",
+  "onehot_separator": "__",
   "fields": [
     {"kind":"number","label":"age","mappedTo":"age","required":true,"step":1.0}
   ],
   "reports": [
-    {"kind":"classifier","label":"Predicted class","mappedTo":"classifier",
-     "output":0,"labels":["cold","warm"],"showClassProbabilities":true}
+    {"kind":"classifier","label":"Predicted class","mappedTo":0,
+     "labels":["0","1"],"showClassProbabilities":true}
   ]
 }
 ```
 
-All keys shown are required. Unknown keys and versions are rejected. Arrays are
-ordered; `fields` has 1–100,000 entries and `reports` 1–1,024. Typed records use
-strict types, finite numbers and no arbitrary extensibility. This envelope
-supports only the default inferred vocabulary, not every mlschema override.
+All five keys are required and unknown keys are forbidden. `source` is exactly
+`training_data` or `default`; `onehot_separator` is bounded as above. Version `1`
+and unknown versions raise bounded `InvalidSchemaError` requiring re-export.
+A missing schema member raises bounded `InvalidContainerError` saying the bundle
+predates the required schema and must be re-exported, through shared member rules.
+Thus 0.1.0a1 bundles without schema or with schema v1 are incompatible with 0.1.0a2.
+Format version remains `1`, whose pre-release wire contract is not frozen.
 
-Every ordinary field has exactly `kind`, `label`, `mappedTo`, `required`, plus
-the kind-specific keys below. Labels are nonempty strings of at most 100
-characters; `mappedTo` is a manifest feature name; `required` is a boolean.
-At the top level, an ordinary field's label equals its feature name.
+Arrays preserve order. `fields` has 1–100,000 entries and `reports` 1–1,024.
+Typed records use strict types, finite numbers and no arbitrary extensibility.
+The vocabulary supports default inference, not every mlschema override.
+
+Ordinary fields have exactly `kind`, `label`, `mappedTo`, `required`, plus the
+kind-specific keys below. Labels are nonempty strings of at most 100 characters;
+`required` is boolean. For model origin, `mappedTo` must be a manifest feature
+name (nonempty, at most 1,024 characters). For every other origin, it must be a
+strict integer position in `[0, n_features)`, never a bool or string. The other
+mapping type is rejected. Resolve to an index before coverage/order checks;
+a top-level ordinary label must equal the feature name at that index.
 
 | Kind | Additional required keys |
 | --- | --- |
 | `text`, `boolean`, `date` | None. |
-| `number` | `step`: finite positive number; default inference emits `1.0` for integers or `0.1` for floats. |
+| `number` | `step`: finite positive number; integers infer `1.0`, floats `0.1`. |
 | `category` | `options`: 1–100,000 unique strings, retaining categorical order and unused categories. |
-| `series` | `field1`, `field2`: ordinary scalar fields from the same feature column; no nested series or one-hot groups. Subfield labels describe pair axes; each `mappedTo` equals its parent mapping. |
+| `series` | `field1`, `field2`: scalar fields from the same feature column; no nested series/one-hot groups. Subfield labels describe pair axes; mappings resolve to the parent's index. |
 | `onehot-category` | Special shape below. |
 
-A one-hot group has exactly `kind`, `label`, `required`, `options`; no parent
-`mappedTo`. Its label is the shared prefix before the first `__`. At least two
-binary columns with that prefix form a group. There are 2–100,000 options, each
-exactly `{"label":SUFFIX,"value":SUFFIX,"mappedTo":COLUMN}`. These three strings
-are nonempty and at most 1,024 characters. `COLUMN = PREFIX + "__" + SUFFIX`;
-the option label and value agree. Other columns stay ordinary fields, even if
-their names contain `__`; the reader cannot verify whether their values were
-binary. Group options preserve feature order, and fields are emitted in order
-of their first mapped feature. Non-adjacent group columns are supported.
+One-hot groups have exactly `kind`, `label`, `required`, `options`, with no parent
+mapping. At least two binary named columns sharing a prefix before the first
+stored separator form a group. There are 2–100,000 options, each exactly
+`{"label":SUFFIX,"value":SUFFIX,"mappedTo":MAPPING}`. Label/value are nonempty
+strings of at most 1,024 characters and must agree. Resolve the mapping by origin;
+the manifest feature at that index must equal group label + stored separator +
+option value. Other fields can contain the separator; readers cannot attest
+whether training values were binary. Options preserve feature order; fields
+preserve the order of their first mapped feature. Non-adjacent groups are supported.
 
-Field/option mappings must cover every manifest feature exactly once, with no
-duplicates, missing features, declared target or additional columns. The field count may be
-smaller than the feature count because of one-hot groups. The reader verifies
-these mappings and ordering without mlschema, not historical inference outcomes.
+Resolved field/option indices must cover every feature exactly once, with no
+duplicates, missing features, declared target or extra columns. Groups can make
+the field count smaller than the feature count. Readers check this without
+mlschema; they cannot verify historical inference or the declared source.
 
-There is exactly one report per model output, in output order. `output` is a
-zero-based integer index; every report has the model's kind and `mappedTo` equal
-to that kind. A classifier report has exactly the classifier keys in the example:
-its label is `Predicted class`, `showClassProbabilities` is exactly true, and
-`labels` equals that output's manifest class-label array by canonical byte equality.
-Types and prediction-column order are preserved. A regressor report has exactly
-`kind`, `label`, `mappedTo`, `output`, with label `Predicted value` and no labels
-or probability setting. This extends MLSuite's single-output report shape with
-an output index and typed labels instead of display-string coercion.
+There is exactly one report per model output, in output order. `mappedTo` is the
+strict zero-based output integer, including `0` for a single output. There is no
+`output` key. Labels are `Predicted class` / `Predicted value` for one output;
+multiple outputs append a space and the position, such as `Predicted class 0`.
+A regressor has exactly `kind`, `label`, `mappedTo`. A classifier also requires
+`labels` and `showClassProbabilities: true`. `labels` is an array of bounded
+strings of at most 1,024 characters (including empty original strings), obtained by Python `str()` on that output's original labels.
+Their order matches prediction columns. If two original labels in one output
+have the same string form, export fails with bounded `InvalidSchemaError`.
+The same string can occur in different outputs. Manifest labels retain their
+original JSON types and are verified against the native model.
 
-Inspection validates reports against the manifest; it cannot verify that manifest
-against the model. Load also verifies native claims, so a changed manifest/report
-pair cannot conceal disagreement with native kind, counts or labels. Label-free
-ONNX mappings remain count-checked declarations, as in the ONNX contract.
+Reports are recomputed through shared construction and compared by canonical
+JSON bytes. Inspect checks against manifest claims; load also verifies those
+claims against the native model. An internally consistent manifest/report lie
+cannot conceal native disagreement. Label-free ONNX labels remain count-checked
+declarations, as in its native contract.
 
 ## What leaves the training machine
 
@@ -128,7 +156,8 @@ The member is a canonical JSON array of row objects, for example
 `[{"age":42,"active":true}]`. Each row must have exactly the declared feature
 names. JSON keys are sorted canonically; consumers use manifest feature order.
 An externally written empty array is valid, but public export selects N > 0.
-Reader validation also rejects a declared target name that is a sample feature.
+Reader validation rejects any declared target name that is a schema/sample feature;
+export rejects the same overlap before publication, including synthetic defaults.
 
 Cell mappings: Python and NumPy boolean/integer/real/string scalars become JSON
 scalars; float32 promotes exactly to binary64. Categorical cells use their scalar

@@ -100,7 +100,7 @@ def test_regressor(columns, tmp_path):
         assert np.array_equal(loaded.predict(values), expected)
     assert loaded.feature_origin == ("model" if columns else "generated")
     assert loaded.feature_names == (
-        ("a", "b") if columns else ("feature_1", "feature_2")
+        ("a", "b") if columns else ("feature_0", "feature_1")
     )
     assert loaded.manifest.features.model_dtypes == (
         ["int64", "float64"] if columns else ["float32"] * 2

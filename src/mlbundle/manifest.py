@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import Field, JsonValue, ValidationError, field_validator, model_validator
 
-from ._base import ContractModel, Name, ShortString
+from ._base import ContractModel, ShortString
 from ._pipeline_contract import PipelineInfo, expected_model_members
 from .canonical import canonical_dumps, canonical_loads
 from .claims import (
@@ -29,6 +29,7 @@ from .contract import (
     MemberName,
     SerializationFormat,
 )
+from .declarations import TargetNames, validate_target_names
 from .environment import TrainingEnvironment
 from .errors import (
     InvalidJSONError,
@@ -91,7 +92,7 @@ class FeatureInfo(ContractModel):
         if self.model_dtypes is not None and len(self.model_dtypes) != len(self.names):
             raise ValueError("Model dtypes must align with feature names.")
         if self.origin == FeatureOrigin.GENERATED and self.names != [
-            f"feature_{index}" for index in range(1, len(self.names) + 1)
+            f"feature_{index}" for index in range(len(self.names))
         ]:
             raise ValueError("Generated names must follow the format convention.")
         return self
@@ -99,11 +100,11 @@ class FeatureInfo(ContractModel):
 
 class TargetInfo(ContractModel):
     class_labels: ClassLabels | None
-    name: Name | None = None
+    names: TargetNames | None
 
 
 class MemberReferences(ContractModel):
-    schema_: Literal["schema.json"] | None = Field(default=None, alias="schema")
+    schema_: Literal["schema.json"] = Field(alias="schema")
     structure: Literal["structure.json"] | None = None
     samples: Literal["samples.json"] | None = None
 
@@ -157,6 +158,7 @@ class Manifest(ContractModel):
         if len(self.features.names) != self.model.n_features:
             raise ValueError("Feature count and names must agree.")
         validate_labels(self.model, self.target.class_labels)
+        validate_target_names(self.target.names, self.model.n_outputs)
         expected = expected_model_members(self.model.library, self.model.pipeline)
         if self.model.pipeline is not None and (
             canonical_dumps(self.target.class_labels)

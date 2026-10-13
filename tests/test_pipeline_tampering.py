@@ -7,7 +7,7 @@ import pytest
 import skops.io as sio
 
 import mlbundle
-from conftest import build_zip
+from conftest import align_schema, build_zip
 from mlbundle._sklearn import transformers
 from mlbundle.canonical import canonical_dumps, canonical_loads
 from mlbundle.writing import write_container
@@ -130,7 +130,7 @@ def test_recomputed_component_claims(composite, path, value, claim):
     ],
 )
 def test_invalid_member_candidates(composite, member_set):
-    record, _ = composite
+    record, members = composite
     with pytest.raises(
         mlbundle.InvalidContainerError, match="Invalid model member combination"
     ):
@@ -138,6 +138,7 @@ def test_invalid_member_candidates(composite, member_set):
             build_zip(
                 [
                     ("manifest.json", canonical_dumps(record)),
+                    ("schema.json", members[mlbundle.MemberName.SCHEMA]),
                     *[(name, b"native") for name in member_set],
                 ]
             )
@@ -214,6 +215,8 @@ def test_labels_counts_missing_structure_and_unknown_version(composite):
     changed["target"]["class_labels"] = changed["model"]["pipeline"]["estimator"][
         "claims"
     ]["class_labels"] = [["no", "yes"]]
+    members = dict(members)
+    align_schema(changed, members)
     with pytest.raises(mlbundle.ClaimMismatchError, match="class_labels"):
         mlbundle.load(write_container(changed, members))
     changed = copy.deepcopy(record)
