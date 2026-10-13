@@ -1,6 +1,6 @@
 [project]
 name = "mlbundle"
-version = "0.1.0a2"
+version = "0.1.0a3"
 description = "Pickle-free, verifiable model bundles with a manifest, schema and structure."
 readme = "README.md"
 license = "MIT"

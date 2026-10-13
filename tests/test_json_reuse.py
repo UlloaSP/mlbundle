@@ -29,7 +29,7 @@ def native(monkeypatch, manifest_data):
         deserialize=lambda data: "native",
         extract_claims=lambda model: extracted,
         extract_structure=lambda model: structure,
-        predictor=lambda model: object(),
+        predictor=lambda model, claims=None: object(),
     )
     monkeypatch.setattr(model_io, "find_adapter", lambda model: adapter)
     monkeypatch.setattr(model_io, "get_adapter", lambda library: adapter)

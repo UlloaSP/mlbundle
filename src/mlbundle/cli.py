@@ -9,11 +9,11 @@ from collections.abc import Sequence
 from typing import TextIO
 
 from . import inspect, load
+from ._display import display as _display
 from .contract import MemberName
 from .errors import MissingOptionalDependencyError, MLBundleError
 from .results import LoadedBundle, MetadataView
 
-_DISPLAY_LIMIT = 512
 _NOTICE = (
     "inspect validates metadata and integrity; it cannot attest that metadata "
     "matches the model. Only verify loads the model and checks that agreement."
@@ -30,14 +30,6 @@ class _Parser(argparse.ArgumentParser):
             _write_output(self.format_help().rstrip("\n"))
         else:
             super().print_help(file)
-
-
-def _display(value: object) -> str:
-    # ASCII JSON escapes terminal controls, bidi controls and line separators.
-    rendered = json.dumps(value, ensure_ascii=True)
-    if len(rendered) > _DISPLAY_LIMIT:
-        return rendered[: _DISPLAY_LIMIT - 3] + "..."
-    return rendered
 
 
 def _summary(view: MetadataView) -> str:

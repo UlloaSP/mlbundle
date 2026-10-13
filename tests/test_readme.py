@@ -20,10 +20,20 @@ PYTHON = [code for language, code in BLOCKS if language == "python"]
 @pytest.mark.parametrize(
     "code",
     PYTHON,
-    ids=["sklearn", "xgboost", "catboost", "composite", "onnx", "schema-samples"],
+    ids=[
+        "sklearn",
+        "records",
+        "xgboost",
+        "catboost",
+        "composite",
+        "onnx",
+        "schema-samples",
+    ],
 )
 def test_python_example(code, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    if 'record = {"0"' in code:
+        exec(compile(PYTHON[0], str(README), "exec"), {})
     if 'Path("trained.onnx")' in code:
         # The user's prerequisite file: a self-contained, two-column classifier.
         Path("trained.onnx").write_bytes(softmax().SerializeToString())
@@ -31,7 +41,7 @@ def test_python_example(code, tmp_path, monkeypatch):
 
 
 def test_console_examples(tmp_path, monkeypatch):
-    assert len(PYTHON) == 6
+    assert len(PYTHON) == 7
     assert all(language in {"python", "shell"} for language, _ in BLOCKS)
     monkeypatch.chdir(tmp_path)
     exec(compile(PYTHON[0], str(README), "exec"), {})

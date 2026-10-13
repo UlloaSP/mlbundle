@@ -1,6 +1,7 @@
 """Shared export and validating load; adapters own all native-model behavior."""
 
 from collections.abc import Mapping, Sequence
+from contextlib import nullcontext
 from os import PathLike
 from typing import cast
 
@@ -8,6 +9,7 @@ from pydantic import JsonValue
 
 from ._container_rules import MEMBER_ORDER, BundleSource, effective_limits
 from ._export_manifest import manifest_parts
+from ._load_diagnostics import sklearn_environment
 from ._native_io import prepare_native
 from .claims import Label, verify_claims, verify_structure_bytes
 from .container import read_validated_container
@@ -123,28 +125,35 @@ def load(source: BundleSource, *, limits: ArchiveLimits | None = None) -> Loaded
             members,
             manifest.features.names,
             cast(bool, manifest.model.hyperparameters["verbose"]),
+            manifest.environment.packages.get("scikit-learn"),
         )
         verify_claims(manifest.verified_claims(), actual)
     else:
         adapter = get_adapter(manifest.model.library)
-        model = adapter.deserialize(members[adapter.model_member])
-        actual = adapter.extract_claims(model)
-        expected = manifest.verified_claims()
-        # Check native dimensions before using any label declaration from the bundle.
-        verify_claims(
-            expected.model_copy(update={"class_labels": actual.class_labels}), actual
-        )
-        actual = resolve_labels(
-            actual,
-            ExportDeclarations(
-                class_labels=manifest.target.class_labels
-                if actual.class_labels is None
-                else None
-            ),
-        )
-        verify_claims(expected, actual)
-        predictor = adapter.predictor(model)
-        extracted = adapter.extract_structure(model)
+        with (
+            sklearn_environment(manifest.environment.packages.get("scikit-learn"))
+            if adapter.model_member == MemberName.SKOPS
+            else nullcontext()
+        ):
+            model = adapter.deserialize(members[adapter.model_member])
+            actual = adapter.extract_claims(model)
+            expected = manifest.verified_claims()
+            # Check native dimensions before using any label declaration from the bundle.
+            verify_claims(
+                expected.model_copy(update={"class_labels": actual.class_labels}),
+                actual,
+            )
+            actual = resolve_labels(
+                actual,
+                ExportDeclarations(
+                    class_labels=manifest.target.class_labels
+                    if actual.class_labels is None
+                    else None
+                ),
+            )
+            verify_claims(expected, actual)
+            predictor = adapter.predictor(model, actual)
+            extracted = adapter.extract_structure(model)
     decoded = container.json.get(MemberName.STRUCTURE)
     structure = None if decoded is None else decoded.value
     if (MemberName.STRUCTURE in members) != (extracted is not None):

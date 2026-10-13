@@ -7,6 +7,7 @@ from sklearn.pipeline import Pipeline
 
 from mlbundle._prediction_input import tabular
 from mlbundle._sklearn.prediction import _string_inputs
+from mlbundle._sklearn.record_input import record_input
 from mlbundle.adapters import (
     Predictor as NativePredictor,
     ProbabilityOutput,
@@ -29,6 +30,9 @@ class Predictor:
         self.prefix, self.native, self.claims = prefix, native, claims
         self.strings = prefix is not None and _string_inputs(prefix)
         self.categorical = categorical
+
+    def record_input(self, row: list[float], names: list[str]) -> object:
+        return record_input(self.prefix, row, names)
 
     def _transform(self, data: Any) -> Any:
         # A single-step composite preserves the leaf's categorical admission.
@@ -75,3 +79,8 @@ class Predictor:
         if self.claims.kind != ModelKind.CLASSIFIER:
             raise ValueError("predict_proba requires a classifier.")
         return self.native.predict_proba(self._transform(data))
+
+    def predict_class_indices(self, data: object) -> list[list[int]] | None:
+        if self.claims.kind != ModelKind.CLASSIFIER:
+            raise ValueError("Class prediction requires a classifier.")
+        return self.native.predict_class_indices(self._transform(data))

@@ -1,11 +1,13 @@
 """Composite orchestration; each byte member belongs to its existing loader."""
 
+from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import Any
 
 from pydantic import JsonValue
 from sklearn.pipeline import Pipeline
 
+from mlbundle._load_diagnostics import sklearn_environment
 from mlbundle._native_io import NativeExport, prepare_native
 from mlbundle._pipeline_contract import PipelineInfo
 from mlbundle._sklearn import transformers
@@ -120,29 +122,32 @@ def load_components(
     members: dict[MemberName, bytes],
     names: list[str],
     verbose: bool,
+    declared_sklearn: str | None,
 ) -> tuple[Pipeline, Predictor, ModelClaims, dict[str, JsonValue]]:
     adapter = get_adapter(recipe.estimator.library)
     transformer_adapter = transformers.Adapter()
     leaf = adapter.deserialize(members[adapter.model_member])
-    prefix = (
-        None
-        if recipe.transformers is None
-        else transformer_adapter.deserialize(members[MemberName.SKOPS])
-    )
+    with sklearn_environment(declared_sklearn):
+        prefix = (
+            None
+            if recipe.transformers is None
+            else transformer_adapter.deserialize(members[MemberName.SKOPS])
+        )
     native_claims = adapter.extract_claims(leaf)
-    model = rebuild(prefix, leaf, recipe.step_names, verbose)
-    validate_components(model)
-    actual = extract(
-        prefix,
-        native_claims,
-        adapter.library,
-        recipe.step_names,
-        verbose,
-        names=names,
-        transformer_adapter=transformer_adapter,
-    )
+    with sklearn_environment(declared_sklearn) if prefix is not None else nullcontext():
+        model = rebuild(prefix, leaf, recipe.step_names, verbose)
+        validate_components(model)
+        actual = extract(
+            prefix,
+            native_claims,
+            adapter.library,
+            recipe.step_names,
+            verbose,
+            names=names,
+            transformer_adapter=transformer_adapter,
+        )
+        claims = outer_claims(prefix, native_claims, verbose)
     verify(recipe, actual)
-    claims = outer_claims(prefix, native_claims, verbose)
     extracted = structure(adapter.extract_structure(leaf), actual)
     settings = native_claims.hyperparameters.get("prediction")
     categorical = (

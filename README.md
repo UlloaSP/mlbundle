@@ -12,7 +12,7 @@ mlbundle replaces three gaps in separate model/DataFrame uploads:
 - **Training data leaving the machine:** schema inference runs locally;
   training rows are included only when explicitly requested as samples.
 
-**Pre-alpha v0.1.0a2, not yet published.** Version 0.1.0a1 reserved the PyPI name. Format version 1 is
+**Pre-alpha v0.1.0a3, not yet published.** Version 0.1.0a2 is on PyPI. Format version 1 is
 not frozen; bundles may need re-export. The security design has not had an
 independent review: do not accept bundles from untrusted parties.
 Requires **Python >=3.14**; tested on Windows/Linux. Schema requires Python 3.14.
@@ -20,7 +20,7 @@ Requires **Python >=3.14**; tested on Windows/Linux. Schema requires Python 3.14
 ## Install and try scikit-learn
 
 Install the pre-release with
-`python -m pip install "mlbundle[sklearn,schema]==0.1.0a2"` once published.
+`python -m pip install "mlbundle[sklearn,schema]==0.1.0a3"` once published.
 Replace `sklearn` with `xgboost`, `catboost` or `onnx`, or use `[all]` for all dependencies.
 Export needs the `schema` extra; reading does not. Omit the brackets for metadata-only inspection; load/verify needs the matching model extra.
 
@@ -48,6 +48,39 @@ inference/explanations; mutating it invalidates the metadata verification.
 Native names win; otherwise origin is `declared`, `dataframe`, or `generated` (`feature_0` through `feature_{N-1}`).
 For models without native names, pass a 2-D NumPy array or nested numeric rows in manifest feature order; declared names do not add name-based prediction.
 `target_names=` and `metadata=` remain author declarations.
+
+## Runtime records
+
+Load with the matching model extra, then use the bundle's own record mapping:
+
+```python
+from mlbundle import load
+
+bundle = load("trained.mlbundle")
+record = {"0": "0.0", "1": "true"}
+print(bundle.predict_record(record)[0].probabilities)  # (1.0, 0.0)
+assert bundle.row_from_record(record) == [0.0, 1.0]  # Also usable for explanations.
+```
+
+Model-origin keys are native feature names. Other origins use zero-based positions
+as integers or canonical decimal strings; supplying both forms is an error.
+Every feature is required as a key. Extra keys are ignored without iterating the
+record, so work depends on feature count rather than record size.
+Values accept finite Python numbers, booleans and decimal or true/false strings.
+Strings strip ASCII whitespace and are limited to 64 characters; decimal forms
+include `.5`, `1.` and exponents. `None` becomes NaN only when the schema field
+permits missing values, using the group's requirement for one-hot options.
+`PredictionInputError` names invalid keys without echoing values. Array/DataFrame
+prediction retains its existing rules. Results are frozen `OutputPrediction`
+records in output order, with classifier labels/probabilities or a regression value.
+`predicted_label` is the report string for the native model's own class decision,
+which may differ from the largest probability. It is `None` for regressors and
+ONNX classifiers without a graph label output; mlbundle never substitutes argmax.
+Name-selecting sklearn pipelines use a DataFrame and require pandas (included in
+`schema`); other models use a numeric row, preserving native categorical handling.
+`EnvironmentMismatchError` diagnoses a failed skops load with differing sklearn
+versions. `InvalidManifestError` explains safe, different writer versions on a
+failed manifest check. Neither diagnostic adds a compatibility gate.
 
 ## XGBoost
 
@@ -227,40 +260,16 @@ dependency rejection (`MLBundleError`), **2** usage/I/O failure.
 
 ## Supported models and limits
 
-- **Sklearn:** fitted classifiers exposing `predict_proba` and regressors with
-  recoverable feature/output counts. Tested families include trees/ensembles,
-  linear/regularized/robust/GLM models, SVMs, PLSRegression, naive Bayes, LDA/QDA,
-  dense brute-force neighbors, NearestCentroid, MLP and MultiOutput/RegressorChain.
-  SimpleImputer/KNNImputer, scalers, KBinsDiscretizer, categorical encoders,
-  univariate selectors and closed NumPy FunctionTransformer functions round-trip,
-  including nested ColumnTransformer pipelines; see [the exact lists](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-state.md).
-  All-sklearn Pipeline structure stays null; composite trees expose the inner boundary. See
+- **Sklearn:** fitted classifiers exposing `predict_proba` and regressors with recoverable feature/output counts. Tested families include trees/ensembles, linear/regularized/robust/GLM models, SVMs, PLSRegression, naive Bayes, LDA/QDA, dense brute-force neighbors, NearestCentroid, MLP and MultiOutput/RegressorChain. SimpleImputer/KNNImputer, scalers, KBinsDiscretizer, categorical encoders, univariate selectors and closed NumPy FunctionTransformer functions round-trip, including nested ColumnTransformer pipelines; see [the exact lists](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-state.md). All-sklearn Pipeline structure stays null; composite trees expose the inner boundary. See
   [tested configurations](https://github.com/UlloaSP/mlbundle/blob/main/tests/test_sklearn_families.py) and [core round trips/rejections](https://github.com/UlloaSP/mlbundle/blob/main/tests/test_sklearn.py).
-- **Sklearn rejections:** custom estimators/subclasses, functions/types outside the
-  closed lists (including lambdas and user functions), compound fitted dtypes, classifiers without
-  probabilities, multilabel/ClassifierChain layouts, unsupported native placements,
-  and untrusted nested storage such as fitted sparse neighbor arrays.
-  HistGradientBoosting uses untrusted `TreePredictor` storage and is rejected.
-- **Sklearn versions:** the closed class/attribute catalog is audited/tested
-  against **1.9.1 with skops 0.16.0**, not every version allowed by `>=1.6`.
-  Unknown state fails; export/load sklearn versions must match. Configurations
-  must satisfy the catalog and round trip; see [state ownership](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-state.md).
+- **Sklearn rejections:** custom estimators/subclasses, functions/types outside the closed lists (including lambdas and user functions), compound fitted dtypes, classifiers without probabilities, multilabel/ClassifierChain layouts, unsupported native placements, and untrusted nested storage such as fitted sparse neighbor arrays. HistGradientBoosting uses untrusted `TreePredictor` storage and is rejected.
+- **Sklearn versions:** the closed class/attribute catalog is audited/tested against **1.9.1 with skops 0.16.0**, not every version allowed by `>=1.6`. Unknown state fails; matching export/load sklearn versions are recommended. Configurations must satisfy the catalog and round trip; see [state ownership](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-state.md).
 - **XGBoost:** exact XGBClassifier/XGBRegressor, one target, native gbtree
-  (including XGBoost 3.4.1 dart normalized to gbtree). Closed probability/regression
-  objectives; raw boosters, RF wrappers, subclasses, ranking/survival/custom
-  objectives and unsupported storage are rejected. At most 100,000 trees/depth 14,
-  with complete state/dumps; see [the mapping](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-adapters.md#implemented-xgboost-mapping).
-- **ONNX:** fixed-width rank-two numeric inputs; one regression/probability target,
-  optional native labels and dynamic/one-row batches. Unsupported layouts,
-  external data/custom domains/functions and runtime/training configuration fail
-  before CPU sessions. Tested with ONNX 1.23.0/Runtime 1.30.0; see [ONNX bounds](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-onnx.md).
+  (including XGBoost 3.4.1 dart normalized to gbtree). Closed probability/regression objectives; raw boosters, RF wrappers, subclasses, ranking/survival/custom objectives and unsupported storage are rejected. At most 100,000 trees/depth 14, with complete state/dumps; see [the mapping](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-adapters.md#implemented-xgboost-mapping).
+- **ONNX:** fixed-width rank-two numeric inputs; one regression/probability target, optional native labels and dynamic/one-row batches. Unsupported layouts, external data/custom domains/functions and runtime/training configuration fail before CPU sessions. Tested with ONNX 1.23.0/Runtime 1.30.0; see [ONNX bounds](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-onnx.md).
 
 Archive ceilings: **6 members**, **512 MiB** archive/compressed/member bytes,
-**1 GiB** aggregate uncompressed bytes, ratio **200**, JSON depth **32**.
-Manifest: **8 MiB**; structure: **256 MiB**; schema/samples: **16 MiB each**.
-Features/classes: at most **100,000**; outputs: **1,024** (XGBoost/CatBoost/ONNX: one).
-Callers may only lower `ArchiveLimits`. Native [state](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-state.md)/[ONNX](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-onnx.md)
-bounds do not cap process memory, prediction rows or CPU.
+**1 GiB** aggregate uncompressed bytes, ratio **200**, JSON depth **32**. Manifest: **8 MiB**; structure: **256 MiB**; schema/samples: **16 MiB each**. Features/classes: at most **100,000**; outputs: **1,024** (XGBoost/CatBoost/ONNX: one). Callers may only lower `ArchiveLimits`. Native [state](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-state.md)/[ONNX](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-onnx.md) bounds do not cap process memory, prediction rows or CPU.
 
 ## Bundle contents and security
 
@@ -283,18 +292,6 @@ maintained dependencies. See [SECURITY.md](https://github.com/UlloaSP/mlbundle/b
 
 ## Development
 
-From the root: `uv python install 3.14`, `uv sync --locked --all-extras`,
-`uv run pre-commit install`. Default dev installs every extra; base: `uv sync --no-dev`.
-Pydantic v2 is the sole core dependency; model/schema imports are lazy. Schema uses
-mlschema `>=0.2.1,<0.3` on 3.14 only (0.2.1 excludes 3.15). `uv.lock` fixes tested
-versions; dependency edits require `uv sync` and committing the updated lockfile.
+From the root: `uv python install 3.14`, `uv sync --locked --all-extras`, `uv run pre-commit install`. Default dev installs every extra; base: `uv sync --no-dev`. Pydantic v2 is the sole core dependency; model/schema imports are lazy. Schema uses mlschema `>=0.2.1,<0.3` on 3.14 only (0.2.1 excludes 3.15). `uv.lock` fixes tested versions; dependency edits require `uv sync` and committing the updated lockfile.
 
-Run `uv run ruff check .`, `uv run ruff format --check .`, `uv run pyright`,
-`uv run pytest` and `uv build`. Tests execute every fenced README example and
-write terminal/XML coverage with an 80% branch-inclusive minimum.
-CI checks lint/types and tests the same built wheel on Ubuntu/Windows, including
-clean base installs. The owner, or an agent on the owner's explicit request for
-that version, runs manual [publishing](https://github.com/UlloaSP/mlbundle/blob/main/docs/publishing.md) from `main` with `pypi_env` approval. Read [AGENTS.md](https://github.com/UlloaSP/mlbundle/blob/main/AGENTS.md).
-Agents never run or approve it on their own initiative or add publish paths, tokens or secrets.
-Releases, version tags, conversions, per-model environments, signing and additional
-model libraries remain outside scope. The project is MIT licensed.
+Run `uv run ruff check .`, `uv run ruff format --check .`, `uv run pyright`, `uv run pytest` and `uv build`. Tests execute every fenced README example and write terminal/XML coverage with an 80% branch-inclusive minimum. CI checks lint/types and tests the same built wheel on Ubuntu/Windows, including clean base installs. The owner, or an agent on the owner's explicit request for that version, runs manual [publishing](https://github.com/UlloaSP/mlbundle/blob/main/docs/publishing.md) from `main` with `pypi_env` approval. Read [AGENTS.md](https://github.com/UlloaSP/mlbundle/blob/main/AGENTS.md). Agents never run or approve it on their own initiative or add publish paths, tokens or secrets. Releases, version tags, conversions, per-model environments, signing and additional model libraries remain outside scope. The project is MIT licensed.
