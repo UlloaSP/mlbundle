@@ -52,7 +52,7 @@ def _base(path: Path) -> None:
 
     import mlbundle
 
-    assert mlbundle.__version__ == "0.1.0"
+    assert mlbundle.__version__ == "0.1.0a1"
     view = mlbundle.inspect(path)
     assert view.manifest.model.library == "sklearn"
     assert "cannot attest" in _console("--help")
@@ -119,14 +119,34 @@ def _contents(directory: Path) -> None:
         assert any(name.endswith(".dist-info/licenses/LICENSE") for name in wheel_names)
         assert any(name.endswith(".dist-info/entry_points.txt") for name in wheel_names)
         assert all(name.startswith(("mlbundle/", "mlbundle-")) for name in wheel_names)
+        wheel_files = {
+            name: archive.read(name)
+            for name in wheel_names
+            if name.startswith("mlbundle/") and not name.endswith("/")
+        }
     with open_tar(sdist) as archive:
         sdist_names = archive.getnames()
         assert any(name.endswith("/src/mlbundle/py.typed") for name in sdist_names)
         assert any(name.endswith("/LICENSE") for name in sdist_names)
+        prefix = sdist.name.removesuffix(".tar.gz") + "/src/"
+        sdist_files = {}
+        for member in archive.getmembers():
+            if member.isfile() and member.name.startswith(prefix):
+                stream = archive.extractfile(member)
+                assert stream is not None
+                sdist_files[member.name.removeprefix(prefix)] = stream.read()
+        assert wheel_files == sdist_files, "Wheel and sdist package bytes must match"
     for name in [*wheel_names, *sdist_names]:
-        assert not set(Path(name).parts) & {"tests", ".venv", ".git", "__pycache__"}, (
-            name
-        )
+        assert not set(Path(name).parts) & {
+            "tests",
+            ".venv",
+            ".git",
+            "__pycache__",
+            "catboost_info",
+            ".pytest_cache",
+            ".ruff_cache",
+            "htmlcov",
+        }, name
         assert not name.endswith((".pyc", ".mlbundle", "coverage.xml")), name
     sys.stdout.write(
         f"artifacts: {wheel.name}, {sdist.name}; py.typed/catalog/license present; no tests or stray files\n"

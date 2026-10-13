@@ -136,8 +136,8 @@ still preserve validation, security and reproducibility.
   or PR text.
 - `C:\software\mlsuite` and `C:\software\mlschema` are read-only references.
   Never modify, commit or run write commands inside either checkout.
-- Do not publish to PyPI, create releases or version tags, or add a publish job.
-  "Tags" in this project means GitHub repository topics.
+- Publish only via manual `publish.yml` from `main`, through `pypi_env` with owner approval, on the owner's explicit request for that specific version.
+  Agents never run or approve it on their own initiative or add publish paths/tokens/secrets. No GitHub releases/version tags; "tags" means GitHub repository topics.
 - sklearn-to-ONNX conversion, per-model environments, bundle signing and additional
   libraries (including LightGBM and PyTorch) are outside the project scope.
 - Never claim a verification that was not run; report its real output or blocker.
@@ -154,8 +154,8 @@ uv run pre-commit install
 ```
 
 After changing dependency metadata, use `uv sync` to regenerate `uv.lock` and
-commit the lockfile. CI uses `uv sync --locked --group dev --all-extras` on Python 3.14.
-The default dev group installs `mlbundle[all]`; base users can omit the dev group.
+commit the lockfile. CI and manual `publish.yml` use locked dev/all extras on 3.14.
+Default dev installs `mlbundle[all]`; base users can omit it. Publishing reuses CI.
 Ruff handles lint and formatting; Pyright uses the family's basic mode.
 
 ## Verifying
@@ -174,8 +174,8 @@ The Ruff commands also work without the final `.` because the default is the
 current directory: `uv run ruff check` and `uv run ruff format --check`.
 `uv run pytest` runs `tests/`, measures branch coverage and enforces the family's
 80% minimum, writing terminal and XML reports. Tests use the installed package;
-its version comes from package metadata. CI checks lint and types and runs tests
-and a clean base-wheel smoke check on Ubuntu and Windows. The local build must produce a wheel and source archive.
+its version comes from package metadata. CI checks lint/types and the built wheel
+on Ubuntu/Windows; manual `publish.yml` requires that CI. Build a wheel and sdist.
 
 Start with the smallest proof of a behavior change, then broaden when needed.
 If a check cannot run, report the exact command and blocker. Never claim a test,
@@ -285,9 +285,9 @@ its kind/count inference remains ONNX-owned. Keep native behavior in adapters; f
 - `src/mlbundle/inspection.py`, `results.py` — metadata-only inspection and result records without adapter resolution.
 - `docs/format.md` — version 1 wire specification; linked container, adapter/structure, ONNX and schema/sample sections are normative.
 - `tests/` — one file per feature, with success and error cases together.
-- `scripts/package_smoke.py` — fixture, isolated install and artifact-content checks.
+- `scripts/package_smoke.py`, `publish_check.py` — artifact checks and publish preflight.
 - `pyproject.toml` and `uv.lock` — package metadata, tool configuration and lock.
-- `.github/workflows/ci.yml` — lint, types and cross-platform tests.
+- `.github/workflows/ci.yml`, `publish.yml` — shared CI and owner-approved publishing.
 - `.pre-commit-config.yaml` — Ruff, Pyright and basic file hygiene.
 - `README.md`, `SECURITY.md` and this file — project and contributor context.
 

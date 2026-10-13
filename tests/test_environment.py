@@ -20,7 +20,7 @@ def test_installed_environment():
 def test_missing_distributions_and_onnx(monkeypatch):
     def version(name):
         if name == "mlbundle":
-            return "0.1.0"
+            return "0.1.0a1"
         raise metadata.PackageNotFoundError(name)
 
     monkeypatch.setattr(module.metadata, "version", version)
@@ -31,7 +31,7 @@ def test_missing_distributions_and_onnx(monkeypatch):
         producer_version="",
     )
     environment = module.capture_environment(onnx=graph)
-    assert environment.packages == {"mlbundle": "0.1.0"}
+    assert environment.packages == {"mlbundle": "0.1.0a1"}
     assert environment.onnx == graph
 
 

@@ -18,6 +18,13 @@ def read(data: dict) -> Manifest:
     return Manifest.from_bytes(canonical_dumps(data))
 
 
+@pytest.mark.parametrize("writer_version", ["0.1.0", "0.1.0a1"])
+def test_writer_version_is_independent_of_reader(manifest_data, writer_version):
+    manifest_data["writer_version"] = writer_version
+    manifest_data["environment"]["packages"]["mlbundle"] = writer_version
+    assert read(manifest_data).writer_version == writer_version
+
+
 def test_round_trip_and_claim_projection(manifest_data):
     manifest = read(manifest_data)
     assert Manifest.from_bytes(manifest.to_bytes()) == manifest

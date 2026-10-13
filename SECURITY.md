@@ -1,7 +1,8 @@
 # Security policy
 
-mlbundle v0.1 is pre-release; format version 1 is not yet frozen. It implements
-strict manifest validation, secure container reading/writing, metadata-only
+The published v0.1.0a1 pre-alpha has not had an independent security review;
+do not accept bundles from untrusted parties. Format version 1 is not frozen.
+It implements strict manifest validation, secure container reading/writing, metadata-only
 `inspect`, export/load, sklearn, XGBoost, CatBoost and ONNX adapters, local schema inference,
 explicit samples, prediction-state verification and the inspect/verify CLI.
 The container validates ZIP/ZIP64 layout, bounds sources and actual decompression,
