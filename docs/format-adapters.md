@@ -70,12 +70,12 @@ optional dependency reports `pip install "mlbundle[EXTRA]"`. An unrecognized
 object raises `UnsupportedModelError`.
 
 `export(model, destination, *, training_data=None, feature_names=None, class_labels=None,
-target_name=None, sample_rows=None, metadata=None, overwrite=False, limits=None)`
+target_names=None, sample_rows=None, onehot_separator="__", metadata=None, overwrite=False, limits=None)`
 returns a `MetadataView` of the written
 bundle. It serializes, extracts, reloads and compares both claims and structure
 before writing. Model-exposed names take precedence over supplied names. It
 captures distribution metadata, including `claims.onnx` in the environment for
-the ONNX adapter. [Local schema export](format-schema.md) owns frame alignment,
+the ONNX adapter. [Required schema export](format-schema.md) owns local/default inference, frame alignment,
 training dtypes, schema/report declarations and explicit sample selection.
 `load(source, *, limits=None)` validates the container, resolves its closed enum,
 deserializes, recomputes claims/structure and compares canonical bytes before
@@ -210,9 +210,9 @@ bounded `MLBundleError` subclasses without cell contents. Shape errors additiona
 retain `ValueError` compatibility through `PredictionInputError`.
 
 `MetadataView` carries `manifest`, a tuple of `MemberName` values including
-the manifest, and optional `schema` and `samples` JSON values; it has no model.
+the manifest, required `schema` and optional `samples` JSON values; it has no model.
 `LoadedBundle` additionally carries the exact
-native object, a uniform predictor, optional schema/structure/sample values, and
+native object, a uniform predictor, required schema and optional structure/samples, and
 properties for kind, library, class name, ordered feature names and origin, and
 output-major original class labels. Calling the prediction method for the wrong
 kind raises a bounded `ValueError`. Result records and typed models prevent field

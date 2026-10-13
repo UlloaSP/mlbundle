@@ -14,11 +14,15 @@ def classifier(x, y, **params):
     return xgb.XGBClassifier(n_estimators=3, max_depth=2, n_jobs=1, **params).fit(x, y)
 
 
-def rewrite(path, change):
+def rewrite(path, change, *, schema=False):
     manifest, members = read_container(path)
     parts = manifest.model_dump(mode="json", by_alias=True)
     del members[MemberName.MANIFEST]
     change(parts, members)
+    if schema:
+        from conftest import align_schema
+
+        align_schema(parts, members)
     return write_container(parts, members)
 
 

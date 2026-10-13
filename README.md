@@ -12,7 +12,7 @@ mlbundle replaces three gaps in separate model/DataFrame uploads:
 - **Training data leaving the machine:** schema inference runs locally;
   training rows are included only when explicitly requested as samples.
 
-**Pre-alpha v0.1.0a1, published to reserve the PyPI name.** Format version 1 is
+**Pre-alpha v0.1.0a2, not yet published.** Version 0.1.0a1 reserved the PyPI name. Format version 1 is
 not frozen; bundles may need re-export. The security design has not had an
 independent review: do not accept bundles from untrusted parties.
 Requires **Python >=3.14**; tested on Windows/Linux. Schema requires Python 3.14.
@@ -20,11 +20,9 @@ Requires **Python >=3.14**; tested on Windows/Linux. Schema requires Python 3.14
 ## Install and try scikit-learn
 
 Install the pre-release with
-`python -m pip install --pre "mlbundle[sklearn]"`.
-Replace `[sklearn]` with `[xgboost]`, `[catboost]`, `[onnx]`, `[schema]` or `[all]` for the
-corresponding dependencies. Combine extras as `[sklearn,schema]` for local
-DataFrame inference. Omit the brackets for a base install that can inspect
-every bundle without model libraries. Load/verify needs the matching model extra.
+`python -m pip install "mlbundle[sklearn,schema]==0.1.0a2"` once published.
+Replace `sklearn` with `xgboost`, `catboost` or `onnx`, or use `[all]` for all dependencies.
+Export needs the `schema` extra; reading does not. Omit the brackets for metadata-only inspection; load/verify needs the matching model extra.
 
 ```python
 from sklearn.tree import DecisionTreeClassifier
@@ -47,8 +45,9 @@ regressors use `bundle.predict`. Results are plain lists: output-major classifie
 labels/probabilities, row-major regression values. `native_model` supports native
 inference/explanations; mutating it invalidates the metadata verification.
 
-Native names win; otherwise origin is `declared`, `dataframe`, or `generated` (`feature_1` through `feature_N`).
-`target_name=` and `metadata=` remain author declarations.
+Native names win; otherwise origin is `declared`, `dataframe`, or `generated` (`feature_0` through `feature_{N-1}`).
+For models without native names, pass a 2-D NumPy array or nested numeric rows in manifest feature order; declared names do not add name-based prediction.
+`target_names=` and `metadata=` remain author declarations.
 
 ## XGBoost
 
@@ -163,8 +162,8 @@ no visualization structure. See [the exact ONNX contract](https://github.com/Ull
 ## Local schema and explicit samples
 
 Install a model extra plus `schema` on Python 3.14. Supply a nonempty pandas
-DataFrame with string feature names in model input order. A named target must
-exist and is excluded; without `target_name`, the frame contains features only.
+DataFrame with string feature names in model input order. `target_names` has one
+unique name per output; every target column must exist and is excluded. Without it the frame contains features only.
 
 ```python
 import pandas as pd
@@ -177,7 +176,7 @@ training = pd.DataFrame(
 )
 features = training.drop(columns="target")
 model = DecisionTreeClassifier(random_state=7).fit(features, training["target"])
-export(model, "schema.mlbundle", training_data=training, target_name="target")
+export(model, "schema.mlbundle", training_data=training, target_names=["target"])
 view = inspect("schema.mlbundle")
 assert view.manifest.features.dtypes == ["float64", "float64"]
 assert view.schema["reports"][0]["labels"] == ["cold", "warm"]
@@ -188,12 +187,16 @@ export(model, "sampled.mlbundle", training_data=features, sample_rows=2)
 assert inspect("sampled.mlbundle").samples == features.head(2).to_dict("records")
 ```
 
-`schema.json` contains a schema version, locally inferred fields and one report
-per target output. `color__red`/`color__blue` binary columns can become one
-category field using mlschema's `__` convention. Frame names must match native
-names in order; `feature_names=` cannot rename/reorder a supplied frame.
+`schema.json` is required and uses schema version `2`, with `source` equal to
+`training_data` or `default`. Without a frame, mlschema infers fields from one
+synthetic row of float `1.0` values; training dtypes remain null. `onehot_separator=`
+defaults to `__` and is stored in the schema (1–16 characters). `color__red`/`color__blue`
+binary columns can become one category field. Native-name mappings are strings; all other origins map by zero-based feature position. Reports map by output position,
+including `0` for one output, with string display labels; manifest class labels retain
+their original types. Frame names must match native names in order; `feature_names=` cannot rename/reorder a supplied frame.
 Training dtypes are declarations, separate from verified model dtypes. Inspect/load
 validate schema mappings, reports and sample keys without pandas or mlschema.
+Bundles written by 0.1.0a1 without schema, or with schema version `1`, must be re-exported.
 
 **Data leaving the machine:** names/dtypes, field kinds/nullability, dtype-based
 steps, categories (including unused), one-hot suffixes, pair-axis metadata and
@@ -261,12 +264,12 @@ bounds do not cap process memory, prediction rows or CPU.
 
 ## Bundle contents and security
 
-Every bundle contains `manifest.json` and one native member, or the declared
-`model.skops` + `model.ubj`/`model.cbm` composite pair. Single-step composites use only the leaf. Optional members are `schema.json`, `structure.json`
+Every bundle contains `manifest.json`, `schema.json` and one native member, or the declared
+`model.skops` + `model.ubj`/`model.cbm` composite pair. Single-step composites use only the leaf. Optional members are `structure.json`
 (required when the adapter extracts structure) and explicitly requested
 `samples.json`. No training DataFrame or arbitrary files are included.
 The manifest records identity/time/writer, model parameters/counts/state,
-ordered features/dtypes/origin, target labels/name, environment, member
+ordered features/dtypes/origin, target labels/names, environment, member
 SHA-256/sizes, references and free-form user metadata. The normative
 [format specification](https://github.com/UlloaSP/mlbundle/blob/main/docs/format.md) owns these records and verification rules.
 

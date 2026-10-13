@@ -44,11 +44,15 @@ def test_load_sources_and_native_predictions(data, tmp_path):
         assert loaded.structure["family"] == "decision_tree"
 
 
-def _rewrite(path, change):
+def _rewrite(path, change, *, schema=False):
     manifest, members = read_container(path)
     value = manifest.model_dump(mode="json", by_alias=True)
     del members[MemberName.MANIFEST]
     change(value, members)
+    if schema:
+        from conftest import align_schema
+
+        align_schema(value, members)
     return write_container(value, members)
 
 
@@ -102,7 +106,7 @@ def test_lying_manifest(change, claim, data, tmp_path):
         DecisionTreeClassifier().fit(pd.DataFrame(x, columns=list("abcd")), y), path
     )
     with pytest.raises(ClaimMismatchError) as error:
-        mlbundle.load(_rewrite(path, change))
+        mlbundle.load(_rewrite(path, change, schema=True))
     assert error.value.claim == claim
 
 
@@ -132,7 +136,7 @@ def test_lying_structure(model, alter, data, tmp_path):
         members[MemberName.STRUCTURE] = canonical_dumps(structure)
 
     with pytest.raises(ClaimMismatchError, match="structure"):
-        mlbundle.load(_rewrite(path, change))
+        mlbundle.load(_rewrite(path, change, schema=True))
 
 
 def test_added_structure_and_swapped_model(data, tmp_path):
@@ -226,7 +230,7 @@ def test_invalid_or_non_estimator_payload(payload, error, data, tmp_path):
     "member,value,error",
     [
         (MemberName.STRUCTURE, None, ClaimMismatchError),
-        (MemberName.SAMPLES, [{"feature_1": 0}], None),
+        (MemberName.SAMPLES, [{"feature_0": 0}], None),
     ],
 )
 def test_optional_members(member, value, error, tmp_path):

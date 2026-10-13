@@ -95,7 +95,7 @@ hyperparameter ceiling applies; no training parameters are inferred from it.
 by original domain), IR version and producer name/version. These fields, graph
 signatures, counts, kind, names/dtypes and native labels are all recomputed with
 the writer's extraction code and compared by exact canonical bytes. Historical
-environment, training dtypes, supplied matrix feature names, target name and
+environment, training dtypes, supplied matrix feature names, target names and
 label-free mappings remain declarations.
 
 Producer name/version each allow 0–65,536 characters, including multiline build

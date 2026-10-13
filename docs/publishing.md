@@ -1,7 +1,7 @@
 # Manual pre-alpha publishing
 
-Version `0.1.0a1` reserves the PyPI name `mlbundle`. Format version 1 is not
-frozen, so bundles may need re-export. The security design has not had an
+Version `0.1.0a2` is the next unpublished pre-alpha; `0.1.0a1` reserved the PyPI name.
+Format version 1 is not frozen; schema v2 requires older bundles to be re-exported. The security design has not had an
 independent review; do not accept bundles from untrusted parties.
 
 The owner, or an agent on the owner's explicit request for that specific version,
@@ -22,10 +22,10 @@ The owner, or an agent on the owner's explicit request, follows these steps:
 3. Open [Publish to PyPI](https://github.com/UlloaSP/mlbundle/actions/workflows/publish.yml),
    choose **Run workflow**, select **main**, and run it once.
 4. Wait for the build/CI jobs to succeed. Review the run's commit and downloaded
-   `distributions` artifact, containing the `0.1.0a1` wheel and source archive.
+   `distributions` artifact, containing the `0.1.0a2` wheel and source archive.
    Approve the `pypi_env` deployment when satisfied. This approval permits upload.
-5. Check [mlbundle on PyPI](https://pypi.org/project/mlbundle/0.1.0a1/) and install
-   with `python -m pip install --pre "mlbundle[sklearn]"` on Python 3.14.
+5. Check [mlbundle on PyPI](https://pypi.org/project/mlbundle/0.1.0a2/) and install
+   with `python -m pip install "mlbundle[sklearn,schema]==0.1.0a2"` on Python 3.14.
 
 A pending publisher does not reserve a name until a successful upload. The
 [PyPI pending-publisher documentation](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/)

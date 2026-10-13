@@ -8,14 +8,51 @@ import zlib
 
 import pytest
 
-from mlbundle import __version__
+from mlbundle import MemberName, __version__
 from mlbundle.canonical import canonical_dumps
 from mlbundle.integrity import hash_member
 
 
+def schema_for_manifest(parts):
+    model, features = parts["model"], parts["features"]
+    reports = []
+    label = "Predicted class" if model["kind"] == "classifier" else "Predicted value"
+    for index in range(model["n_outputs"]):
+        report = {
+            "kind": model["kind"],
+            "label": label if model["n_outputs"] == 1 else f"{label} {index}",
+            "mappedTo": index,
+        }
+        if model["kind"] == "classifier":
+            report.update(
+                labels=[str(value) for value in parts["target"]["class_labels"][index]],
+                showClassProbabilities=True,
+            )
+        reports.append(report)
+    return {
+        "schema_version": "2",
+        "source": "default",
+        "onehot_separator": "__",
+        "fields": [
+            {
+                "kind": "text",
+                "label": name,
+                "mappedTo": name if features["origin"] == "model" else index,
+                "required": True,
+            }
+            for index, name in enumerate(features["names"])
+        ],
+        "reports": reports,
+    }
+
+
+def align_schema(parts, members):
+    members[MemberName.SCHEMA] = canonical_dumps(schema_for_manifest(parts))
+
+
 @pytest.fixture
 def manifest_data() -> dict:
-    return {
+    value = {
         "format_name": "mlbundle",
         "format_version": "1",
         "bundle_id": "f0d87d83-8cf9-4cf5-af08-e1c885156513",
@@ -38,7 +75,7 @@ def manifest_data() -> dict:
             "model_dtypes": None,
             "origin": "model",
         },
-        "target": {"class_labels": [[1, "positive"]], "name": "outcome"},
+        "target": {"class_labels": [[1, "positive"]], "names": ["outcome"]},
         "environment": {
             "python_version": "3.14.0",
             "python_implementation": "CPython",
@@ -49,9 +86,13 @@ def manifest_data() -> dict:
             "onnx": None,
         },
         "integrity": {"model.skops": hash_member(b"native model bytes").model_dump()},
-        "references": {"schema": None, "structure": None, "samples": None},
+        "references": {"schema": "schema.json", "structure": None, "samples": None},
         "user_metadata": {"name": "example", "metrics": {"accuracy": 0.95}},
     }
+    value["integrity"]["schema.json"] = hash_member(
+        canonical_dumps(schema_for_manifest(value))
+    ).model_dump()
+    return value
 
 
 def build_zip(parts, compression=0, *, archive_comment=b"", **attributes):
@@ -73,6 +114,7 @@ def parts(manifest_data):
     return [
         ("manifest.json", canonical_dumps(manifest_data)),
         ("model.skops", b"native model bytes"),
+        ("schema.json", canonical_dumps(schema_for_manifest(manifest_data))),
     ]
 
 

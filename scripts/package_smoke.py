@@ -52,7 +52,7 @@ def _base(path: Path) -> None:
 
     import mlbundle
 
-    assert mlbundle.__version__ == "0.1.0a1"
+    assert mlbundle.__version__ == "0.1.0a2"
     view = mlbundle.inspect(path)
     assert view.manifest.model.library == "sklearn"
     assert "cannot attest" in _console("--help")
@@ -164,7 +164,14 @@ def main() -> None:
         _base(args.path)
     else:
         if args.action == "sklearn":
-            absent = _OPTIONAL - {"sklearn", "skops", "numpy", "scipy"}
+            absent = _OPTIONAL - {
+                "sklearn",
+                "skops",
+                "numpy",
+                "scipy",
+                "pandas",
+                "mlschema",
+            }
             assert all(find_spec(name) is None for name in absent)
         _sklearn(args.path)
         if args.action == "create":

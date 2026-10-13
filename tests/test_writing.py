@@ -44,7 +44,7 @@ def test_roundtrip_and_determinism(
             "producer_name": "",
             "producer_version": "",
         }
-    members = {member: b"dummy native bytes"}
+    members = {member: b"dummy native bytes", MemberName.SCHEMA: b"{}"}
     if optional:
         for name in (MemberName.SCHEMA, MemberName.STRUCTURE, MemberName.SAMPLES):
             members[name] = b"[]" if name == MemberName.SAMPLES else b"{}"
@@ -74,7 +74,7 @@ def test_atomic_write_and_failure(manifest_data, tmp_path, monkeypatch, overwrit
     target = tmp_path / "model.mlbundle"
     args = (
         Manifest.from_bytes(canonical_dumps(manifest_data)),
-        {MemberName.SKOPS: b"model"},
+        {MemberName.SKOPS: b"model", MemberName.SCHEMA: b"{}"},
     )
     first = write_container(*args, destination=target)
     assert read_container(str(target)) == read_container(io.BytesIO(first))
@@ -102,7 +102,7 @@ def test_atomic_write_and_failure(manifest_data, tmp_path, monkeypatch, overwrit
         ({"../model.skops": b"x"}, InvalidContainerError),
         ({"mödél.skops": b"x"}, InvalidContainerError),
         ({}, InvalidContainerError),
-        ({MemberName.SKOPS: "text"}, TypeError),
+        ({MemberName.SKOPS: "text", MemberName.SCHEMA: b"{}"}, TypeError),
     ],
 )
 def test_invalid_writer_inputs(manifest_data, members, error):
@@ -129,7 +129,7 @@ def test_writer_limits_leave_destination_untouched(
     with pytest.raises(LimitExceededError):
         write_container(
             manifest_data,
-            {MemberName.SKOPS: data},
+            {MemberName.SKOPS: data, MemberName.SCHEMA: b"{}"},
             destination=target,
             overwrite=True,
             limits=limits,
@@ -147,14 +147,20 @@ def test_no_overwrite_publication_race(manifest_data, tmp_path, monkeypatch):
 
     monkeypatch.setattr("os.link", race)
     with pytest.raises(FileExistsError):
-        write_container(manifest_data, {MemberName.SKOPS: b"model"}, destination=target)
+        write_container(
+            manifest_data,
+            {MemberName.SKOPS: b"model", MemberName.SCHEMA: b"{}"},
+            destination=target,
+        )
     assert target.read_bytes() == b"concurrent writer"
     assert list(tmp_path.glob(".mlbundle-*")) == []
 
 
 def test_chunked_model_and_empty_model(manifest_data):
     for data in (b"", random.Random(0).randbytes(200_000)):
-        bundle = write_container(manifest_data, {MemberName.SKOPS: data})
+        bundle = write_container(
+            manifest_data, {MemberName.SKOPS: data, MemberName.SCHEMA: b"{}"}
+        )
         assert read_container(bundle)[1][MemberName.SKOPS] == data
 
 
@@ -163,31 +169,33 @@ def test_chunked_model_and_empty_model(manifest_data):
     [
         (
             b"native model bytes",
-            "8e4bea2f61364aa5247df42588f6ad89065bcf87dc65a96d0cc185b602b27fe8",
+            "e6fe466bcfcc6bbc8ac7310eb4a77a21e34a0545abd7ec9bc84149ba34e29a70",
         ),
         (
             random.Random(0).randbytes(200_000),
-            "f32df46fe39f515d09403af12a2e64bbee1fe4c579ad4229c14f187d397eb473",
+            "adf3678cb1037c802bcf95688065302f6c11a16a057bbe29784a6a0235a6992e",
         ),
         (
             b"hello world " * 10_000,
-            "2cfab1749bdca7b97cfd6eba990e16054f4b7404ac8a8a2c3a818c95d04150c8",
+            "b5219cc6066a71271bd993e7bb89462c927372349bedaba73549df61b2ed55ad",
         ),
         (
             bytes(range(256)) * 500,
-            "a2d903caee80044799e2640cd5672e26c2fe13d0a0eddf1a5a9d061f12b9c942",
+            "509b61925106409488d5420eb97145d0b07770224144c6c5101d59e74fc72b10",
         ),
         (
             b"0" * 1000,
-            "5e92b884593597b822b7a72326b06084fe4c85ee028c164869115895f52dbc41",
+            "f98eb7aa07287110dd50cf6d8f04cb60e5c82ae72428c45911e7a81653d84c7a",
         ),
     ],
     ids=["native", "noise", "text", "uniform", "runs"],
 )
 def test_fixed_archive_bytes_on_both_platforms(manifest_data, data, expected):
-    manifest_data["writer_version"] = "0.1.0a1"
-    manifest_data["environment"]["packages"]["mlbundle"] = "0.1.0a1"
-    bundle = write_container(manifest_data, {MemberName.SKOPS: data})
+    manifest_data["writer_version"] = "0.1.0a2"
+    manifest_data["environment"]["packages"]["mlbundle"] = "0.1.0a2"
+    bundle = write_container(
+        manifest_data, {MemberName.SKOPS: data, MemberName.SCHEMA: b"{}"}
+    )
     assert hashlib.sha256(bundle).hexdigest() == expected
 
 
@@ -202,11 +210,16 @@ def test_writer_optional_member_errors(manifest_data, name):
     ]:
         with pytest.raises(error):
             write_container(
-                manifest_data, {MemberName.SKOPS: b"model", member: data}, limits=limits
+                manifest_data,
+                {MemberName.SKOPS: b"model", MemberName.SCHEMA: b"{}", member: data},
+                limits=limits,
             )
     manifest_data["references"][name] = None
     with pytest.raises(InvalidManifestError):
-        write_container(manifest_data, {MemberName.SKOPS: b"model", member: b"{}"})
+        write_container(
+            manifest_data,
+            {MemberName.SKOPS: b"model", MemberName.SCHEMA: b"{}", member: b"{}"},
+        )
 
 
 def test_remaining_compression_budget(manifest_data, monkeypatch):
@@ -223,7 +236,10 @@ def test_remaining_compression_budget(manifest_data, monkeypatch):
     with pytest.raises(LimitExceededError):
         write_container(
             manifest_data,
-            {MemberName.SKOPS: random.Random(0).randbytes(2000)},
+            {
+                MemberName.SKOPS: random.Random(0).randbytes(2000),
+                MemberName.SCHEMA: b"{}",
+            },
             limits=ArchiveLimits(max_archive_bytes=2048, max_compressed_bytes=1000),
         )
     assert len(caps) == 2 and 0 < caps[1] < caps[0] == 1000
@@ -257,18 +273,24 @@ def test_no_hard_links_fallback(manifest_data, tmp_path, monkeypatch, race, fail
     if race or fail_copy:
         with pytest.raises(FileExistsError if race else OSError):
             write_container(
-                manifest_data, {MemberName.SKOPS: b"model"}, destination=target
+                manifest_data,
+                {MemberName.SKOPS: b"model", MemberName.SCHEMA: b"{}"},
+                destination=target,
             )
         assert target.read_bytes() == b"other writer" if race else not target.exists()
     else:
         result = write_container(
-            manifest_data, {MemberName.SKOPS: b"model"}, destination=target
+            manifest_data,
+            {MemberName.SKOPS: b"model", MemberName.SCHEMA: b"{}"},
+            destination=target,
         )
         assert target.read_bytes() == result
         if os.name != "nt":
             assert stat.S_IMODE(target.stat().st_mode) == 0o600
         with pytest.raises(FileExistsError):
             write_container(
-                manifest_data, {MemberName.SKOPS: b"model"}, destination=target
+                manifest_data,
+                {MemberName.SKOPS: b"model", MemberName.SCHEMA: b"{}"},
+                destination=target,
             )
     assert not list(tmp_path.glob(".mlbundle-*"))

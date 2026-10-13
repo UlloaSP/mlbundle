@@ -67,7 +67,7 @@ def model(data):
 
 def test_privacy_without_samples(data, model, tmp_path):
     path = tmp_path / "private.mlbundle"
-    view = mlbundle.export(model, path, training_data=data, target_name="target")
+    view = mlbundle.export(model, path, training_data=data, target_names=["target"])
     _, members = read_container(path)
     assert MemberName.SAMPLES not in members and view.samples is None
     contents = b"\n".join(members.values())
@@ -96,7 +96,7 @@ def test_privacy_without_samples(data, model, tmp_path):
 def test_exact_sample_selection_and_conversion(data, model, tmp_path):
     path = tmp_path / "samples.mlbundle"
     view = mlbundle.export(
-        model, path, training_data=data, target_name="target", sample_rows=2
+        model, path, training_data=data, target_names=["target"], sample_rows=2
     )
     expected = [
         {
@@ -135,7 +135,7 @@ def test_exact_sample_selection_and_conversion(data, model, tmp_path):
         model,
         tmp_path / "full.mlbundle",
         training_data=data,
-        target_name="target",
+        target_names=["target"],
         sample_rows=3,
     )
     assert full.samples[-1]["number"] == {"$float": "+inf"}
@@ -150,7 +150,7 @@ def test_schema_structure_samples_coexist(tmp_path):
         model,
         tmp_path / "all.mlbundle",
         training_data=frame,
-        target_name="target",
+        target_names=["target"],
         sample_rows=1,
     )
     assert len(view.members) == 5
@@ -163,7 +163,7 @@ def test_invalid_sample_count(count, data, model, tmp_path):
     path = tmp_path / "never.mlbundle"
     with pytest.raises(InvalidSamplesError, match="positive"):
         mlbundle.export(
-            model, path, training_data=data, target_name="target", sample_rows=count
+            model, path, training_data=data, target_names=["target"], sample_rows=count
         )
     assert not path.exists()
 
@@ -177,7 +177,7 @@ def test_samples_require_frame_and_respect_byte_limit(data, model, tmp_path):
             model,
             path,
             training_data=data,
-            target_name="target",
+            target_names=["target"],
             sample_rows=2,
             limits=mlbundle.ArchiveLimits(max_samples_bytes=20),
         )
@@ -192,7 +192,7 @@ def test_unsupported_sample_values(value, data, model, tmp_path):
             model,
             tmp_path / "never.mlbundle",
             training_data=data,
-            target_name="target",
+            target_names=["target"],
             sample_rows=1,
         )
 
@@ -249,7 +249,7 @@ def test_nested_dates_scalars_and_sample_depth(tmp_path):
 def test_lying_samples(change, data, model, tmp_path):
     path = tmp_path / "samples.mlbundle"
     mlbundle.export(
-        model, path, training_data=data, target_name="target", sample_rows=1
+        model, path, training_data=data, target_names=["target"], sample_rows=1
     )
     manifest, members = read_container(path)
     samples = canonical_loads(members[MemberName.SAMPLES])
@@ -265,11 +265,11 @@ def test_lying_samples(change, data, model, tmp_path):
 def test_manifest_target_cannot_be_a_sample_feature(data, model, tmp_path):
     path = tmp_path / "samples.mlbundle"
     mlbundle.export(
-        model, path, training_data=data, target_name="target", sample_rows=1
+        model, path, training_data=data, target_names=["target"], sample_rows=1
     )
     manifest, members = read_container(path)
     parts = manifest.model_dump(mode="json", by_alias=True)
-    parts["target"]["name"] = "text"
+    parts["target"]["names"] = ["text"]
     del members[MemberName.MANIFEST]
     bundle = write_container(parts, members)
     for reader in (mlbundle.inspect, mlbundle.load):
@@ -292,7 +292,7 @@ def test_numpy_timestamp_precision(fraction, unit, data, model, tmp_path):
     )
     path = tmp_path / "precise.mlbundle"
     view = mlbundle.export(
-        model, path, training_data=data, target_name="target", sample_rows=2
+        model, path, training_data=data, target_names=["target"], sample_rows=2
     )
     assert view.samples[0]["text"] == expected
     assert view.samples[1]["text"] is None

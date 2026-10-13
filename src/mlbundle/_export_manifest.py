@@ -1,6 +1,6 @@
 """Manifest construction shared by standalone and composite export."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from importlib.metadata import version
 from uuid import uuid4
@@ -11,7 +11,6 @@ from .claims import ModelClaims
 from .contract import (
     FORMAT_NAME,
     FORMAT_VERSION,
-    FeatureOrigin,
     Library,
     MemberName,
     SerializationFormat,
@@ -26,26 +25,10 @@ def manifest_parts(
     serialization: SerializationFormat,
     *,
     structure: dict[str, JsonValue] | None,
-    feature_names: Sequence[str] | None,
-    training: TrainingDeclaration | None,
-    target_name: str | None,
+    training: TrainingDeclaration,
+    target_names: list[str] | None,
     metadata: Mapping[str, JsonValue] | None,
 ) -> dict[str, object]:
-    names = claims.feature_names
-    origin = FeatureOrigin.MODEL
-    if names is None:
-        origin = (
-            FeatureOrigin.DECLARED
-            if feature_names is not None
-            else FeatureOrigin.GENERATED
-        )
-        names = (
-            list(feature_names)
-            if feature_names is not None
-            else [f"feature_{index}" for index in range(1, claims.n_features + 1)]
-        )
-        if training is not None:
-            names, origin = training.names, FeatureOrigin.DATAFRAME
     model = claims.model_dump(
         mode="json", exclude={"feature_names", "feature_dtypes", "class_labels", "onnx"}
     )
@@ -58,21 +41,17 @@ def manifest_parts(
         "writer_version": version("mlbundle"),
         "model": model,
         "features": {
-            "names": names,
-            "dtypes": [None] * claims.n_features
-            if training is None
-            else training.dtypes,
+            "names": training.names,
+            "dtypes": training.dtypes,
             "model_dtypes": claims.feature_dtypes,
-            "origin": origin.value,
+            "origin": training.origin.value,
         },
-        "target": {"class_labels": claims.class_labels, "name": target_name},
+        "target": {"class_labels": claims.class_labels, "names": target_names},
         "environment": capture_environment(onnx=claims.onnx).model_dump(mode="json"),
         "references": {
             "structure": None if structure is None else MemberName.STRUCTURE.value,
-            "schema": None if training is None else MemberName.SCHEMA.value,
-            "samples": None
-            if training is None or training.samples is None
-            else MemberName.SAMPLES.value,
+            "schema": MemberName.SCHEMA.value,
+            "samples": None if training.samples is None else MemberName.SAMPLES.value,
         },
         "user_metadata": {} if metadata is None else dict(metadata),
     }

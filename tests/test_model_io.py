@@ -152,11 +152,14 @@ def _check_graph_mismatch(path):
 
 
 def _check_declared_count_mismatch(path):
+    from conftest import align_schema
+
     manifest, members = read_container(path)
     parts = manifest.model_dump(mode="json", by_alias=True)
     parts["model"]["n_classes"] = [1]
     parts["target"]["class_labels"] = [["one"]]
     del members[MemberName.MANIFEST]
+    align_schema(parts, members)
     with pytest.raises(ClaimMismatchError, match="n_classes"):
         mlbundle.load(write_container(parts, members))
 
