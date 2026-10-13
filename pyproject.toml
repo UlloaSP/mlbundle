@@ -1,6 +1,6 @@
 [project]
 name = "mlbundle"
-version = "0.1.0"
+version = "0.1.0a1"
 description = "Pickle-free, verifiable model bundles with a manifest, schema and structure."
 readme = "README.md"
 license = "MIT"
@@ -58,7 +58,7 @@ all = [
 Homepage = "https://github.com/UlloaSP/mlbundle"
 Repository = "https://github.com/UlloaSP/mlbundle"
 Issues = "https://github.com/UlloaSP/mlbundle/issues"
-Documentation = "https://github.com/UlloaSP/mlbundle/blob/develop/README.md"
+Documentation = "https://github.com/UlloaSP/mlbundle/blob/main/README.md"
 
 [dependency-groups]
 dev = [
@@ -99,7 +99,8 @@ filterwarnings = [
 source = ["mlbundle"]
 branch = true
 parallel = true
-omit = ["*/tests/*", "*/__pycache__/*", "*/site-packages/*"]
+# CI measures the installed wheel inside site-packages.
+omit = ["*/tests/*", "*/__pycache__/*"]
 
 [tool.coverage.report]
 fail_under = 80

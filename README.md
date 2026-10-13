@@ -12,14 +12,15 @@ mlbundle replaces three gaps in separate model/DataFrame uploads:
 - **Training data leaving the machine:** schema inference runs locally;
   training rows are included only when explicitly requested as samples.
 
-**Pre-release v0.1.0; format version 1 is not yet frozen.** Nothing is published
-on PyPI. Requires **Python >=3.14**. The tested baseline is CPython 3.14 on
-Windows and Linux; the schema extra currently works only on Python 3.14.
+**Pre-alpha v0.1.0a1, published to reserve the PyPI name.** Format version 1 is
+not frozen; bundles may need re-export. The security design has not had an
+independent review: do not accept bundles from untrusted parties.
+Requires **Python >=3.14**; tested on Windows/Linux. Schema requires Python 3.14.
 
 ## Install and try scikit-learn
 
-Install from Git with
-`python -m pip install "mlbundle[sklearn] @ git+https://github.com/UlloaSP/mlbundle.git@develop"`.
+Install the pre-release with
+`python -m pip install --pre "mlbundle[sklearn]"`.
 Replace `[sklearn]` with `[xgboost]`, `[catboost]`, `[onnx]`, `[schema]` or `[all]` for the
 corresponding dependencies. Combine extras as `[sklearn,schema]` for local
 DataFrame inference. Omit the brackets for a base install that can inspect
@@ -99,7 +100,7 @@ assert bundle.predict_proba(rows) == model.predict_proba(rows).tolist()
 Depthwise/Lossguide, custom Python objectives/metrics and other losses are rejected.
 Classifier losses: Logloss, CrossEntropy, MultiClass. Regressors: RMSE, MAE,
 Quantile, Huber, Poisson, MAPE. Complete trees/borders/NaN handling/importances
-are verified on load. [The CatBoost contract](docs/format-catboost.md) details
+are verified on load. [The CatBoost contract](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-catboost.md) details
 wrapper recovery, native-parser limits and the private in-memory serializer.
 
 ## Composite pipelines
@@ -132,7 +133,7 @@ Each needs a fitted, data-free width proof. Unknown widths, FeatureUnion/KNNImpu
 slice/callable/scalar selectors, caching, metadata routing and other native placements
 remain rejected. Step names/outer options are declarations; trees address transformed
 features, without original-feature attribution. Schema/dtypes/samples describe original
-inputs; six members permit schema plus explicit samples. See [the pipeline contract](docs/format-pipeline.md).
+inputs; six members permit schema plus explicit samples. See [the pipeline contract](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-pipeline.md).
 
 ## Existing ONNX files
 
@@ -157,7 +158,7 @@ Paths and bytes are preserved unchanged; a ModelProto is serialized once.
 There is no conversion. `native_model` contains the original `data` and CPU
 `session`. Native graph labels are verified; supplied labels must agree with
 them. Without native/supplied labels, encoded indices are generated. ONNX has
-no visualization structure. See [the exact ONNX contract](docs/format-onnx.md).
+no visualization structure. See [the exact ONNX contract](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-onnx.md).
 
 ## Local schema and explicit samples
 
@@ -199,7 +200,7 @@ steps, categories (including unused), one-hot suffixes, pair-axis metadata and
 class labels. No inferred ranges, means, counts or arbitrary text/example rows.
 Names/categories and learned models/structure can reveal training information.
 Explicit `sample_rows=N` includes the first N feature rows, without target/index;
-N must be positive and within the frame. See [schema and samples](docs/format-schema.md).
+N must be positive and within the frame. See [schema and samples](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-schema.md).
 
 ## Inspect, load and the CLI
 
@@ -229,9 +230,9 @@ dependency rejection (`MLBundleError`), **2** usage/I/O failure.
   dense brute-force neighbors, NearestCentroid, MLP and MultiOutput/RegressorChain.
   SimpleImputer/KNNImputer, scalers, KBinsDiscretizer, categorical encoders,
   univariate selectors and closed NumPy FunctionTransformer functions round-trip,
-  including nested ColumnTransformer pipelines; see [the exact lists](docs/format-state.md).
+  including nested ColumnTransformer pipelines; see [the exact lists](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-state.md).
   All-sklearn Pipeline structure stays null; composite trees expose the inner boundary. See
-  [tested configurations](tests/test_sklearn_families.py) and [core round trips/rejections](tests/test_sklearn.py).
+  [tested configurations](https://github.com/UlloaSP/mlbundle/blob/main/tests/test_sklearn_families.py) and [core round trips/rejections](https://github.com/UlloaSP/mlbundle/blob/main/tests/test_sklearn.py).
 - **Sklearn rejections:** custom estimators/subclasses, functions/types outside the
   closed lists (including lambdas and user functions), compound fitted dtypes, classifiers without
   probabilities, multilabel/ClassifierChain layouts, unsupported native placements,
@@ -240,22 +241,22 @@ dependency rejection (`MLBundleError`), **2** usage/I/O failure.
 - **Sklearn versions:** the closed class/attribute catalog is audited/tested
   against **1.9.1 with skops 0.16.0**, not every version allowed by `>=1.6`.
   Unknown state fails; export/load sklearn versions must match. Configurations
-  must satisfy the catalog and round trip; see [state ownership](docs/format-state.md).
+  must satisfy the catalog and round trip; see [state ownership](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-state.md).
 - **XGBoost:** exact XGBClassifier/XGBRegressor, one target, native gbtree
   (including XGBoost 3.4.1 dart normalized to gbtree). Closed probability/regression
   objectives; raw boosters, RF wrappers, subclasses, ranking/survival/custom
   objectives and unsupported storage are rejected. At most 100,000 trees/depth 14,
-  with complete state/dumps; see [the mapping](docs/format-adapters.md#implemented-xgboost-mapping).
+  with complete state/dumps; see [the mapping](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-adapters.md#implemented-xgboost-mapping).
 - **ONNX:** fixed-width rank-two numeric inputs; one regression/probability target,
   optional native labels and dynamic/one-row batches. Unsupported layouts,
   external data/custom domains/functions and runtime/training configuration fail
-  before CPU sessions. Tested with ONNX 1.23.0/Runtime 1.30.0; see [ONNX bounds](docs/format-onnx.md).
+  before CPU sessions. Tested with ONNX 1.23.0/Runtime 1.30.0; see [ONNX bounds](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-onnx.md).
 
 Archive ceilings: **6 members**, **512 MiB** archive/compressed/member bytes,
 **1 GiB** aggregate uncompressed bytes, ratio **200**, JSON depth **32**.
 Manifest: **8 MiB**; structure: **256 MiB**; schema/samples: **16 MiB each**.
 Features/classes: at most **100,000**; outputs: **1,024** (XGBoost/CatBoost/ONNX: one).
-Callers may only lower `ArchiveLimits`. Native [state](docs/format-state.md)/[ONNX](docs/format-onnx.md)
+Callers may only lower `ArchiveLimits`. Native [state](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-state.md)/[ONNX](https://github.com/UlloaSP/mlbundle/blob/main/docs/format-onnx.md)
 bounds do not cap process memory, prediction rows or CPU.
 
 ## Bundle contents and security
@@ -267,7 +268,7 @@ Every bundle contains `manifest.json` and one native member, or the declared
 The manifest records identity/time/writer, model parameters/counts/state,
 ordered features/dtypes/origin, target labels/name, environment, member
 SHA-256/sizes, references and free-form user metadata. The normative
-[format specification](docs/format.md) owns these records and verification rules.
+[format specification](https://github.com/UlloaSP/mlbundle/blob/main/docs/format.md) owns these records and verification rules.
 
 Treat bundles as untrusted. The reader validates ZIP layout, allowed members,
 limits, strict JSON/manifest and hashes; adapters use closed trust/loading paths
@@ -275,7 +276,7 @@ and recompute claims. **Hashes detect corruption, not deliberate tampering**;
 there is no signing or proof of authorship, training history, quality or fairness.
 Schema, samples and training-environment declarations are not authenticated.
 Native parsers/inference require process isolation, memory/CPU/row limits and
-maintained dependencies. See [SECURITY.md](SECURITY.md) for guarantees and reporting.
+maintained dependencies. See [SECURITY.md](https://github.com/UlloaSP/mlbundle/blob/main/SECURITY.md) for guarantees and reporting.
 
 ## Development
 
@@ -288,8 +289,8 @@ versions; dependency edits require `uv sync` and committing the updated lockfile
 Run `uv run ruff check .`, `uv run ruff format --check .`, `uv run pyright`,
 `uv run pytest` and `uv build`. Tests execute every fenced README example and
 write terminal/XML coverage with an 80% branch-inclusive minimum.
-CI preserves lint/types and Ubuntu/Windows tests and checks a clean base wheel
-installation on both OSes. `uv build` creates a local wheel and source archive.
-Read [AGENTS.md](AGENTS.md) before contributing. Publishing, releases, version
-tags, conversions, per-model environments, signing and additional model libraries
-remain outside scope. The project is MIT licensed.
+CI checks lint/types and tests the same built wheel on Ubuntu/Windows, including
+clean base installs. Only the owner runs manual [publishing](https://github.com/UlloaSP/mlbundle/blob/main/docs/publishing.md) from `main` and
+approves `pypi_env`; it publishes those validated artifacts. Read [AGENTS.md](https://github.com/UlloaSP/mlbundle/blob/main/AGENTS.md).
+Releases, version tags, conversions, per-model environments, signing and additional
+model libraries remain outside scope. The project is MIT licensed.
