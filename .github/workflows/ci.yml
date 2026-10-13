@@ -156,7 +156,7 @@ jobs:
       - name: Run tests with coverage
         shell: bash
         working-directory: ${{ runner.temp }}
-        run: uv run --project "$GITHUB_WORKSPACE" --no-sync pytest "$GITHUB_WORKSPACE/tests" -c "$GITHUB_WORKSPACE/pyproject.toml" --cov-report="xml:$GITHUB_WORKSPACE/coverage.xml"
+        run: uv run --project "$GITHUB_WORKSPACE" --no-sync pytest "$GITHUB_WORKSPACE/tests" -c "$GITHUB_WORKSPACE/pyproject.toml" --cov-config="$GITHUB_WORKSPACE/pyproject.toml" --cov-report="xml:$GITHUB_WORKSPACE/coverage.xml"
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
