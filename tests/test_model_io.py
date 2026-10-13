@@ -119,7 +119,7 @@ def test_closed_adapter_pipeline_is_library_agnostic(
         def extract_structure(self, model):
             return None
 
-        def predictor(self, model):
+        def predictor(self, model, claims=None):
             return SimpleNamespace(predict_proba=lambda data: [[0.2, 0.8]])
 
     FakeAdapter.library = library

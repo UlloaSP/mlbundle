@@ -25,7 +25,7 @@ feature order, separate from verified `model_dtypes`.
 Without `training_data`, inference uses a synthetic one-row pandas DataFrame of
 float `1.0` values, one column per feature. Native or declared names are its
 columns; generated origin uses columns `range(n_features)`. mlschema supplies
-all field shapes, including numeric `step: 0.1` and one-hot grouping for named
+field shapes, including numeric `step: 0.1` and one-hot grouping for named
 binary columns. Synthetic dtypes are not training evidence: manifest training
 dtypes remain null. Generated names/labels are `feature_0` through `feature_{N-1}`.
 
@@ -35,8 +35,8 @@ without builders, overrides or custom kinds. The separator is stored and read
 from the schema; consumers must not assume the default.
 
 Model-origin fields retain name mappings. Dataframe/declared inference preserves
-named columns for grouping, then rewrites every `mappedTo`, including series
-subfields and one-hot options, to its zero-based feature position. Generated
+named columns for grouping, then rewrites parent/one-hot `mappedTo` values
+to their zero-based feature position. Series columns have no mappings. Generated
 origin is inferred on positional columns directly. Labels remain feature names.
 For models without native names, prediction accepts 2-D NumPy arrays or nested
 numeric rows in manifest feature order. Adapter-supported sparse arrays and
@@ -96,8 +96,23 @@ a top-level ordinary label must equal the feature name at that index.
 | `text`, `boolean`, `date` | None. |
 | `number` | `step`: finite positive number; integers infer `1.0`, floats `0.1`. |
 | `category` | `options`: 1–100,000 unique strings, retaining categorical order and unused categories. |
-| `series` | `field1`, `field2`: scalar fields from the same feature column; no nested series/one-hot groups. Subfield labels describe pair axes; mappings resolve to the parent's index. |
+| `series` | `columns`: exactly two scalar subfields, with `id` equal to `field1` then `field2`, and no `mappedTo`; no nested series/one-hot groups. Labels describe pair axes. |
 | `onehot-category` | Special shape below. |
+
+In 0.1.0a3 the `series` shape changed from `field1`/`field2` to MLForm's
+`columns` while format 1 is not frozen. Schema version stays `"2"`: no bundle
+written before this change contains a series field, so a version bump would
+invalidate every 0.1.0a2 bundle for a shape none uses. Readers reject the old shape.
+The exporter adapts mlschema's pairs in one small function until mlschema emits
+this shape. Parent `label`, `required` and `mappedTo` remain unchanged:
+
+```json
+{"kind":"series","label":"pair","mappedTo":0,"required":true,
+ "columns":[
+   {"id":"field1","kind":"number","label":"field1","required":true,"step":1.0},
+   {"id":"field2","kind":"number","label":"field2","required":true,"step":1.0}
+ ]}
+```
 
 One-hot groups have exactly `kind`, `label`, `required`, `options`, with no parent
 mapping. At least two binary named columns sharing a prefix before the first
@@ -131,6 +146,46 @@ JSON bytes. Inspect checks against manifest claims; load also verifies those
 claims against the native model. An internally consistent manifest/report lie
 cannot conceal native disagreement. Label-free ONNX labels remain count-checked
 declarations, as in its native contract.
+
+## Runtime record input
+
+`LoadedBundle.row_from_record` returns one numeric row in feature order;
+`predict_record` returns a tuple of frozen `OutputPrediction` dataclasses, one
+per output, using report `mappedTo` and string labels. Classifiers return labels,
+probabilities and `predicted_label`: the report string at the index of the native
+model's own class decision. Regressors return a value and `predicted_label=None`.
+The decision comes from sklearn estimator/Pipeline `predict`, XGBoost wrapper
+`predict`, CatBoost `predict(prediction_type="Class")` (including its threshold),
+or the ONNX graph's label output. Composites transform inputs and call the native
+leaf. Native dimensions, scalar bounds and membership in each output's classes
+are validated before mapping to report strings; malformed results raise bounded
+`InvalidModelError` without values. Multi-output decisions preserve output order.
+ONNX classifiers with no label output return `predicted_label=None`; no argmax
+fallback is computed. Decisions may disagree with probabilities and are never
+checked against them. There is no new public array-level class-decision method.
+The existing predictor validates the numeric row and its output as usual.
+Sklearn/composite predictors supply a one-row pandas DataFrame only when their
+fitted name-based column selectors require one; missing pandas raises
+`MissingOptionalDependencyError` naming the existing schema extra. Other models
+receive a nested numeric row, preserving native categorical behavior.
+This optional native-owned `record_input` hook does not change array/DataFrame
+validation. `row_from_record` itself has no optional imports.
+
+Records must be mappings. Model-origin keys are feature names; every other
+origin accepts integer positions or their canonical decimal strings (`"0"`,
+`"12"`), never both forms for a position. Lookups touch only expected keys;
+extra keys are ignored without iteration, independent of the record's size.
+Missing-key errors show at most five keys, each escaped and capped at 128
+characters, followed by the count of additional missing keys.
+
+Finite Python int/float and bool values convert to floats. Strings strip only
+ASCII whitespace and must then contain at most 64 characters: case-insensitive
+`true`/`false` or `[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?`.
+Parsing must yield a finite float. `None` becomes NaN only when the schema's
+parent `required` is false, including one-hot options and series fields.
+Other types, nonfinite numbers and invalid strings raise `PredictionInputError`
+with a bounded, escaped key and reason, never the value. Array/DataFrame paths
+keep their existing validation; schema nullability remains an author declaration.
 
 ## What leaves the training machine
 

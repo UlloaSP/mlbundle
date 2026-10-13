@@ -169,30 +169,30 @@ def test_chunked_model_and_empty_model(manifest_data):
     [
         (
             b"native model bytes",
-            "e6fe466bcfcc6bbc8ac7310eb4a77a21e34a0545abd7ec9bc84149ba34e29a70",
+            "04135705c8b64e3a492fc543b0cb150a747cc2214533c9425ba93d61870b7494",
         ),
         (
             random.Random(0).randbytes(200_000),
-            "adf3678cb1037c802bcf95688065302f6c11a16a057bbe29784a6a0235a6992e",
+            "af4a7e26486a59a105f9363c4b8d034172c27a7058d80635d2dadadf26b8ac05",
         ),
         (
             b"hello world " * 10_000,
-            "b5219cc6066a71271bd993e7bb89462c927372349bedaba73549df61b2ed55ad",
+            "a69ad3950fbf46b8524f38f65b92911215dc435060b4158b7be2c01adb6b79dc",
         ),
         (
             bytes(range(256)) * 500,
-            "509b61925106409488d5420eb97145d0b07770224144c6c5101d59e74fc72b10",
+            "605ab1cb22b719643413342f342258cb92d81be9aa65bbfe19ebeccc27a9b1f3",
         ),
         (
             b"0" * 1000,
-            "f98eb7aa07287110dd50cf6d8f04cb60e5c82ae72428c45911e7a81653d84c7a",
+            "1f1facf21a7f91d32984764a4efb4c8b9bf9992aa4c639c0abe2cd3b943e14d9",
         ),
     ],
     ids=["native", "noise", "text", "uniform", "runs"],
 )
 def test_fixed_archive_bytes_on_both_platforms(manifest_data, data, expected):
-    manifest_data["writer_version"] = "0.1.0a2"
-    manifest_data["environment"]["packages"]["mlbundle"] = "0.1.0a2"
+    manifest_data["writer_version"] = "0.1.0a3"
+    manifest_data["environment"]["packages"]["mlbundle"] = "0.1.0a3"
     bundle = write_container(
         manifest_data, {MemberName.SKOPS: data, MemberName.SCHEMA: b"{}"}
     )

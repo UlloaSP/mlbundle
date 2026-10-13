@@ -1,6 +1,6 @@
 # Security policy
 
-The v0.1.0a2 development pre-alpha has not had an independent security review;
+The v0.1.0a3 development pre-alpha has not had an independent security review;
 do not accept bundles from untrusted parties. Format version 1 is not frozen.
 It implements strict manifest validation, secure container reading/writing, metadata-only
 `inspect`, export/load, sklearn, XGBoost, CatBoost and ONNX adapters, local schema inference,
@@ -270,6 +270,19 @@ manifest data within format limits. Errors are one bounded stderr line with a
 failure category, not bundle values. Inspect still does not attest model claims;
 verify requires the matching extra and performs full loading and comparison.
 
+Record input looks up only the expected schema keys and ignores all extra keys
+without iterating the record. It accepts finite Python numbers, booleans and
+bounded decimal/true/false strings after ASCII whitespace stripping. `None`
+becomes NaN only for schema-declared optional features. Errors escape and bound
+feature names and never echo input values. These conveniences belong only to
+`row_from_record`/`predict_record`; array/DataFrame validation is unchanged.
+Version diagnostics use strict version text of at most 64 characters and appear
+only after failure; environment declarations remain unauthenticated claims.
+Classifier record results validate native class decisions against the output's
+classes before returning the report label. Invalid dimensions, values or classes
+raise bounded errors without values. A missing ONNX label output yields None;
+mlbundle never derives a decision from probabilities.
+
 ## Reporting a vulnerability
 
 Use [GitHub private vulnerability reporting for UlloaSP/mlbundle](https://github.com/UlloaSP/mlbundle/security/advisories/new).
@@ -278,5 +291,5 @@ behavior, and the impact. Share malicious bundles or sensitive details through
 that private report rather than a public issue or pull request. Remove personal
 or confidential training data from any reproducer you submit.
 
-Version 0.1.0a1 is published; 0.1.0a2 is not yet published. Report the affected
+Version 0.1.0a2 is published; 0.1.0a3 is not yet published. Report the affected
 version and commit you tested.

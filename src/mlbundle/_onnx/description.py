@@ -12,11 +12,9 @@ from mlbundle.environment import OnnxInfo, Opset
 from mlbundle.errors import InvalidModelError, LimitExceededError
 from mlbundle.limits import HYPERPARAMETER_BYTES, MAX_CLASSES
 
+from .decisions import decision_labels
+from .labels import LABEL_OPS, labels_for as _labels
 from .signatures import _batch, _inputs, signature
-
-LABEL_OPS = frozenset(
-    {"ZipMap", "LinearClassifier", "TreeEnsembleClassifier", "SVMClassifier"}
-)
 
 
 @dataclass(frozen=True)
@@ -25,6 +23,8 @@ class Description:
     inputs: tuple[dict[str, Any], ...]
     output: str
     maps: bool
+    decision_output: dict[str, Any] | None = None
+    decision_labels: ClassLabels | None = None
 
 
 def _ancestors(graph: Any, output: str) -> list[Any]:
@@ -40,25 +40,6 @@ def _ancestors(graph: Any, output: str) -> list[Any]:
             result.append(node)
             pending.extend(node.input)
     return result
-
-
-def _labels(nodes: list[Any]) -> ClassLabels | None:
-    found = []
-    for node in nodes:
-        if node.domain != "ai.onnx.ml" or node.op_type not in LABEL_OPS:
-            continue
-        for attr in node.attribute:
-            if attr.name == "classlabels_strings":
-                found.append([value.decode("utf-8") for value in attr.strings])
-            elif attr.name in ("classlabels_ints", "classlabels_int64s"):
-                found.append(list(attr.ints))
-    if not found:
-        return None
-    if any(
-        canonical_dumps(labels) != canonical_dumps(found[0]) for labels in found[1:]
-    ):
-        raise InvalidModelError("ONNX native label records disagree.")
-    return cast(ClassLabels, [found[0]])
 
 
 def _native_labels(graph: Any, output: str) -> ClassLabels | None:
@@ -249,4 +230,21 @@ def describe(model: Any) -> Description:
             producer_version=model.producer_version,
         ),
     )
-    return Description(claims, inputs, output["name"], output["shape"] is None)
+    decision = (
+        next((value for value in outputs if value["name"] != output["name"]), None)
+        if kind == ModelKind.CLASSIFIER
+        else None
+    )
+    labels_for_decision = (
+        None
+        if decision is None
+        else decision_labels(graph, decision["name"], output["name"], cast(int, count))
+    )
+    return Description(
+        claims,
+        inputs,
+        output["name"],
+        output["shape"] is None,
+        decision,
+        labels_for_decision,
+    )

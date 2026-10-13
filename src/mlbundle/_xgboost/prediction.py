@@ -4,6 +4,7 @@ from typing import Any, cast
 
 import numpy as np
 
+from mlbundle._prediction_decisions import class_indices
 from mlbundle._prediction_input import tabular
 from mlbundle.adapters import ProbabilityOutput, RegressionOutput
 from mlbundle.claims import ModelClaims
@@ -16,7 +17,9 @@ class Predictor:
         self.model = model
         self.claims = claims
 
-    def _call(self, data: object, *, probabilities: bool) -> tuple[np.ndarray, int]:
+    def _call(
+        self, data: object, *, probabilities: bool, decisions: bool = False
+    ) -> tuple[np.ndarray, int]:
         try:
             data, rows = tabular(
                 data, self.claims.n_features, categorical=self.model.enable_categorical
@@ -26,11 +29,19 @@ class Predictor:
                 if probabilities
                 else self.model.predict(data)
             )
-            return np.asarray(raw, dtype=float), rows
+            return np.asarray(raw, dtype=object if decisions else float), rows
         except MLBundleError:
             raise
         except Exception:
             raise InvalidModelError("XGBoost prediction failed.") from None
+
+    def predict_class_indices(self, data: object) -> list[list[int]]:
+        if self.claims.kind != ModelKind.CLASSIFIER:
+            raise ValueError("Class prediction requires a classifier.")
+        raw, rows = self._call(data, probabilities=False, decisions=True)
+        # The closed wrapper predicts encoded indices, including with bound labels.
+        labels = [list(range((self.claims.n_classes or [0])[0]))]
+        return class_indices(raw, labels, rows)
 
     def predict(self, data: object) -> RegressionOutput:
         if self.claims.kind != ModelKind.REGRESSOR:

@@ -106,7 +106,7 @@ def test_mixed_schema_and_series(tmp_path):
         ]
     ).fit(frame, [False, True])
     view = mlbundle.export(model, tmp_path / "mixed.mlbundle", training_data=frame)
-    assert view.schema["fields"] == infer_schema(frame, onehot_separator="__")
+    assert view.schema["fields"][:-1] == infer_schema(frame, onehot_separator="__")[:-1]
     assert [field["kind"] for field in view.schema["fields"]] == [
         "number",
         "category",

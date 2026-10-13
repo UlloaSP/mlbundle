@@ -5,7 +5,7 @@ from typing import Annotated, Literal, cast
 from pydantic import Field, JsonValue, TypeAdapter, ValidationError
 
 from ._base import ContractModel
-from ._schema_fields import OneHotField, SchemaField, SeriesField
+from ._schema_fields import OneHotField, SchemaField
 from .canonical import DecodedJSON, canonical_dumps
 from .claims import ModelClaims
 from .contract import FeatureOrigin, MemberName, ModelKind
@@ -83,9 +83,6 @@ def positional_fields(fields: list[dict], names: list[str]) -> None:
     def rewrite(field: dict) -> None:
         if "mappedTo" in field:
             field["mappedTo"] = positions[field["mappedTo"]]
-        for key in ("field1", "field2"):
-            if key in field:
-                rewrite(field[key])
         for option in field.get("options", []):
             if isinstance(option, dict):
                 rewrite(option)
@@ -125,11 +122,6 @@ def _field_indices(
         return indices
     index = _mapping_index(field.mappedTo, positions, origin)
     if field.label != names[index]:
-        raise ValueError
-    if isinstance(field, SeriesField) and any(
-        _mapping_index(sub.mappedTo, positions, origin) != index
-        for sub in (field.field1, field.field2)
-    ):
         raise ValueError
     return [index]
 

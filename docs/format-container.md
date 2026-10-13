@@ -150,4 +150,8 @@ ceilings raise `LimitExceededError`. Invalid manifest JSON or typed fields raise
 raise `UnsupportedFormatVersionError` before validating version-specific fields.
 Invalid member JSON raises `InvalidJSONError`. Member hash or integrity-size
 disagreement raises `IntegrityMismatchError` naming the allowed member.
-Messages do not include untrusted names, JSON blobs or ZIP exception text.
+Manifest-validation failures may name a strict version string of at most 64
+characters when `writer_version` differs from the installed reader, explain that
+format 1 is not frozen and require re-export. Absent/malformed/equal versions
+retain the generic error. Inspect/load share this manifest path; valid manifests
+from a different writer still pass. Messages omit JSON blobs and ZIP exception text.

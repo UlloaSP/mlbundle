@@ -8,6 +8,7 @@ from .adapters import Predictor, ProbabilityOutput, RegressionOutput
 from .claims import ClassLabels
 from .contract import FeatureOrigin, Library, MemberName, ModelKind
 from .manifest import Manifest
+from .records import OutputPrediction, predict_record, row_from_record
 
 
 @dataclass(frozen=True)
@@ -66,3 +67,15 @@ class LoadedBundle:
         if self.kind != ModelKind.REGRESSOR:
             raise ValueError("predict requires a regressor.")
         return self.predictor.predict(data)
+
+    def row_from_record(self, record: object) -> list[float]:
+        """Validate expected record keys and values in model feature order.
+
+        Extra keys are ignored without iterating the record. Only this path
+        parses numeric strings and schema-permitted None values.
+        """
+        return row_from_record(self.manifest, self.schema, record)
+
+    def predict_record(self, record: object) -> tuple[OutputPrediction, ...]:
+        """Predict one record, returning one frozen result per output in order."""
+        return predict_record(self.manifest, self.schema, self.predictor, record)

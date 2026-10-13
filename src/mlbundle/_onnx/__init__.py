@@ -111,5 +111,5 @@ class Adapter:
     def extract_structure(self, model: object) -> dict[str, JsonValue] | None:  # noqa: ARG002
         return None
 
-    def predictor(self, model: Any) -> Predictor:
-        return Predictor(model.session, self._describe(model.data))
+    def predictor(self, model: Any, claims: ModelClaims | None = None) -> Predictor:
+        return Predictor(model.session, self._describe(model.data), claims)
