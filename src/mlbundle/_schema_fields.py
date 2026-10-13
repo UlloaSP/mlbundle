@@ -10,12 +10,13 @@ from ._base import ContractModel, Name
 from .limits import MAX_FEATURES
 
 FieldLabel = Annotated[str, Field(min_length=1, max_length=100)]
+MappedTo = Name | Annotated[int, Field(ge=0, lt=MAX_FEATURES)]
 
 
 class FieldBase(ContractModel):
     label: FieldLabel
     required: bool
-    mappedTo: Name
+    mappedTo: MappedTo
 
 
 class SimpleField(FieldBase):
@@ -52,7 +53,7 @@ class SeriesField(FieldBase):
 class OneHotOption(ContractModel):
     label: Name
     value: Name
-    mappedTo: Name
+    mappedTo: MappedTo
 
 
 class OneHotField(ContractModel):

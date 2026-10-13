@@ -1,6 +1,6 @@
 # Security policy
 
-The published v0.1.0a1 pre-alpha has not had an independent security review;
+The v0.1.0a2 development pre-alpha has not had an independent security review;
 do not accept bundles from untrusted parties. Format version 1 is not frozen.
 It implements strict manifest validation, secure container reading/writing, metadata-only
 `inspect`, export/load, sklearn, XGBoost, CatBoost and ONNX adapters, local schema inference,
@@ -256,8 +256,10 @@ Omitting samples does not prevent model memorization or model-side disclosure.
 
 Only explicit `sample_rows=N` includes real feature rows: exactly the first N,
 without target or index. The schema/sample members have 16 MiB/depth-32 limits.
-Inspect and load validate closed shapes, feature mappings/row keys and report
-kind/labels without mlschema. Load also verifies native model claims; label-free
+Schema v2 is required, inferred locally from training data or a synthetic default;
+source/separator remain declarations. Older bundles require re-export. Inspect/load
+validate mappings by feature origin and string reports by output position without
+mlschema/pandas; native label verification retains original types. Load also verifies native model claims; label-free
 ONNX original labels remain declarations. Consumers must treat schema and sample
 values as untrusted display/input data, never executable instructions.
 See [the exact data-derived contract](docs/format-schema.md) and review what is shared.
@@ -276,5 +278,5 @@ behavior, and the impact. Share malicious bundles or sensitive details through
 that private report rather than a public issue or pull request. Remove personal
 or confidential training data from any reproducer you submit.
 
-There are no published versions yet. Report findings against the repository's
-current code and identify the commit you tested.
+Version 0.1.0a1 is published; 0.1.0a2 is not yet published. Report the affected
+version and commit you tested.

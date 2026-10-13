@@ -1,15 +1,40 @@
 """Export declarations and resolution for models without native class labels."""
 
 from collections.abc import Sequence
-from typing import cast
+from typing import Annotated, cast
 
-from pydantic import ValidationError
+from pydantic import Field, TypeAdapter, ValidationError
 
-from ._base import ContractModel
+from ._base import ContractModel, Name
 from .canonical import canonical_dumps
 from .claims import ClassLabels, Label, ModelClaims, validate_labels
 from .contract import ModelKind
-from .errors import UnsupportedModelError
+from .errors import InvalidSchemaError, UnsupportedModelError
+from .limits import MAX_OUTPUTS
+
+TargetNames = Annotated[list[Name], Field(min_length=1, max_length=MAX_OUTPUTS)]
+
+
+def validate_target_names(names: list[str] | None, n_outputs: int) -> None:
+    if names is not None and (len(names) != n_outputs or len(set(names)) != len(names)):
+        raise ValueError("Target names must be unique and match the output count.")
+
+
+def export_target_names(
+    names: Sequence[str] | None, n_outputs: int
+) -> list[str] | None:
+    if isinstance(names, (str, bytes)):
+        raise InvalidSchemaError("target_names requires a list of names.")
+    try:
+        values = TypeAdapter(TargetNames | None).validate_python(
+            None if names is None else list(names), strict=True
+        )
+        validate_target_names(values, n_outputs)
+        return values
+    except (ValidationError, TypeError, ValueError):
+        raise InvalidSchemaError(
+            "target_names must contain one unique bounded nonempty name per output."
+        ) from None
 
 
 class ExportDeclarations(ContractModel):

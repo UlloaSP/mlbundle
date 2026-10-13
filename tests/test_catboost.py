@@ -122,7 +122,7 @@ def test_schema_samples_and_lowered_limits(tmp_path):
     mlbundle.export(model, path, training_data=x, sample_rows=2)
     loaded = mlbundle.load(path)
     assert loaded.samples == x.head(2).to_dict("records")
-    assert loaded.schema["reports"][0]["labels"] == [0, 1, 2]
+    assert loaded.schema["reports"][0]["labels"] == ["0", "1", "2"]
     assert set(loaded.members) == {
         mlbundle.MemberName.MANIFEST,
         mlbundle.MemberName.CBM,

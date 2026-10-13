@@ -208,9 +208,9 @@ before publication. XGBoost supports exact XGBClassifier/XGBRegressor tree
 wrappers with closed probability/regression objectives and one target. Original
 class labels supplied through output-major `class_labels=` are bound to a native
 copy through an mlbundle-owned booster attribute and verified on load. Omitted
-labels use encoded indices; sklearn/CatBoost reject `class_labels=` because they own classes_. Local `training_data=` inference uses mlschema with `__`, excludes a named target,
-and records training dtypes. Only explicit `sample_rows=N` includes real rows.
-Schema/report and sample validation is shared by export, inspect and load.
+labels use encoded indices; sklearn/CatBoost reject `class_labels=` because they own classes_. Every export requires the schema extra: mlschema infers from `training_data=` or one float-1.0 row, recording schema v2 `source` and configurable `onehot_separator` (default `__`). Real frames exclude every declared target and record training dtypes; default dtypes stay null. Only explicit `sample_rows=N` includes real rows.
+Model-origin mappings use names; other origins use positions and generated names start at `feature_0`. `target_names` declares one unique bounded name per output; real frames exclude all target columns. Reports map by output position with unique string labels, while manifest labels retain their types.
+Schema/report and sample validation is shared by export, inspect and load without schema libraries; missing schema and old schema versions require re-export.
 ONNX preserves path/bytes unchanged (ModelProto is serialized once), validates
 bytes once per export/load with bounded scalar scans, and rejects external tensors,
 custom domains, functions and training/runtime configuration before a CPU session. It verifies graph signatures, metadata and environment
@@ -220,14 +220,14 @@ labels use count-checked declarations. Structure is null. See the normative
 ONNX section linked from `docs/format.md` for exact layouts and resource bounds.
 CatBoost supports exact numeric single-target symmetric classifiers/regressors, with native state commitments and in-memory loading. Exact outer sklearn Pipelines ending in XGBoost/CatBoost use separately checked skops/native components; other native placements remain rejected.
 The closed member list is: required `manifest.json`, one
-native member, or declared `model.skops` + `model.ubj`/`model.cbm` pair, optional `schema.json`, and
+native member, or declared `model.skops` + `model.ubj`/`model.cbm` pair, required `schema.json`, and
 `structure.json` when the supported model has extractable structure. Optional
 `samples.json` requires explicit user intent. The ceiling is six members; no others are allowed.
 
 The manifest must record format name/version, bundle id, UTC creation time and
 writer version; model library, estimator class, classifier/regressor kind,
 hyperparameters and feature/class/output counts; feature names, order, dtypes
-and origin; original class labels and target name; training Python, OS,
+and origin; original class labels and output-major target names; training Python, OS,
 architecture and package versions; member SHA-256 hashes and sizes; and
 free-form user metadata. Sample rows are allowed only on explicit request.
 All of this is untrusted input, and model-derived fields must be verified.
@@ -263,14 +263,14 @@ its kind/count inference remains ONNX-owned. Keep native behavior in adapters; f
 - `src/mlbundle/canonical.py` and `_canonical_work.py` — deterministic JSON and bounded decoding/expansion.
 - `src/mlbundle/model_io.py`, `_native_io.py`, `_export_manifest.py` — public I/O, native round trips and manifest construction.
 - `src/mlbundle/_composite/`, `_pipeline_contract.py` — strict recipe, separate I/O, closed reconstruction/claims/prediction and input/inner boundaries. Read `docs/format-pipeline.md` when changing composites.
-- `src/mlbundle/training.py` — lazy local DataFrame alignment and schema inference.
+- `src/mlbundle/training.py` — lazy local/default inference and feature origin/dtype resolution.
 - `src/mlbundle/schema.py` and `_schema_fields.py` — closed schema/report declarations and reader cross-checks without mlschema.
 - `src/mlbundle/samples.py` — explicit feature-row selection and bounded cell conversion.
 - `src/mlbundle/_sklearn/` — owned trust/skops/state/parameters/structure, transformer route and closed fitted-width/name proofs. Composite commitments/native structure bind the rebuilt Pipeline; all-sklearn structure stays null.
 - `src/mlbundle/_xgboost/` — closed wrappers/objectives, native UBJSON preflight/loading, label binding, recoverable config, complete tree structure and validated prediction.
 - `src/mlbundle/_catboost/` — closed numeric symmetric wrappers/losses, CBM preflight/in-memory loading, complete native state/structure and validated prediction.
 - `src/mlbundle/_onnx/` — bounded protobuf/graph validation, unchanged bytes, native signatures/labels, CPU sessions and tabular prediction.
-- `src/mlbundle/declarations.py` — export-time class labels and resolution for native models without labels.
+- `src/mlbundle/declarations.py` — class-label resolution and shared output-major target-name validation.
 - `src/mlbundle/claims.py` — shared extracted claims and exact claim/structure comparison.
 - `src/mlbundle/manifest.py` — manifest sections, cross-field validation and JSON boundaries.
 - `src/mlbundle/integrity.py` — member SHA-256/size records and verification.

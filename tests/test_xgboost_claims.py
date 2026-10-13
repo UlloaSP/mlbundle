@@ -66,7 +66,7 @@ def test_lying_manifest(change, claim, xgb_data, tmp_path):
         class_labels=[["a", "b", "c"]],
     )
     with pytest.raises(ClaimMismatchError) as error:
-        mlbundle.load(rewrite(path, change))
+        mlbundle.load(rewrite(path, change, schema=True))
     assert error.value.claim == claim
 
 
@@ -89,7 +89,7 @@ def test_lying_structure(alter, xgb_data, tmp_path):
         b[MemberName.STRUCTURE] = canonical_dumps(value)
 
     with pytest.raises(ClaimMismatchError, match="structure"):
-        mlbundle.load(rewrite(path, change))
+        mlbundle.load(rewrite(path, change, schema=True))
 
 
 def test_swapped_model(xgb_data, tmp_path):
@@ -120,4 +120,4 @@ def test_lying_regressor_kind(xgb_data, tmp_path):
         manifest["target"].update(class_labels=[[False, True]])
 
     with pytest.raises(ClaimMismatchError, match="kind"):
-        mlbundle.load(rewrite(path, change))
+        mlbundle.load(rewrite(path, change, schema=True))

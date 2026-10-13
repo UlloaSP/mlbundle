@@ -7,18 +7,22 @@ from dataclasses import dataclass
 from importlib import import_module
 from typing import TYPE_CHECKING, cast
 
+from pydantic import ValidationError
+
 from .canonical import canonical_dumps, canonical_value
 from .claims import ModelClaims
-from .contract import MemberName
+from .contract import FeatureOrigin, MemberName
 from .errors import (
+    InvalidManifestError,
     InvalidSamplesError,
     InvalidSchemaError,
     MissingOptionalDependencyError,
     MLBundleError,
 )
 from .limits import ArchiveLimits
+from .manifest import FeatureInfo
 from .samples import sample_bytes
-from .schema import ONEHOT_SEPARATOR, reports_for, validate_schema
+from .schema import positional_fields, reports_for, validate_schema, validate_separator
 
 if TYPE_CHECKING:
     from pandas import DataFrame
@@ -27,16 +31,17 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class TrainingDeclaration:
     names: list[str]
-    dtypes: list[str]
+    dtypes: list[str | None]
     schema: bytes
     samples: bytes | None
+    origin: FeatureOrigin
 
 
 def _feature_frame(
     data: DataFrame,
     claims: ModelClaims,
     feature_names: Sequence[str] | None,
-    target_name: str | None,
+    target_names: list[str] | None,
 ) -> DataFrame:
     if data.empty:
         raise InvalidSchemaError("training_data must be a nonempty pandas DataFrame.")
@@ -45,9 +50,12 @@ def _feature_frame(
         raise InvalidSchemaError("Training columns must be bounded nonempty strings.")
     if len(set(columns)) != len(columns):
         raise InvalidSchemaError("Training column names must be unique.")
-    if target_name is not None and target_name not in columns:
-        raise InvalidSchemaError("target_name must identify a training column.")
-    names = [name for name in columns if name != target_name]
+    targets = set(target_names or [])
+    if not targets <= set(columns):
+        raise InvalidSchemaError(
+            "Every target_names entry must identify a training column."
+        )
+    names = [name for name in columns if name not in targets]
     if len(names) != claims.n_features:
         raise InvalidSchemaError("Training column count disagrees with the model.")
     if claims.feature_names is not None and names != claims.feature_names:
@@ -62,35 +70,80 @@ def prepare_training(
     claims: ModelClaims,
     *,
     feature_names: Sequence[str] | None,
-    target_name: str | None,
+    target_names: list[str] | None,
     sample_rows: int | None,
+    onehot_separator: str,
     limits: ArchiveLimits,
-) -> TrainingDeclaration | None:
-    if data is None:
-        if sample_rows is not None:
-            raise InvalidSamplesError("sample_rows requires training_data.")
-        return None
+) -> TrainingDeclaration:
+    separator = validate_separator(onehot_separator)
+    if data is None and sample_rows is not None:
+        raise InvalidSamplesError("sample_rows requires training_data.")
     try:
         pd = import_module("pandas")
         mlschema = import_module("mlschema")
     except ImportError:
         raise MissingOptionalDependencyError("schema") from None
-    if not isinstance(data, pd.DataFrame):
-        raise InvalidSchemaError("training_data must be a nonempty pandas DataFrame.")
-    frame = _feature_frame(cast("DataFrame", data), claims, feature_names, target_name)
-    names = list(frame.columns)
+    dtypes: list[str | None]
+    if data is not None:
+        if not isinstance(data, pd.DataFrame):
+            raise InvalidSchemaError(
+                "training_data must be a nonempty pandas DataFrame."
+            )
+        frame = _feature_frame(
+            cast("DataFrame", data), claims, feature_names, target_names
+        )
+        names = list(frame.columns)
+        origin = (
+            FeatureOrigin.MODEL
+            if claims.feature_names is not None
+            else FeatureOrigin.DATAFRAME
+        )
+        dtypes = [str(dtype) for dtype in frame.dtypes]
+    else:
+        names = claims.feature_names
+        origin = FeatureOrigin.MODEL
+        if names is None:
+            origin = (
+                FeatureOrigin.DECLARED
+                if feature_names is not None
+                else FeatureOrigin.GENERATED
+            )
+            names = (
+                list(feature_names)
+                if feature_names is not None
+                else [f"feature_{index}" for index in range(claims.n_features)]
+            )
+        try:
+            FeatureInfo(names=names, origin=origin, dtypes=[None] * claims.n_features)
+        except ValidationError:
+            raise InvalidManifestError from None
+        columns = (
+            range(claims.n_features) if origin == FeatureOrigin.GENERATED else names
+        )
+        frame = pd.DataFrame([[1.0] * claims.n_features], columns=columns)
+        dtypes = [None] * claims.n_features
     cap = limits.member_bytes(MemberName.SCHEMA)
     try:
-        fields = mlschema.infer_schema(frame, onehot_separator=ONEHOT_SEPARATOR)
+        fields = mlschema.infer_schema(frame, onehot_separator=separator)
+        if origin in (FeatureOrigin.DATAFRAME, FeatureOrigin.DECLARED):
+            positional_fields(fields, names)
         schema = canonical_value(
-            {"schema_version": "1", "fields": fields, "reports": reports_for(claims)},
+            {
+                "schema_version": "2",
+                "source": "default" if data is None else "training_data",
+                "onehot_separator": separator,
+                "fields": fields,
+                "reports": reports_for(claims),
+            },
             max_bytes=cap,
         )
     except MLBundleError:
         raise
     except Exception:
         raise InvalidSchemaError("Local mlschema inference failed.") from None
-    validate_schema(schema, names, claims, max_bytes=cap)
+    validate_schema(
+        schema, names, claims, origin=origin, target_names=target_names, max_bytes=cap
+    )
     samples = (
         None
         if sample_rows is None
@@ -98,7 +151,8 @@ def prepare_training(
     )
     return TrainingDeclaration(
         names=names,
-        dtypes=[str(dtype) for dtype in frame.dtypes],
+        dtypes=dtypes,
         schema=canonical_dumps(schema, max_bytes=cap),
         samples=samples,
+        origin=origin,
     )

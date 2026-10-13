@@ -30,7 +30,7 @@ from onnx_helpers import classifier, regressor, rewrite, softmax
             lambda m, b: (
                 m["model"].update(n_features=1),
                 m["features"].update(
-                    names=["feature_1"], dtypes=[None], model_dtypes=["float32"]
+                    names=["feature_0"], dtypes=[None], model_dtypes=["float32"]
                 ),
             ),
             "n_features",
@@ -88,7 +88,7 @@ def test_lying_manifest(change, claim, tmp_path):
     path = tmp_path / "model.mlbundle"
     mlbundle.export(classifier(), path)
     with pytest.raises(ClaimMismatchError) as error:
-        mlbundle.load(rewrite(path, change))
+        mlbundle.load(rewrite(path, change, schema=True))
     assert error.value.claim == claim
 
 
@@ -97,7 +97,9 @@ def test_lying_feature_names(tmp_path):
     mlbundle.export(regressor(columns=True), path)
     with pytest.raises(ClaimMismatchError, match="feature_names"):
         mlbundle.load(
-            rewrite(path, lambda m, b: m["features"].update(names=["b", "a"]))
+            rewrite(
+                path, lambda m, b: m["features"].update(names=["b", "a"]), schema=True
+            )
         )
 
 
@@ -128,7 +130,11 @@ def test_label_free_declarations_are_count_checked_not_authenticated(tmp_path):
     path = tmp_path / "model.mlbundle"
     mlbundle.export(softmax(), path, class_labels=[["cold", "warm"]])
     result = mlbundle.load(
-        rewrite(path, lambda m, b: m["target"].update(class_labels=[["red", "blue"]]))
+        rewrite(
+            path,
+            lambda m, b: m["target"].update(class_labels=[["red", "blue"]]),
+            schema=True,
+        )
     )
     assert result.class_labels == [["red", "blue"]]
     with pytest.raises(ClaimMismatchError, match="n_classes"):
@@ -139,5 +145,6 @@ def test_label_free_declarations_are_count_checked_not_authenticated(tmp_path):
                     m["model"].update(n_classes=[1]),
                     m["target"].update(class_labels=[["red"]]),
                 ),
+                schema=True,
             )
         )

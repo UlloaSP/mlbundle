@@ -73,7 +73,7 @@ def test_lying_manifest(change, claim, tmp_path):
     path = tmp_path / "model.mlbundle"
     mlbundle.export(classifier(), path)
     with pytest.raises(mlbundle.ClaimMismatchError) as error:
-        mlbundle.load(rewrite(path, change))
+        mlbundle.load(rewrite(path, change, schema=True))
     assert error.value.claim == claim
 
 
@@ -99,7 +99,7 @@ def test_lying_structure(alter, tmp_path):
         members[mlbundle.MemberName.STRUCTURE] = canonical_dumps(value)
 
     with pytest.raises(mlbundle.ClaimMismatchError, match="structure"):
-        mlbundle.load(rewrite(path, change))
+        mlbundle.load(rewrite(path, change, schema=True))
 
 
 def test_native_leaf_state_changed_with_fresh_integrity(tmp_path):
@@ -112,7 +112,7 @@ def test_native_leaf_state_changed_with_fresh_integrity(tmp_path):
         )
 
     with pytest.raises(mlbundle.ClaimMismatchError, match="state_sha256"):
-        mlbundle.load(rewrite(path, change))
+        mlbundle.load(rewrite(path, change, schema=True))
 
 
 def test_regressor_kind_is_native(tmp_path):
@@ -124,4 +124,4 @@ def test_regressor_kind_is_native(tmp_path):
         manifest["target"].update(class_labels=[[0, 1]])
 
     with pytest.raises(mlbundle.ClaimMismatchError):
-        mlbundle.load(rewrite(path, change))
+        mlbundle.load(rewrite(path, change, schema=True))

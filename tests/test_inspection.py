@@ -22,7 +22,9 @@ def test_inspect_and_optional_json(manifest_data):
 
     manifest_data["references"]["schema"] = "schema.json"
     schema = {
-        "schema_version": "1",
+        "schema_version": "2",
+        "source": "training_data",
+        "onehot_separator": "__",
         "fields": [
             {"kind": "text", "label": name, "required": True, "mappedTo": name}
             for name in ("a", "b")
@@ -31,9 +33,8 @@ def test_inspect_and_optional_json(manifest_data):
             {
                 "kind": "classifier",
                 "label": "Predicted class",
-                "mappedTo": "classifier",
-                "output": 0,
-                "labels": [1, "positive"],
+                "mappedTo": 0,
+                "labels": ["1", "positive"],
                 "showClassProbabilities": True,
             }
         ],
@@ -51,8 +52,18 @@ def test_inspect_and_optional_json(manifest_data):
 
 
 def test_inspect_no_model_imports(manifest_data, tmp_path):
+    from conftest import schema_for_manifest
+    from mlbundle.canonical import canonical_dumps
+
     target = tmp_path / "model.mlbundle"
-    write_container(manifest_data, {MemberName.SKOPS: b"model"}, destination=target)
+    write_container(
+        manifest_data,
+        {
+            MemberName.SKOPS: b"model",
+            MemberName.SCHEMA: canonical_dumps(schema_for_manifest(manifest_data)),
+        },
+        destination=target,
+    )
     script = """
 import sys
 from mlbundle import inspect
@@ -83,5 +94,30 @@ def test_inspect_rejections(manifest_data, parts):
 
     with pytest.raises(UnsupportedFormatVersionError):
         inspect(
-            build_zip([("manifest.json", canonical_dumps(manifest_data)), parts[1]])
+            build_zip([("manifest.json", canonical_dumps(manifest_data)), *parts[1:]])
         )
+
+
+def test_load_without_schema_libraries(tmp_path):
+    from sklearn.tree import DecisionTreeClassifier
+
+    import mlbundle
+
+    path = tmp_path / "model.mlbundle"
+    mlbundle.export(DecisionTreeClassifier().fit([[0], [1]], ["", "positive"]), path)
+    script = """
+import sys
+class WithoutSchema:
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split('.')[0] in {'pandas', 'mlschema'}:
+            raise ModuleNotFoundError(name=fullname)
+sys.meta_path.insert(0, WithoutSchema())
+from mlbundle import load
+bundle = load(sys.argv[1])
+assert bundle.predict_proba([[0], [1]]) == [[1.0, 0.0], [0.0, 1.0]]
+assert bundle.schema['reports'][0]['labels'] == ['', 'positive']
+assert not {'pandas', 'mlschema'} & sys.modules.keys()
+"""
+    subprocess.run(
+        [sys.executable, "-I", "-c", script, str(path)], check=True, capture_output=True
+    )

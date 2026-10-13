@@ -5,7 +5,7 @@ This document defines the wire contract for `format_name = "mlbundle"` and
 "Must" denotes a compatibility or security requirement. This pre-release
 contract is implemented by the manifest, secure container, inspect/export/load,
 sklearn/XGBoost/CatBoost/ONNX adapters, local schema, samples and prediction-state checks.
-Version 1 is not yet frozen. The inspect/verify CLI uses these public APIs.
+Version 1 is not yet frozen; 0.1.0a2 requires schema version 2 and re-export of older bundles. The inspect/verify CLI uses these public APIs.
 
 The normative container rules are in [Container and resource limits](format-container.md).
 The normative structure, adapter and result rules are in [Adapters and structure](format-adapters.md).
@@ -24,7 +24,7 @@ The normative schema/declaration rules are in [Schema and samples](format-schema
 | `model.ubj` | Standalone model member; XGBoost native UBJSON format. |
 | `model.cbm` | Standalone model member; CatBoost native CBM binary format. |
 | `model.onnx` | Standalone model member; original, self-contained ONNX bytes, unchanged. |
-| `schema.json` | Optional; exact object with `schema_version`, `fields` and `reports` from local inference. See [Schema and samples](format-schema.md). No training DataFrame. |
+| `schema.json` | Required; exact object with `schema_version: "2"`, `source`, `onehot_separator`, `fields` and `reports` from local/default inference. See [Schema and samples](format-schema.md). No training DataFrame. |
 | `structure.json` | Optional only for families without extractable structure; object as defined below. |
 | `samples.json` | Optional; array of row objects keyed by feature name, in declared feature order when consumed. Only explicit user intent may enable it. Values use the canonical JSON value rules. Samples are real user data. |
 
@@ -131,7 +131,7 @@ its extracted names in order, even when a frame supplies training dtypes.
 Otherwise `dataframe` means columns from `training_data=`, and `declared` means
 `feature_names=` without a frame. Both are author declarations: the reader checks
 count/alignment, not historical truth. With neither, origin is `generated` and
-names must be `feature_1` through `feature_N`. Claim extraction represents missing
+names must be `feature_0` through `feature_{N-1}`. Claim extraction represents missing
 model feature names as null, so falsely declaring a named model's origin as
 `dataframe`, `declared` or `generated` also fails comparison. Model dtype extraction is
 independent of name origin and must be compared even when its claim is null.
@@ -141,14 +141,14 @@ independent of name origin and must be compared even when its claim is null.
 | Field | Type | Meaning / verification |
 | --- | --- | --- |
 | `class_labels` | null or array of label arrays | Verified original labels in prediction-column order, **one array per target output**, even for a single output. Regressors use null. Each output has 1–100,000 unique labels and its length equals the corresponding class count. |
-| `name` | optional nonempty string, at most 1,024 characters | Target name when known; an author declaration. |
+| `names` | null or array of unique nonempty strings, each at most 1,024 characters | Required key; one target name per output in output order, or null when undeclared. Length must equal `n_outputs`; names are author declarations. |
 
 Labels are strict strings (including an empty original label), integers, finite
 binary64 numbers or booleans. Their
 types are preserved; `1`, `1.0`, `true` and `"1"` have distinct canonical bytes.
 NaN/infinite class labels are unsupported. String labels are at most 1,024
-characters. Do not convert labels to display strings in the bundle or silently
-reorder them; a consumer may format them for display separately.
+characters. Preserve manifest labels and order; schema reports use their string
+forms for display, as specified in [Schema and samples](format-schema.md).
 
 `export(class_labels=...)` accepts output-major sequences, including a nested
 sequence for a single output. Supplied labels must use one scalar type per output,
@@ -205,13 +205,13 @@ file, not who produced or trained it.
 `integrity` is an object mapping **every other present member** to exactly
 `{"sha256":HEX,"size":BYTES}`. The digest is 64 lowercase hexadecimal characters;
 size is an integer 0–512 MiB, further bounded by the specific member cap.
-It has 1–4 keys: exactly the selected model and referenced optional members.
+It has 2–5 keys: exactly the selected model member(s), schema and referenced optional members.
 There is no manifest hash, since the manifest cannot contain its own digest.
 Declared sizes must equal both actual uncompressed sizes and ZIP metadata.
 
-`references` is a required object with optional `schema`, `structure` and
-`samples` fields. Each is null/absent or respectively the literal `"schema.json"`,
-`"structure.json"`, `"samples.json"`. There are no URLs or arbitrary paths.
+`references` requires `schema: "schema.json"`; optional `structure` and `samples`
+are null/absent or respectively `"structure.json"`, `"samples.json"`.
+There are no URLs or arbitrary paths.
 
 `user_metadata` is a free JSON object for name, description, author, tags,
 training metrics, dataset description or other annotations. Maximum 1,024
@@ -274,23 +274,23 @@ metadata and the optional fitted-state commitment. Classifier extraction may lea
 carries none; the shared pipeline resolves the declaration as specified above.
 Library/serialization/member pairing is validated by the closed
 registry. Structure is compared separately using the same canonical encoding.
-Schema, training dtypes, frame/declared-origin names, target name, training environment,
+Schema, training dtypes, frame/declared-origin names, target names, training environment,
 user metadata, identity and samples are not verified against the model; they must
 still pass their own validation and integrity checks. Inspection verifies format
 and integrity only, and must never attest that model claims match the model.
 
 ## Versioning and integrity
 
-Readers must reject unknown format versions rather than guess. Any change to
+Readers must reject unknown format versions rather than guess. After format freeze, changes to
 required fields, accepted identifiers, member rules, claim semantics, numeric
 encoding or mandatory structure shapes requires a new format version and an
-explicit reader implementation. Tightening caller-selected resource limits does
+explicit reader implementation. Before freeze, incompatible v1 revisions require re-export. Tightening caller-selected resource limits does
 not change the format. Corrections to documentation that preserve wire behavior
 and implementation changes behind these contracts do not require a version bump.
-The unreleased version 1 includes schema vocabulary, `declared` origin,
+The unfrozen version 1 includes required schema v2, positional mappings, `declared` origin,
 prediction-state records, missing tree routing, native XGBoost routing/dropout
 and closed state/work rules, scalar dtype/type/function records and composition
-references. It remains subject to change before format freeze; older sklearn
+references. It remains subject to change before format freeze; schema v1/absent schemas and older sklearn
 pipeline parameter projections require re-export under this revised v1 contract.
 
 Hashes detect corruption, not deliberate tampering: an attacker can replace a

@@ -129,8 +129,8 @@ def test_corruption_and_polyglots(parts, transform):
 )
 def test_member_set(parts, manifest_data, change):
     if change == "absent_reference":
-        manifest_data["references"]["schema"] = "schema.json"
-        manifest_data["integrity"]["schema.json"] = hash_member(b"{}").model_dump()
+        manifest_data["references"]["structure"] = "structure.json"
+        manifest_data["integrity"]["structure.json"] = hash_member(b"{}").model_dump()
         parts[0] = ("manifest.json", canonical_dumps(manifest_data))
     else:
         parts = {
@@ -168,7 +168,7 @@ def test_integrity_mismatch(parts, manifest_data, field, value):
 )
 def test_invalid_manifest(parts, data, error):
     with pytest.raises(error):
-        read_container(build_zip([("manifest.json", data), parts[1]]))
+        read_container(build_zip([("manifest.json", data), *parts[1:]]))
 
 
 def test_unknown_field_and_noncanonical_json(parts, manifest_data):
@@ -209,7 +209,7 @@ def test_optional_caps_count_and_json(parts, manifest_data, name):
         bundle = build_zip(
             [
                 ("manifest.json", canonical_dumps(manifest_data)),
-                parts[1],
+                *[part for part in parts[1:] if part[0] != member],
                 (member, value),
             ]
         )
@@ -218,7 +218,9 @@ def test_optional_caps_count_and_json(parts, manifest_data, name):
 
 
 def test_honest_and_lying_bombs(parts):
-    bundle = build_zip([parts[0], ("model.skops", b"0" * 4096)], compression=8)
+    bundle = build_zip(
+        [parts[0], ("model.skops", b"0" * 4096), parts[2]], compression=8
+    )
     with pytest.raises(LimitExceededError):
         read_container(bundle, limits=ArchiveLimits(max_compression_ratio=10))
     with pytest.raises(InvalidContainerError, match="Actual member size"):
@@ -269,10 +271,8 @@ def test_total_compressed_size(parts):
     limits = ArchiveLimits(max_compressed_bytes=len(parts[0][1]) + 1)
     with pytest.raises(LimitExceededError):
         read_container(build_zip(parts), limits=limits)
-    assert (
-        read_container(reverse_directory(build_zip(parts)))[1][MemberName.SKOPS]
-        == parts[1][1]
-    )
+    actual = read_container(reverse_directory(build_zip(parts)))[1]
+    assert actual[MemberName.SKOPS] == parts[1][1]
 
 
 def test_bounded_sources(parts, tmp_path, monkeypatch):
