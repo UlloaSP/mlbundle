@@ -23,7 +23,14 @@ dependency floor is not a promise of compatibility with every later version.
 There is no version whitelist. Other versions can introduce unknown classes or
 state fields and fail export/load. `_sklearn_version` also participates in the
 commitment: a different installed sklearn version changes reserialized state,
-so full loading rejects it as `InvalidModelError`. Export and load should use
+so loading may reject it as `InvalidModelError`. After a sklearn/skops
+`InvalidModelError`, safe differing declared/installed versions produce
+`EnvironmentMismatchError`
+with both versions and re-export/load guidance. Declarations must match a strict
+version pattern of at most 64 characters; otherwise the original error remains.
+Successful loads remain successful: this is diagnosis, not a compatibility gate.
+It also covers a composite's skops prefix, without relabeling native leaf failures.
+Export and load should use
 the same sklearn version. Other matching-version configurations must satisfy
 all catalog, trust, dimensions and round-trip checks; they are not a tested range.
 

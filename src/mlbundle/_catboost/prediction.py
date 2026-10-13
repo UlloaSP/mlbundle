@@ -4,6 +4,7 @@ from typing import Any, cast
 
 import numpy as np
 
+from mlbundle._prediction_decisions import class_indices
 from mlbundle._prediction_input import tabular
 from mlbundle.adapters import ProbabilityOutput, RegressionOutput
 from mlbundle.claims import ModelClaims
@@ -15,7 +16,9 @@ class Predictor:
     def __init__(self, model: Any, claims: ModelClaims) -> None:
         self.model, self.claims = model, claims
 
-    def _call(self, data: object, *, probabilities: bool) -> tuple[np.ndarray, int]:
+    def _call(
+        self, data: object, *, probabilities: bool, decisions: bool = False
+    ) -> tuple[np.ndarray, int]:
         try:
             inputs, rows = tabular(data, self.claims.n_features)
             if rows < 1:
@@ -29,16 +32,27 @@ class Predictor:
                 raise PredictionInputError(
                     "CatBoost prediction columns must match native feature order."
                 )
-            raw = (
-                self.model.predict_proba(inputs, thread_count=1)
-                if probabilities
-                else self.model.predict(inputs, thread_count=1)
-            )
-            return np.asarray(raw, dtype=float), rows
+            if decisions:
+                raw = self.model.predict(
+                    inputs, prediction_type="Class", thread_count=1
+                )
+            else:
+                raw = (
+                    self.model.predict_proba(inputs, thread_count=1)
+                    if probabilities
+                    else self.model.predict(inputs, thread_count=1)
+                )
+            return np.asarray(raw, dtype=object if decisions else float), rows
         except MLBundleError:
             raise
         except Exception:
             raise InvalidModelError("CatBoost prediction failed.") from None
+
+    def predict_class_indices(self, data: object) -> list[list[int]]:
+        if self.claims.kind != ModelKind.CLASSIFIER:
+            raise ValueError("Class prediction requires a classifier.")
+        raw, rows = self._call(data, probabilities=False, decisions=True)
+        return class_indices(raw, self.claims.class_labels or [], rows)
 
     def predict(self, data: object) -> RegressionOutput:
         if self.claims.kind != ModelKind.REGRESSOR:

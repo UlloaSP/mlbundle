@@ -15,11 +15,9 @@ Implementation claims require code and test proof. `docs/format.md` owns the wir
 
 ### 1. Reproducibility across the training/runtime boundary
 
-MLSuite turns trained models into reviewable applications; it does not train
-them. Its current model and training-DataFrame joblib uploads permit pickle code
-execution, omit training versions, and send real data just to infer a schema.
-mlbundle must replace that workflow with one self-describing file. Preserve the
-identity and meaning of the model, schema, features, classes and outputs.
+MLSuite turns trained models into reviewable applications; it does not train them.
+Its runtime accepts only `.mlbundle` uploads. Preserve the identity and meaning
+of the model, schema, features, classes and outputs across this boundary.
 
 ### 2. Metadata is a claim, even when it looks useful
 
@@ -197,61 +195,60 @@ The conversation, issues, code, tests and final diff are the work record.
 
 ## How it works
 
-The container writer accepts serialized member bytes and a manifest or its
-JSON-ready parts, computes integrity records and produces a deterministic ZIP.
-It enforces the same limits and validation as the container reader and publishes
-paths atomically on hard-link filesystems, requiring explicit overwrite. The
-exclusive-creation fallback removes partial destinations on failure but exposes
-the file during copying. Public sklearn/XGBoost/CatBoost export extracts claims/structure,
-serializes with skops/native UBJSON/CBM and verifies a native round trip
-before publication. XGBoost supports exact XGBClassifier/XGBRegressor tree
-wrappers with closed probability/regression objectives and one target. Original
-class labels supplied through output-major `class_labels=` are bound to a native
-copy through an mlbundle-owned booster attribute and verified on load. Omitted
-labels use encoded indices; sklearn/CatBoost reject `class_labels=` because they own classes_. Every export requires the schema extra: mlschema infers from `training_data=` or one float-1.0 row, recording schema v2 `source` and configurable `onehot_separator` (default `__`). Real frames exclude every declared target and record training dtypes; default dtypes stay null. Only explicit `sample_rows=N` includes real rows.
-Model-origin mappings use names; other origins use positions and generated names start at `feature_0`. `target_names` declares one unique bounded name per output; real frames exclude all target columns. Reports map by output position with unique string labels, while manifest labels retain their types.
-Schema/report and sample validation is shared by export, inspect and load without schema libraries; missing schema and old schema versions require re-export.
-ONNX preserves path/bytes unchanged (ModelProto is serialized once), validates
-bytes once per export/load with bounded scalar scans, and rejects external tensors,
-custom domains, functions and training/runtime configuration before a CPU session. It verifies graph signatures, metadata and environment
-claims. `native_model` is an OnnxModel with original bytes and a CPU session.
-Kind is inferred from supported outputs; native labels are verified, absent
-labels use count-checked declarations. Structure is null. See the normative
-ONNX section linked from `docs/format.md` for exact layouts and resource bounds.
-CatBoost supports exact numeric single-target symmetric classifiers/regressors, with native state commitments and in-memory loading. Exact outer sklearn Pipelines ending in XGBoost/CatBoost use separately checked skops/native components; other native placements remain rejected.
-The closed member list is: required `manifest.json`, one
-native member, or declared `model.skops` + `model.ubj`/`model.cbm` pair, required `schema.json`, and
-`structure.json` when the supported model has extractable structure. Optional
-`samples.json` requires explicit user intent. The ceiling is six members; no others are allowed.
+The writer accepts member bytes and manifest parts, computes integrity records,
+validates through the reader and produces a deterministic ZIP. Publication uses
+atomic hard links or replacement, requiring explicit overwrite. Exclusive-create
+fallback removes partial destinations on failure but exposes the file while copying.
+Sklearn/XGBoost/CatBoost exports verify shared claims/structure after a native
+skops/UBJSON/CBM round trip before publication. Safety ceilings may only be lowered.
 
-The manifest must record format name/version, bundle id, UTC creation time and
-writer version; model library, estimator class, classifier/regressor kind,
-hyperparameters and feature/class/output counts; feature names, order, dtypes
-and origin; original class labels and output-major target names; training Python, OS,
-architecture and package versions; member SHA-256 hashes and sizes; and
-free-form user metadata. Sample rows are allowed only on explicit request.
-All of this is untrusted input, and model-derived fields must be verified.
-Class counts and original labels are output-major arrays, including for a single
-output. Model-exposed dtypes are verified separately from declared training dtypes.
-The writer must test serialization/reloading and reject claims or structure that
-cannot survive the native round trip. Default safety ceilings may only be lowered.
+Every export requires the schema extra. mlschema infers from `training_data=` or
+one float-1.0 row, recording schema v2 source/separator (default `__`). Real frames
+exclude every declared target and record training dtypes; default dtypes are null.
+Only explicit `sample_rows=N` includes real rows. Model-origin mappings use names;
+others use positions; generated names start at `feature_0`. Unique `target_names`
+map by output position. Reports use string labels; manifest labels retain types.
+Series pairs are adapted once to MLForm columns until mlschema emits that shape.
+Export/inspect/load share schema/report/sample validation without reader-side mlschema.
 
-The container reader validates the archive, manifest, JSON bounds and integrity
-without loading a model. `inspect` exposes validated metadata and a member list
-without importing model libraries; it cannot attest that model-derived claims
-match the model. Public `load` uses a closed adapter and recomputes claims and
-structure before returning the native model and validated predictor.
+XGBoost supports exact single-target tree wrappers with closed objectives. Supplied
+output-major labels bind to a native copy via an owned booster attribute and are
+verified on load; omitted labels use encoded indices. Sklearn/CatBoost own classes_
+and reject `class_labels=`. CatBoost supports exact numeric single-target symmetric
+models, complete native state/structure and in-memory CBM loading. Exact outer
+sklearn Pipelines ending in XGBoost/CatBoost use checked skops/native components;
+other native placements remain rejected.
 
-An adapter module provides `Adapter` with library/member identity, recognition, export preparation, serialization/deserialization, `ModelClaims`, structure extraction
-and a `Predictor`. Extraction uses only the native model, shared by export/load;
-ONNX graph fields belong in `ModelClaims.onnx`. Missing names are null claims;
-the shared pipeline owns supplied/generated names and environment declarations.
-Native errors must become bounded `MLBundleError` subclasses. `prepare_export`
-receives the strict `ExportDeclarations` label record and leaves the user's
-object unchanged. Classifier claims may use null labels only for a native model
-without labels; `declarations.py` then resolves count-validated supplied/generated
-labels. ONNX can use that declaration path without changing its original bytes;
-its kind/count inference remains ONNX-owned. Keep native behavior in adapters; follow `adapters.py`.
+ONNX preserves path/bytes unchanged (ModelProto serialized once), validates once
+per export/load with bounded scalar scans, and rejects external tensors, custom
+domains/functions and runtime/training configuration before a CPU session. It
+verifies signatures, metadata/environment claims and native labels; absent labels
+use count-checked declarations. OnnxModel retains bytes/session; structure is null.
+Read the normative ONNX section linked from `docs/format.md` for layouts and bounds.
+
+The closed member set is manifest, required schema, one native member (or declared
+skops + UBJSON/CBM pair), required extractable structure, and explicit samples:
+at most six members. The manifest records identity/time/writer, model metadata,
+ordered features/origin/dtypes, output-major targets/classes, training environment,
+member hashes/sizes and user metadata. Model-exposed dtypes are separately verified.
+Every declaration is untrusted; hashes do not establish authenticity.
+
+Inspect validates archive/JSON bounds, manifest, integrity and schema/samples
+without model imports/deserialization; it cannot attest model-derived claims.
+Load uses closed adapters and shared extraction to recompute claims and structure.
+`row_from_record`/`predict_record` share schema-key lookups, bounded numeric-string
+and bool conversion, optional None-to-NaN handling and escaped key errors without
+values. Extra keys are never iterated. Predictions are frozen output-major report
+results, including the native class decision's report label (never inferred from
+probabilities). Safe version hints diagnose failed manifests/skops loads without new gates.
+
+Adapters own recognition, preparation, serialization/loading, claims, structure
+and prediction; extraction uses only native state and is shared by export/load.
+`prepare_export` receives strict ExportDeclarations and leaves the user's object
+unchanged. Missing native names are null; shared code owns declared/generated names
+and environment. Null native classifier labels permit count-checked declarations,
+including ONNX without byte changes. Native errors become bounded MLBundleErrors.
+Keep native behavior in adapters; follow `adapters.py`.
 
 ## Where code lives
 
@@ -265,6 +262,7 @@ its kind/count inference remains ONNX-owned. Keep native behavior in adapters; f
 - `src/mlbundle/_composite/`, `_pipeline_contract.py` — strict recipe, separate I/O, closed reconstruction/claims/prediction and input/inner boundaries. Read `docs/format-pipeline.md` when changing composites.
 - `src/mlbundle/training.py` — lazy local/default inference and feature origin/dtype resolution.
 - `src/mlbundle/schema.py` and `_schema_fields.py` — closed schema/report declarations and reader cross-checks without mlschema.
+- `src/mlbundle/_schema_inference.py` — temporary mlschema-to-MLForm series adaptation.
 - `src/mlbundle/samples.py` — explicit feature-row selection and bounded cell conversion.
 - `src/mlbundle/_sklearn/` — owned trust/skops/state/parameters/structure, transformer route and closed fitted-width/name proofs. Composite commitments/native structure bind the rebuilt Pipeline; all-sklearn structure stays null.
 - `src/mlbundle/_xgboost/` — closed wrappers/objectives, native UBJSON preflight/loading, label binding, recoverable config, complete tree structure and validated prediction.
@@ -275,7 +273,7 @@ its kind/count inference remains ONNX-owned. Keep native behavior in adapters; f
 - `src/mlbundle/manifest.py` — manifest sections, cross-field validation and JSON boundaries.
 - `src/mlbundle/integrity.py` — member SHA-256/size records and verification.
 - `src/mlbundle/environment.py` — training declarations and distribution metadata capture.
-- `src/mlbundle/adapters.py` and `_prediction_input.py` — adapter/predictor protocols, output types and shared input checks.
+- `src/mlbundle/adapters.py`, `_prediction_input.py`, `_prediction_decisions.py` — adapter/predictor protocols, input checks and bounded native class mapping.
 - `src/mlbundle/registry.py` — closed lazy resolution of `_sklearn`, `_xgboost`, `_catboost` and `_onnx` adapters.
 - `src/mlbundle/_container_rules.py` — shared source type, closed member sets/order and ceilings.
 - `src/mlbundle/_zip_directory.py` — bounded ZIP/ZIP64 directory and extra-field validation.
@@ -283,6 +281,8 @@ its kind/count inference remains ONNX-owned. Keep native behavior in adapters; f
 - `src/mlbundle/container.py` — source bounds, validated in-memory reading and integrity checks.
 - `src/mlbundle/writing.py` — integrity ownership, deterministic ZIP and atomic publication.
 - `src/mlbundle/inspection.py`, `results.py` — metadata-only inspection and result records without adapter resolution.
+- `src/mlbundle/records.py`, `_display.py` — record input/output and shared safe display.
+- `src/mlbundle/_versions.py`, `_load_diagnostics.py` — bounded post-failure version hints.
 - `docs/format.md` — version 1 wire specification; linked container, adapter/structure, ONNX and schema/sample sections are normative.
 - `tests/` — one file per feature, with success and error cases together.
 - `scripts/package_smoke.py`, `publish_check.py` — artifact checks and publish preflight.

@@ -8,11 +8,14 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import FeatureUnion, Pipeline
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, TargetEncoder
 
+from mlbundle._prediction_decisions import class_indices
 from mlbundle._prediction_input import tabular
 from mlbundle.adapters import ProbabilityOutput, RegressionOutput
 from mlbundle.claims import ModelClaims
 from mlbundle.contract import ModelKind
 from mlbundle.errors import InvalidModelError, MLBundleError
+
+from .record_input import record_input
 
 
 def _string_inputs(model: Any) -> bool:
@@ -42,20 +45,29 @@ class Predictor:
         self.claims = claims
         self.strings = isinstance(self.model, Pipeline) and _string_inputs(self.model)
 
+    def record_input(self, row: list[float], names: list[str]) -> object:
+        return record_input(self.model, row, names)
+
     def _data(self, data: object) -> tuple[object, int]:
         return tabular(data, self.claims.n_features, strings=self.strings)
 
-    def _call(self, data: object, *, probabilities: bool) -> Any:
+    def _call(
+        self, data: object, *, probabilities: bool, decisions: bool = False
+    ) -> Any:
         # Positional arrays/lists remain supported for named models; sklearn
         # still enforces DataFrame name/order when those names are supplied.
         try:
-            return self._native_call(data, probabilities=probabilities)
+            return self._native_call(
+                data, probabilities=probabilities, decisions=decisions
+            )
         except MLBundleError:
             raise
         except Exception:
             raise InvalidModelError("Sklearn prediction failed.") from None
 
-    def _native_call(self, data: object, *, probabilities: bool) -> Any:
+    def _native_call(
+        self, data: object, *, probabilities: bool, decisions: bool = False
+    ) -> Any:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
@@ -70,6 +82,8 @@ class Predictor:
                 if probabilities
                 else self.model.predict(data)
             )
+            if decisions:
+                return raw
             if probabilities:
                 return (
                     [np.asarray(item, dtype=float) for item in raw]
@@ -77,6 +91,13 @@ class Predictor:
                     else np.asarray(raw, dtype=float)
                 )
             return np.asarray(raw, dtype=float)
+
+    def predict_class_indices(self, data: object) -> list[list[int]]:
+        if self.claims.kind != ModelKind.CLASSIFIER:
+            raise ValueError("Class prediction requires a classifier.")
+        data, rows = self._data(data)
+        raw = self._call(data, probabilities=False, decisions=True)
+        return class_indices(raw, self.claims.class_labels or [], rows)
 
     def predict(self, data: object) -> RegressionOutput:
         if self.claims.kind != ModelKind.REGRESSOR:

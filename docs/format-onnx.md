@@ -69,6 +69,13 @@ types and native column order. Identity/Cast can preserve a classifier's probabi
 columns; unrepresented transformations of labeled probabilities are rejected.
 Final ZipMap labels own the map keys, permitting a different mapping from an
 upstream classifier's encoded labels. Unrelated graph nodes cannot supply labels.
+Record predictions read the optional graph label tensor. When the label producer
+and final probability path preserve the same columns, its native class order maps
+to final ZipMap keys, including renamed strings. A graph ArgMax on the class axis
+can supply encoded indices on that same path; mlbundle never computes argmax.
+Unrelated heads must return known labels, and invalid results raise bounded errors.
+Without a label output, `predicted_label` is None. These decisions are independent
+of the probability values and do not add an array-level method to LoadedBundle.
 Fixed probability width determines
 class count; otherwise native labels determine it. Width and native labels must
 agree when both exist. Labels must satisfy the shared uniqueness/count/bounds rules.

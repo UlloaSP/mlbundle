@@ -1,5 +1,7 @@
 """Bounded errors at bundle trust boundaries."""
 
+from ._versions import writer_hint
+
 
 def _identifier(value: str) -> str:
     if (
@@ -29,8 +31,8 @@ class UnsupportedFormatVersionError(MLBundleError):
 
 
 class InvalidManifestError(MLBundleError):
-    def __init__(self) -> None:
-        super().__init__("Invalid mlbundle manifest.")
+    def __init__(self, *, writer_version: object = None) -> None:
+        super().__init__("Invalid mlbundle manifest." + writer_hint(writer_version))
 
 
 class InvalidJSONError(MLBundleError):
@@ -64,6 +66,10 @@ class UnsupportedModelError(MLBundleError):
 
 class InvalidModelError(MLBundleError):
     """Native model content is malformed or violates the adapter contract."""
+
+
+class EnvironmentMismatchError(InvalidModelError):
+    """A sklearn load failed under a different declared package version."""
 
 
 class PredictionInputError(InvalidModelError, ValueError):

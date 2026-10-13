@@ -179,5 +179,7 @@ class Adapter:
         except Exception:
             raise InvalidModelError("Invalid sklearn model structure.") from None
 
-    def predictor(self, model: object) -> Predictor:
-        return Predictor(model, self.extract_claims(model))
+    def predictor(self, model: object, claims: ModelClaims | None = None) -> Predictor:
+        return Predictor(
+            model, self.extract_claims(model) if claims is None else claims
+        )

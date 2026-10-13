@@ -6,13 +6,25 @@ from typing import Any, cast
 
 import numpy as np
 
+from mlbundle._prediction_decisions import class_indices
 from mlbundle.adapters import ProbabilityOutput, RegressionOutput
+from mlbundle.claims import ModelClaims
 from mlbundle.contract import ModelKind
 from mlbundle.errors import InvalidModelError, PredictionInputError
 
 from .description import Description
 
 _InputShapeError = PredictionInputError
+
+
+def _check_decision_dtype(values: np.ndarray, dtype: str) -> None:
+    if dtype == "int64" and values.dtype.kind not in "iu":
+        raise ValueError
+    if dtype == "string" and (
+        values.dtype.kind not in "OU"
+        or any(not isinstance(value, str) for value in values.flat)
+    ):
+        raise ValueError
 
 
 def _array(data: Any, dtype: str) -> np.ndarray:
@@ -45,10 +57,12 @@ def _array(data: Any, dtype: str) -> np.ndarray:
 
 
 class Predictor:
-    def __init__(self, session: Any, description: Description) -> None:
+    def __init__(
+        self, session: Any, description: Description, claims: ModelClaims | None = None
+    ) -> None:
         self.session = session
         self.description = description
-        self.claims = description.claims
+        self.claims = description.claims if claims is None else claims
 
     def _feeds(self, data: object) -> tuple[dict[str, np.ndarray], int]:
         frame = None
@@ -85,16 +99,50 @@ class Predictor:
             feeds[value["name"]] = _array(column, value["dtype"])
         return feeds, rows
 
-    def _run(self, data: object) -> tuple[Any, int]:
+    def _run(self, data: object, *, output: str | None = None) -> tuple[Any, int]:
         try:
             feeds, rows = self._feeds(data)
-            return self.session.run([self.description.output], feeds)[0], rows
+            return self.session.run(
+                [self.description.output if output is None else output], feeds
+            )[0], rows
         except (InvalidModelError, _InputShapeError):
             raise
         except Exception:
             raise InvalidModelError(
                 "ONNX prediction failed or input values are invalid."
             ) from None
+
+    def predict_class_indices(self, data: object) -> list[list[int]] | None:
+        if self.claims.kind != ModelKind.CLASSIFIER:
+            raise ValueError("Class prediction requires a classifier.")
+        output = self.description.decision_output
+        if output is None:
+            return None
+        raw, rows = self._run(data, output=output["name"])
+        try:
+            values = np.asarray(raw)
+            labels = self.claims.class_labels
+            if self.description.decision_labels is not None:
+                labels = self.description.decision_labels
+                if len(labels[0]) != (self.claims.n_classes or [0])[0]:
+                    raise ValueError
+                labels = (
+                    [[str(label) for label in labels[0]]]
+                    if output["dtype"] == "string"
+                    else [[int(label) for label in labels[0]]]
+                )
+            elif (
+                self.description.claims.class_labels is None
+                and output["dtype"] == "int64"
+            ):
+                labels = [list(range((self.claims.n_classes or [0])[0]))]
+            if labels is None:
+                raise ValueError
+            indices = class_indices(raw, labels, rows)
+            _check_decision_dtype(values, output["dtype"])
+            return indices
+        except Exception:
+            raise InvalidModelError("Invalid ONNX class prediction output.") from None
 
     def predict(self, data: object) -> RegressionOutput:
         if self.claims.kind != ModelKind.REGRESSOR:

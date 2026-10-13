@@ -16,6 +16,7 @@ from .environment import OnnxInfo, Opset, TrainingEnvironment
 from .errors import (
     AdapterNotImplementedError,
     ClaimMismatchError,
+    EnvironmentMismatchError,
     IntegrityMismatchError,
     InvalidContainerError,
     InvalidJSONError,
@@ -35,6 +36,7 @@ from .integrity import IntegrityRecord
 from .limits import ArchiveLimits
 from .manifest import FeatureInfo, Manifest, MemberReferences, ModelInfo, TargetInfo
 from .model_io import export, load
+from .records import OutputPrediction
 from .results import LoadedBundle, MetadataView
 
 __version__ = _version("mlbundle")
@@ -45,6 +47,7 @@ __all__ = [
     "AdapterNotImplementedError",
     "ArchiveLimits",
     "ClaimMismatchError",
+    "EnvironmentMismatchError",
     "FeatureInfo",
     "FeatureOrigin",
     "IntegrityMismatchError",
@@ -69,6 +72,7 @@ __all__ = [
     "ModelKind",
     "OnnxInfo",
     "Opset",
+    "OutputPrediction",
     "PredictionInputError",
     "SerializationFormat",
     "TargetInfo",

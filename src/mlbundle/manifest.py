@@ -212,13 +212,22 @@ class Manifest(ContractModel):
 
     @classmethod
     def from_bytes(cls, data: bytes) -> Manifest:
+        value = None
         try:
             value = canonical_loads(data)
             if not isinstance(value, dict) or value.get("format_name") != FORMAT_NAME:
-                raise InvalidManifestError
+                raise InvalidManifestError(
+                    writer_version=value.get("writer_version")
+                    if isinstance(value, dict)
+                    else None
+                )
             version = value.get("format_version")
             if isinstance(version, str) and version != FORMAT_VERSION:
                 raise UnsupportedFormatVersionError
             return cls.model_validate_json(canonical_dumps(value))
         except (ValidationError, InvalidJSONError):
-            raise InvalidManifestError from None
+            raise InvalidManifestError(
+                writer_version=value.get("writer_version")
+                if isinstance(value, dict)
+                else None
+            ) from None

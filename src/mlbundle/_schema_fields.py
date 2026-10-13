@@ -1,4 +1,4 @@
-"""Closed inference-only mlschema 0.2.1 wire vocabulary; no optional imports."""
+"""Closed inferred vocabulary with MLForm series columns; no optional imports."""
 
 from __future__ import annotations
 
@@ -13,41 +13,73 @@ FieldLabel = Annotated[str, Field(min_length=1, max_length=100)]
 MappedTo = Name | Annotated[int, Field(ge=0, lt=MAX_FEATURES)]
 
 
-class FieldBase(ContractModel):
+class ScalarBase(ContractModel):
     label: FieldLabel
     required: bool
+
+
+class FieldBase(ScalarBase):
     mappedTo: MappedTo
 
 
-class SimpleField(FieldBase):
+class SimpleProperties(ScalarBase):
     kind: Literal["text", "boolean", "date"]
 
 
-class NumberField(FieldBase):
+class NumberProperties(ScalarBase):
     kind: Literal["number"]
     step: Annotated[float, Field(gt=0)]
 
 
-class CategoryField(FieldBase):
+class CategoryProperties(ScalarBase):
     kind: Literal["category"]
     options: Annotated[list[str], Field(min_length=1, max_length=MAX_FEATURES)]
 
     @model_validator(mode="after")
-    def unique_options(self) -> CategoryField:
+    def unique_options(self) -> CategoryProperties:
         if len(set(self.options)) != len(self.options):
             raise ValueError("Category options must be unique.")
         return self
 
 
-ScalarField = Annotated[
-    SimpleField | NumberField | CategoryField, Field(discriminator="kind")
+class SimpleField(SimpleProperties):
+    mappedTo: MappedTo
+
+
+class NumberField(NumberProperties):
+    mappedTo: MappedTo
+
+
+class CategoryField(CategoryProperties):
+    mappedTo: MappedTo
+
+
+class SimpleColumn(SimpleProperties):
+    id: Literal["field1", "field2"]
+
+
+class NumberColumn(NumberProperties):
+    id: Literal["field1", "field2"]
+
+
+class CategoryColumn(CategoryProperties):
+    id: Literal["field1", "field2"]
+
+
+SeriesColumn = Annotated[
+    SimpleColumn | NumberColumn | CategoryColumn, Field(discriminator="kind")
 ]
 
 
 class SeriesField(FieldBase):
     kind: Literal["series"]
-    field1: ScalarField
-    field2: ScalarField
+    columns: Annotated[list[SeriesColumn], Field(min_length=2, max_length=2)]
+
+    @model_validator(mode="after")
+    def ordered_columns(self) -> SeriesField:
+        if [column.id for column in self.columns] != ["field1", "field2"]:
+            raise ValueError("Series columns must be field1 then field2.")
+        return self
 
 
 class OneHotOption(ContractModel):
