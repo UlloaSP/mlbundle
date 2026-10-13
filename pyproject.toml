@@ -1,6 +1,6 @@
 [project]
 name = "mlbundle"
-version = "0.1.0"
+version = "0.1.0a1"
 description = "Pickle-free, verifiable model bundles with a manifest, schema and structure."
 readme = "README.md"
 license = "MIT"
@@ -15,6 +15,7 @@ keywords = [
     "security",
     "scikit-learn",
     "xgboost",
+    "catboost",
     "onnx",
     "skops",
 ]
@@ -33,12 +34,31 @@ classifiers = [
     "Typing :: Typed",
 ]
 requires-python = ">=3.14"
-dependencies = []
+dependencies = ["pydantic>=2.13.4,<3"]
+
+[project.scripts]
+mlbundle = "mlbundle.cli:main"
+
+[project.optional-dependencies]
+# sklearn's floor provides get_tags; other floors match the runtime baseline.
+sklearn = ["scikit-learn>=1.6", "skops>=0.16.0"]
+xgboost = ["xgboost>=3.4.1", "scikit-learn>=1.2"]
+# Audited CBM schema and Python 3.14 wheels on Windows/Linux.
+catboost = ["catboost>=1.2.10"]
+onnx = ["onnx>=1.23.0", "onnxruntime>=1.30.0"]
+# The reader validates the 0.2 inferred vocabulary; 0.2.1 requires Python <3.15.
+schema = ["mlschema>=0.2.1,<0.3; python_version == '3.14'"]
+all = [
+    "scikit-learn>=1.6", "skops>=0.16.0", "xgboost>=3.4.1", "catboost>=1.2.10",
+    "onnx>=1.23.0", "onnxruntime>=1.30.0",
+    "mlschema>=0.2.1,<0.3; python_version == '3.14'",
+]
 
 [project.urls]
 Homepage = "https://github.com/UlloaSP/mlbundle"
 Repository = "https://github.com/UlloaSP/mlbundle"
 Issues = "https://github.com/UlloaSP/mlbundle/issues"
+Documentation = "https://github.com/UlloaSP/mlbundle/blob/main/README.md"
 
 [dependency-groups]
 dev = [
@@ -47,6 +67,9 @@ dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
     "pre-commit>=4.6.0",
+    # Install every adapter and schema inference in the development environment.
+    "mlbundle[all]",
+    "pandas>=3.0.6",
 ]
 
 [build-system]
@@ -76,7 +99,8 @@ filterwarnings = [
 source = ["mlbundle"]
 branch = true
 parallel = true
-omit = ["*/tests/*", "*/__pycache__/*", "*/site-packages/*"]
+# CI measures the installed wheel inside site-packages.
+omit = ["*/tests/*", "*/__pycache__/*"]
 
 [tool.coverage.report]
 fail_under = 80
@@ -101,7 +125,8 @@ directory = "htmlcov"
 
 [tool.ruff]
 line-length = 88
-target-version = "py314"
+# Keep source syntax portable while package metadata requires Python 3.14.
+target-version = "py313"
 src = ["src", "tests"]
 extend-exclude = [".git", ".venv", "__pycache__", "build", "dist", "*.egg-info"]
 
@@ -131,7 +156,11 @@ select = [
 ignore = ["E501", "PLR0913", "PLR2004", "RET504"]
 
 [tool.ruff.lint.per-file-ignores]
+"src/mlbundle/model_io.py" = ["PLC0415"]  # Lazy optional adapter imports.
+"src/mlbundle/registry.py" = ["PLC0415"]
 "tests/**/*.py" = ["ARG", "PLR2004", "PLR0124", "PLC0415", "S101", "DTZ"]
+# The base/artifact checks must run without importing the sklearn fixture producer.
+"scripts/package_smoke.py" = ["PLC0415"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["mlbundle"]

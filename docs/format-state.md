@@ -1,0 +1,268 @@
+# Version 1 prediction state and bounded native work
+
+Normative section of [the format contract](format.md). Version 1 is pre-release
+and not yet frozen. Bundles lacking the required prediction-state records
+fail full claim comparison.
+
+## Sklearn state ownership
+
+Skops' type audit is necessary but does not define which attributes belong to an
+estimator. mlbundle additionally owns a closed class/attribute catalog in
+`_sklearn/state_fields.json`, audited against scikit-learn 1.9.1. It covers public
+estimator constructor parameters, inherited and fitted attributes, shared fit
+helpers and the admitted loss/link/MLP optimizer internals. It is package data, never supplied
+by a bundle and never used to import or construct a class. Unknown object types,
+attributes, nested estimator attributes, node keys, loaders and unreferenced files
+are rejected. The supplemental skops trusted list contains Tree, AdamOptimizer,
+SGDOptimizer, `numpy.dtype` and the closed functions below (other exact paths in
+[the adapter contract](format-adapters.md)). A catalog
+entry does not extend skops' trust or guarantee that every configuration exports.
+
+The audited/tested baseline is scikit-learn 1.9.1 with skops 0.16.0; the
+dependency floor is not a promise of compatibility with every later version.
+There is no version whitelist. Other versions can introduce unknown classes or
+state fields and fail export/load. `_sklearn_version` also participates in the
+commitment: a different installed sklearn version changes reserialized state,
+so full loading rejects it as `InvalidModelError`. Export and load should use
+the same sklearn version. Other matching-version configurations must satisfy
+all catalog, trust, dimensions and round-trip checks; they are not a tested range.
+
+Object state must be a dictionary with one string key type per attribute; skops
+may otherwise truncate attributes silently. Stateless admitted objects may use
+the native null state. Tree constructor state has exactly `node_count`,
+`max_depth`, `nodes`, `values`. Constructor dimensions, buffer shapes and loaded
+tree reachability/indices are checked before native traversal. Tree capacity must
+equal node count; maximum depth is recomputed, and maximum class width is derived
+from the per-output class counts. Missing directions are zero or one.
+Estimator classes must be the exact installed native class, rather than a subclass
+impersonating its module and name. This rule also applies before export.
+
+MLPClassifier and MLPRegressor retain their native fitted state for all three
+solvers, standalone and in pipelines. AdamOptimizer fields are `beta_1`, `beta_2`,
+`epsilon`, `learning_rate`, `learning_rate_init`, `ms`, `t`, `vs`; SGDOptimizer
+fields are `learning_rate`, `learning_rate_init`, `lr_schedule`, `momentum`,
+`nesterov`, `power_t`, `velocities`. Every field uses the same schema/reference/
+array budgets and complete commitment as other sklearn state; extra fields fail.
+Skops 0.16.0 ObjectNode uses `object.__new__` then `__dict__.update` for these
+classes. They have no custom allocation, `__setstate__` or reduce hook; their
+constructors and training update methods are never called on load. Other loaders
+for these classes are rejected before skops construction. MLP structure remains
+null, with coefficients, intercepts, layer/output/activation state, label binarizer,
+random state, optimizer buffers and training/validation histories committed in
+`model.state_sha256`. Pipelines commit their complete nested state the same way.
+
+Every admitted state field participates in a complete state commitment, including
+fields omitted from visualization and optional training-only state. Deserialization
+also compares the payload commitment with a fresh skops serialization of the
+loaded object. Ignored declarations or state that changes during construction
+are invalid models. Export applies the same rules before publication.
+
+Adapter work belongs to one synchronous export/load, never a global cache.
+Sklearn validates and digests each original or freshly reserialized constructed
+payload once, then shares those results with claim/structure extraction before
+the native model leaves that operation. The received-payload versus constructed-
+state comparison remains mandatory; independent public calls start fresh.
+Tree constructor checks reuse numeric headers already checked against actual
+streamed bytes. Equal digest-only records and scalar encodings
+are memoized within that digest, with identical commitment bytes and byte ceilings.
+
+### Closed scalar and function values
+
+`_sklearn/trusted.py` owns these lists for export, projection and load; bundle
+declarations never select or expand them. NumPy scalar type parameters are exactly
+`bool` (`bool_` alias), `int8`, `int16`, `int32`, `int64`, `uint8`, `uint16`,
+`uint32`, `uint64`, `float16`, `float32`, `float64`, `complex64`, `complex128`.
+Aliases such as `intp`/`int_` use their installed scalar identity/name. These
+classes use skops' existing TypeNode defaults; TypeNode resolves the attribute
+without calling it. Projection checks object identity, not an advertised name.
+
+Fitted dtype values admit those scalar storage representations, either byte
+order, plus object: categorical SimpleImputer stores an object `_fit_dtype`.
+String, datetime/timedelta, void, structured, sub-array and metadata-bearing
+dtypes are rejected. Numeric dtype storage must be exactly a NumPy ndarray of
+shape `(0,)` whose bounded NPY header passes the scalar list. Object dtype storage
+must be the canonical empty JSON ndarray, with a one-element TupleNode shape
+containing the JSON integer zero. DTypeNode returns the constructed array's dtype;
+only DTypeNode/CachedNode with exact `numpy.dtype` identity are permitted.
+Object cells are never loaded with pickle. Native dtype validation also rejects
+metadata/compound values that serialization could otherwise discard.
+
+Score functions are exactly `f_classif`, `f_regression`, `chi2`, `r_regression`
+in `sklearn.feature_selection._univariate_selection`, and `mutual_info_classif`,
+`mutual_info_regression` in `sklearn.feature_selection._mutual_info`.
+NumPy functions are exactly `numpy.log`, `numpy.log1p`, `numpy.log2`, `numpy.log10`,
+`numpy.exp`, `numpy.expm1`, `numpy.sqrt`, `numpy.square`, `numpy.absolute`
+(`np.abs` is the same native object and serializes as `absolute`). They support
+FunctionTransformer `func` and `inverse_func`. Other functions, including NumPy
+reductions, lambdas and user functions, remain rejected with unsupported names.
+
+Skops 0.16.0 FunctionNode stores only module/name/loader/identity. Its load path
+uses `getattr(import_module(module), name)` and never calls the function. Only
+FunctionNode/CachedNode are permitted for these names; all other function names
+and alternative constructor loaders fail before skops auditing/construction.
+The closed list includes no I/O function. Function execution remains native to
+the fitted transformer at prediction time. All names, loader identities, dtype
+values and fitted selector statistics participate in `state_sha256`.
+
+### Commitment encoding
+
+`state_sha256` is a lowercase SHA-256 digest. A sklearn structure object requires
+this field. Sklearn models with null structure, including Pipeline, instead put
+the digest in `model.state_sha256`; CatBoost also requires a native commitment there.
+Composite prefix digests instead live in `model.pipeline.transformers.state_sha256`;
+the outer digest is null, with native leaf claims/state and structure verified separately. This optional
+manifest field defaults to null, and is part of the verified claim projection.
+Missing commitments on an opaque sklearn model fail full load comparison.
+
+The commitment is a Merkle digest of the bounded skops schema and its buffers.
+For each dictionary, resolve CachedNode to its definition, omit `__id__`, replace
+each child with its digest, then hash `b"dict:" + canonical_dumps(record)`.
+Lists hash `b"list:" + canonical_dumps(child_digest_list)`; scalars hash
+`b"scalar:" + canonical_dumps(value)`. A `file` child uses
+`SHA256(b"file:" + canonical_dumps(buffer_digest))` instead of a filename.
+Shared definitions and files are memoized; identifiers and ZIP timestamps do not
+affect the result. Metadata, loader/class identity and array dimensions do.
+
+A numeric buffer hashes canonical `[dtype.str, shape]` followed by contiguous
+row-major element bytes. Floating NaNs normalize to NumPy's NaN before hashing;
+finite bits, signed zero, dtype and shape are preserved. Structured arrays hash
+the canonical dictionary of named-field numeric digests; unnamed padding is
+excluded because native Tree storage leaves it uninitialized. Sparse buffers
+hash the canonical dictionary of inner member names and their numeric digests.
+These records bind state; they do not authenticate authorship or training history.
+
+### Readable inference composition
+
+Every sklearn structure also requires `prediction_state`, an object with exactly
+the applicable fields below. Missing fields are omitted rather than invented.
+Native arrays keep their shape and canonical numeric representation.
+
+| Native state | Record |
+| --- | --- |
+| `estimators_` | `estimator_labels`: row-major constituent `classes_` arrays, or null for a constituent without labels. |
+| `estimator_weights_`, `estimators_features_` | The corresponding arrays under their native names. |
+| `_x_mean`, `_x_std` | Native centering/scaling vectors under their native names. |
+| `_loss` or `_base_loss` | `loss`: exactly `class`, `link` (class names), `n_classes`. |
+| `init_` | `initializer`: literal native value, or exactly `class`, `parameters`, `state_sha256` for an estimator. Dummy initializers additionally expose `values`, with each present `classes_`, `class_prior_`, `constant_`, `n_classes_`, `n_outputs_`. `learning_rate` is also present. |
+| `_probA`, `_probB` | `probability_calibration`: exactly `A`, `B` native arrays. |
+
+A custom supported initializer's commitment binds all fitted state; it does not
+manufacture a visualization for that initializer. Linear coefficients are native
+decision/regression coefficients. Centered models and calibrated classifiers
+require the composition record to interpret the complete prediction.
+
+### Prediction-state coverage
+
+The commitment covers **all** allowed attributes and nested buffers, not a
+selection inferred from attribute suffixes. The explicit checks supplement it:
+
+| Family | Prediction-relevant state and coverage |
+| --- | --- |
+| DecisionTree / ExtraTree | All eight node record fields, including missing routing, plus value arrays and native dimensions are in the tree record. Depth, capacity and class width are derived/checked. Parameters, names, owning output counts and labels are claims. |
+| RandomForest / ExtraTrees | Constituent trees and order are structure; parent/child output and class counts agree. Parent counts, labels and parameters are claims; remaining state is committed. |
+| GradientBoosting | Stage arrangement/counts, constituent trees, initializer, learning rate and loss/link state are structure/composition. Stage width agrees with classes; fitted loss/link class and loss class count agree with the native parameter-derived loss. Initializer feature width, dummy priors and dummy output dimensions agree with fitted state. |
+| AdaBoost / Bagging / tree meta-estimators | Trees, native order/shape, weights, feature subsets and constituent labels are structure/composition. Feature subsets address parent input widths. All other state, including output mappings, is committed. |
+| LinearRegression / Ridge / Bayesian / sparse-penalty / robust / SGD / LinearSVR / LDA | Native coefficients/intercepts are structure, parameters and labels/counts are claims, all fitted state is committed. Native probability transforms remain library-owned. |
+| PLS / CCA | Coefficients/intercepts plus centering/scaling are structure/composition; fitted output-shape flags and remaining state are committed. |
+| GLMs | Coefficients/intercepts plus loss/link are structure/composition. Fitted loss/link class and class count must agree with the parameter-derived loss. |
+| SVC / NuSVC / SVR / NuSVR | Kernel parameters, support data, native/private coefficients, sparse flag, effective gamma and calibration are committed. Linear coefficients and calibration are structure/composition when available. Public and inference dual coefficients/intercepts must agree, including sklearn's binary sign reversal. Support counts/indices, coefficient/calibration dimensions and sparse storage agree. |
+| Naive Bayes / QDA / neighbors / nearest centroid / MLP / semi-supervised / opaque meta-estimators | Their complete fitted statistics, data, class/output mappings, distance/activation state and nested models are committed in the manifest when structure is null. Statistics/likelihood/prior dimensions agree with classes/features; neighbor sample counts agree with fitted arrays. MLP layer sizes, output counts/activation and label-binarizer classes agree with public parameters/labels. Existing probability/count/trust constraints still apply. |
+| All-sklearn Pipeline | All fitted steps/order/names/parameters are committed; structure stays null. |
+| Composite Pipeline | Prefix skops/state/parameters use the same owners as standalone sklearn. Leaf claims and complete native structure use its adapter. Shared data-free widths/names and checked tree-boundary record describe the reconstructed Pipeline; outer options/final name are declarations. See [pipelines](format-pipeline.md). |
+
+Unsupported custom types, functions/types outside these lists, HistGradientBoosting storage,
+unsupported XGBoost/CatBoost placements, multilabel/chain probability layouts and untrusted nested internals remain
+rejections. For example, actual fitted `csr_matrix` neighbor state is outside the
+unchanged trust list; merely declaring its loader as the trusted base `spmatrix`
+does not make its state survive the native construction comparison.
+
+## Work and allocation ceilings
+
+Before skops' type audit or construction: at most 100,000 schema nodes, 100,000
+CachedNode references, 100,000 expanded dictionary/list visits, and nesting 32.
+Expanded work is calculated once per shared definition, with capped sums; cycles,
+missing references and conflicting numeric/scalar definitions are rejected.
+Sklearn parameter projection separately caps visits at 100,000 and ancestry at
+16, within the existing 1 MiB/depth-16 hyperparameter contract.
+
+Nested ZIP directories are count-checked before ZipFile creates entries: at most
+100,000 outer skops entries and nine inner sparse NPZ entries. Numeric headers
+have rank at most 32, positive item size, no object storage, dimensions at most
+512 MiB, and exact `product(shape) * itemsize` bytes, checked against both ZIP
+metadata and actual streamed bytes before NumPy loads anything. Inner sparse
+archives have a closed member set, ratio at most 200 and checked format, shape,
+index/pointer/block/coordinate/diagonal consistency. Sparse declared dense bytes
+are at most 512 MiB. Aggregate decoded buffers and aggregate materialized buffer
+references are each at most 512 MiB; repeating a file under new identities cannot
+bypass this bound. All these are fixed ceilings in addition to archive limits.
+
+Canonical JSON preflight calculates expanded minimum size/depth of shared native
+containers with memoization before normalization, rejecting over-budget expansion
+and cycles. Native arrays are size-checked before `tolist`. Wire JSON has no
+references and remains bounded by its stored bytes/depth. Lexical depth and
+Unicode escape checks precede decoding; object hooks reject duplicate keys and
+invalid float tags. The C decoder handles ordinary numbers, followed by finite
+float checks (bulk checks for flat arrays); integers retain the 4,096-digit check.
+No native-value normalization or shared-container expansion pass is needed for
+decoded wire values.
+
+Canonical encoding may be deferred until comparison when its byte budget is
+already proven: strings/integers cannot grow from their wire spelling, and a
+finite binary64 float has at most 24 canonical bytes for at least three wire
+token bytes. Thus eight times the stored byte length is a conservative bound.
+Otherwise the canonical encoder checks the exact size immediately. This does
+not raise any ceiling. Equality of validated stored bytes to freshly recomputed
+canonical bytes already proves exact canonical equality; otherwise comparison
+encodes the decoded value with the same sorted keys, types and numeric spellings.
+
+## XGBoost, CatBoost and ONNX
+
+XGBoost's structure additionally requires `native_model`, the complete native
+gradient-booster model returned by bounded UBJSON decoding of `save_raw`.
+Numeric buffers become arrays without decimal rounding. It includes every tree
+field, `tree_info`, iteration pointers, parallel-tree counts, category encodings,
+categorical splits/default directions and optional dropout weights. Learner base
+score and objective fields remain verified hyperparameters. Tree dumps alone are
+insufficient to describe this prediction state.
+
+XGBoost retains bounded, validated immutable UBJSON snapshots within the operation.
+Equal payload bytes reuse preflight; structure reuse requires exact native booster
+byte-span equality plus feature names/types and the importance setting. Every
+native copy and loaded model is still checked through freshly serialized bytes.
+Dump JSON is decoded as one byte/depth-bounded array before canonical structure
+encoding. Cached canonical structure bytes are decoded afresh for each result.
+
+Booster attribute keys are closed: `mlbundle`, `best_iteration`, `best_score`,
+`scikit_learn`. The last three are preserved in `hyperparameters.attributes`;
+the binding is independently checked. Best iteration is a decimal integer with
+at most six digits, in `[0, native_round_count)`. Best score is finite and at most
+256 characters; sklearn identity has only the native classifier/regressor key.
+Unknown wrapper attributes and unknown/missing native record fields fail. Native
+wrapper objective and supplied feature types must agree with native state. The
+wrapper booster is null or a supported tree alias (`gbtree`, or `dart`, which
+XGBoost 3.4 normalizes to gbtree). Wrapper declarations cannot reinterpret the
+native predictor. Native
+iteration increments equal `num_parallel_tree * max(1,num_class)`. Objective
+and learner class counts agree; dropout weights have native tree count, are
+finite and nonnegative. Category indices are at most 1,000,000; split segments
+are checked and aggregate declared categorical bitsets are capped at 512 MiB.
+Category dictionary segments and sorted-index permutations agree with stored
+values; string offsets must address the actual stored byte vector.
+UBJSON has nesting 32, at most 100,000 object collection items and 1,000,000
+non-buffer values; numeric buffer counts require actual stored bytes.
+
+ONNX has no additional mutable fitted state. The CPU session is created from the
+exact original bytes; signatures, metadata, kind, labels and graph/environment
+claims are recomputed from those bytes. No initializer override, custom function,
+domain or model-provided session configuration is admitted. Its descriptor scan
+has no shared-reference mechanism, bounds fields/depth before construction, and
+tensor dimensions require actual stored values before a session. See
+[the ONNX contract](format-onnx.md) for execution limits.
+
+CatBoost's complete numeric CBM snapshot and metadata use the commitment and
+preflight rules in [the CatBoost contract](format-catboost.md). Its mandatory
+structure exposes every symmetric tree without truncation.
+
+These checks are not a native-code sandbox. Runtime-computed allocations,
+dependency memory safety and prediction row/CPU/process limits remain the host's
+responsibility. No claim of exhaustive native-parser memory safety is made.

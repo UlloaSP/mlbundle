@@ -5,11 +5,84 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_call:
+    inputs:
+      prepare-publish:
+        description: Require main and an unpublished version before building
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Check publish ref and PyPI version
+        if: inputs.prepare-publish
+        run: python scripts/publish_check.py
+      - name: Install UV CLI
+        run: python -m pip install uv==0.12.19
+      - name: Build wheel and source archive
+        run: uv build
+      - name: Validate metadata and README rendering
+        run: uvx twine check --strict dist/*
+      - name: Upload distributions for testing and publishing
+        uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+          if-no-files-found: error
+
+  base-install:
+    name: Base wheel smoke (${{ matrix.os }}, Python 3.14)
+    runs-on: ${{ matrix.os }}
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install UV CLI
+        run: python -m pip install uv==0.12.19
+      - name: Download built distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist
+      - name: Install fixture producer from lockfile
+        run: uv sync --locked --group dev --all-extras
+      - name: Produce bundle and check artifact contents
+        shell: bash
+        run: |
+          uv run python scripts/package_smoke.py create "$RUNNER_TEMP/smoke.mlbundle"
+          uv run python scripts/package_smoke.py contents dist
+      - name: Install base wheel in a clean environment and check lazy imports
+        shell: bash
+        run: |
+          uv venv --python 3.14 "$RUNNER_TEMP/mlbundle-base"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            smoke_python="$RUNNER_TEMP/mlbundle-base/Scripts/python.exe"
+          else
+            smoke_python="$RUNNER_TEMP/mlbundle-base/bin/python"
+          fi
+          uv pip install --python "$smoke_python" dist/*.whl
+          "$smoke_python" -I scripts/package_smoke.py base "$RUNNER_TEMP/smoke.mlbundle"
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -23,7 +96,7 @@ jobs:
       - name: Install UV CLI
         run: python -m pip install uv==0.12.19
       - name: Install development dependencies from lockfile
-        run: uv sync --locked --group dev
+        run: uv sync --locked --group dev --all-extras
       - name: Check lint
         run: uv run ruff check .
       - name: Check formatting
@@ -42,13 +115,14 @@ jobs:
       - name: Install UV CLI
         run: python -m pip install uv==0.12.19
       - name: Install development dependencies from lockfile
-        run: uv sync --locked --group dev
+        run: uv sync --locked --group dev --all-extras
       - name: Check types
         run: uv run pyright
 
   tests:
     name: Tests (${{ matrix.os }}, Python 3.14)
     runs-on: ${{ matrix.os }}
+    needs: build
     strategy:
       fail-fast: false
       matrix:
@@ -63,9 +137,26 @@ jobs:
       - name: Install UV CLI
         run: python -m pip install uv==0.12.19
       - name: Install development dependencies from lockfile
-        run: uv sync --locked --group dev
+        run: uv sync --locked --group dev --all-extras
+      - name: Download built distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist
+      - name: Install the wheel that will be published
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            test_python="$GITHUB_WORKSPACE/.venv/Scripts/python.exe"
+          else
+            test_python="$GITHUB_WORKSPACE/.venv/bin/python"
+          fi
+          uv pip install --python "$test_python" --no-deps --reinstall dist/*.whl
+          "$test_python" -I -c 'import mlbundle; from pathlib import Path; assert "site-packages" in Path(mlbundle.__file__).parts; print(mlbundle.__version__, mlbundle.__file__)'
       - name: Run tests with coverage
-        run: uv run pytest
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: uv run --project "$GITHUB_WORKSPACE" --no-sync pytest "$GITHUB_WORKSPACE/tests" -c "$GITHUB_WORKSPACE/pyproject.toml" --cov-config="$GITHUB_WORKSPACE/pyproject.toml" --cov-report="xml:$GITHUB_WORKSPACE/coverage.xml"
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
