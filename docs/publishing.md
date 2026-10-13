@@ -4,10 +4,13 @@ Version `0.1.0a1` reserves the PyPI name `mlbundle`. Format version 1 is not
 frozen, so bundles may need re-export. The security design has not had an
 independent review; do not accept bundles from untrusted parties.
 
-Only Pablo Ulloa Santín runs and approves this workflow. Agents never trigger it.
+The owner, or an agent on the owner's explicit request for that specific version,
+runs this workflow. Agents never run or approve it on their own initiative.
 There is no API token, repository secret, tag, GitHub release or other publish path.
 
-## Owner steps
+## Publishing steps
+
+The owner, or an agent on the owner's explicit request, follows these steps:
 
 1. Review and merge the change into `develop`, then bring it into `main` through
    the normal reviewed integration process. The workflow refuses any other ref.
@@ -46,11 +49,11 @@ and run the full test suite; lint and type checks must also succeed. Tests run
 from the runner's temporary directory so CatBoost writes stay outside the checkout.
 
 The artifact is immutable within the run. `publish` waits for all reusable CI
-jobs and owner approval, downloads `distributions` and uploads those files without
+jobs and `pypi_env` approval, downloads `distributions` and uploads those files without
 rebuilding or checking out source. Only this job has `id-token: write`; the
 workflow otherwise permits only `contents: read`. Trusted Publishing exchanges
 OIDC identity for short-lived PyPI credentials through the documented
 [PyPA publish action](https://github.com/pypa/gh-action-pypi-publish).
 
-Publication and OIDC authorization cannot be tested locally. The first owner-run
+Publication and OIDC authorization cannot be tested locally. The first authorized
 upload is the verification of the registered publisher and approval gate.

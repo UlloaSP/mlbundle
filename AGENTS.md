@@ -136,8 +136,8 @@ still preserve validation, security and reproducibility.
   or PR text.
 - `C:\software\mlsuite` and `C:\software\mlschema` are read-only references.
   Never modify, commit or run write commands inside either checkout.
-- Publish only via manual `publish.yml` from `main`, through `pypi_env` with owner approval.
-  Agents never trigger it or add publish paths/tokens/secrets. No GitHub releases/version tags; "tags" means GitHub repository topics.
+- Publish only via manual `publish.yml` from `main`, through `pypi_env` with owner approval, on the owner's explicit request for that specific version.
+  Agents never run or approve it on their own initiative or add publish paths/tokens/secrets. No GitHub releases/version tags; "tags" means GitHub repository topics.
 - sklearn-to-ONNX conversion, per-model environments, bundle signing and additional
   libraries (including LightGBM and PyTorch) are outside the project scope.
 - Never claim a verification that was not run; report its real output or blocker.

@@ -290,7 +290,8 @@ Run `uv run ruff check .`, `uv run ruff format --check .`, `uv run pyright`,
 `uv run pytest` and `uv build`. Tests execute every fenced README example and
 write terminal/XML coverage with an 80% branch-inclusive minimum.
 CI checks lint/types and tests the same built wheel on Ubuntu/Windows, including
-clean base installs. Only the owner runs manual [publishing](https://github.com/UlloaSP/mlbundle/blob/main/docs/publishing.md) from `main` and
-approves `pypi_env`; it publishes those validated artifacts. Read [AGENTS.md](https://github.com/UlloaSP/mlbundle/blob/main/AGENTS.md).
+clean base installs. The owner, or an agent on the owner's explicit request for
+that version, runs manual [publishing](https://github.com/UlloaSP/mlbundle/blob/main/docs/publishing.md) from `main` with `pypi_env` approval. Read [AGENTS.md](https://github.com/UlloaSP/mlbundle/blob/main/AGENTS.md).
+Agents never run or approve it on their own initiative or add publish paths, tokens or secrets.
 Releases, version tags, conversions, per-model environments, signing and additional
 model libraries remain outside scope. The project is MIT licensed.
