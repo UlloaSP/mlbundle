@@ -1,6 +1,6 @@
 # Security policy
 
-MLbundle 0.2.0 has not had an independent security review;
+MLbundle 0.2.1 has not had an independent security review;
 do not accept bundles from untrusted parties. Format version 1 is not frozen.
 It implements strict manifest validation, secure container reading/writing, metadata-only
 `inspect`, export/load, sklearn, XGBoost, CatBoost and ONNX adapters, local schema inference,

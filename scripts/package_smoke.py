@@ -52,7 +52,7 @@ def _base(path: Path) -> None:
 
     import mlbundle
 
-    assert mlbundle.__version__ == "0.2.0"
+    assert mlbundle.__version__ == "0.2.1"
     view = mlbundle.inspect(path)
     assert view.manifest.model.library == "sklearn"
     assert "cannot attest" in _console("--help")
