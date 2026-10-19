@@ -1,0 +1,49 @@
+---
+import { docs } from "../data/site";
+
+const travels = [
+  "Feature names, order and dtypes",
+  "Each input's kind and whether it may be missing",
+  "Categories and class labels",
+  "The fitted model, and what it learned",
+];
+const stays = [
+  "The training DataFrame and its rows",
+  "Ranges, means and counts",
+  "Example rows, unless you ask for them",
+];
+---
+
+<section class="section schema" id="schema" aria-labelledby="schema-title">
+  <div class="wrap split">
+    <header class="section-head">
+      <h2 id="schema-title">Training data stays on your machine.</h2>
+      <p>
+        Export infers the input schema where the data already is, and keeps only the description.
+        Want example rows in the bundle? Pass <code class="mono">sample_rows=N</code>: they are real
+        data, so they are never added by default.
+      </p>
+      <a class="text-link" href={docs.schema}>
+        Schema and samples <span aria-hidden="true">↗</span>
+      </a>
+    </header>
+    <div class="ledger">
+      <div>
+        <h3>In the bundle</h3>
+        <ul>
+          {travels.map((item) => (
+            <li>{item}</li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <h3>Left behind</h3>
+        <ul>
+          {stays.map((item) => (
+            <li>{item}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>

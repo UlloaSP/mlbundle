@@ -1,4 +1,4 @@
-"""Execute the actual fenced README examples, including the console commands."""
+"""Execute the README quick start and its mlbundle CLI commands."""
 
 import re
 import shlex
@@ -8,8 +8,6 @@ from pathlib import Path
 
 import pytest
 
-from onnx_helpers import softmax
-
 README = Path(__file__).resolve().parents[1] / "README.md"
 BLOCKS = re.findall(
     r"```(\w+)\n(.*?)\n```", README.read_text(encoding="utf-8"), re.DOTALL
@@ -17,32 +15,20 @@ BLOCKS = re.findall(
 PYTHON = [code for language, code in BLOCKS if language == "python"]
 
 
-@pytest.mark.parametrize(
-    "code",
-    PYTHON,
-    ids=[
-        "sklearn",
-        "records",
-        "xgboost",
-        "catboost",
-        "composite",
-        "onnx",
-        "schema-samples",
-    ],
-)
+@pytest.mark.parametrize("code", PYTHON)
 def test_python_example(code, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    if 'record = {"0"' in code:
-        exec(compile(PYTHON[0], str(README), "exec"), {})
-    if 'Path("trained.onnx")' in code:
-        # The user's prerequisite file: a self-contained, two-column classifier.
-        Path("trained.onnx").write_bytes(softmax().SerializeToString())
-    exec(compile(code, str(README), "exec"), {})
+    scope = {}
+    exec(compile(code, str(README), "exec"), scope)
+    assert scope["metadata"].samples is None
+    assert scope["bundle"].feature_names == ("temperature", "humidity")
+    assert scope["result"].predicted_label == "cold"
+    assert scope["result"].probabilities == (1.0, 0.0)
 
 
 def test_console_examples(tmp_path, monkeypatch):
-    assert len(PYTHON) == 7
-    assert all(language in {"python", "shell"} for language, _ in BLOCKS)
+    assert PYTHON
+    assert all(language in {"python", "shell", "bash"} for language, _ in BLOCKS)
     monkeypatch.chdir(tmp_path)
     exec(compile(PYTHON[0], str(README), "exec"), {})
     executable = Path(sys.executable).with_name(

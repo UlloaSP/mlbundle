@@ -1,0 +1,93 @@
+---
+import { Image } from "astro:assets";
+import { Code } from "astro:components";
+import mark from "../../../brand/mlbundle.png";
+import BundleCard from "./BundleCard.astro";
+import Icon from "./Icon.astro";
+import { example, excerpt } from "../data/example";
+import { install, links } from "../data/site";
+
+const themes = { light: "github-light-default", dark: "github-dark-default" } as const;
+---
+
+<section class="hero" aria-labelledby="hero-title">
+  <div class="hero-inner wrap">
+    <Image
+      src={mark}
+      alt=""
+      width={112}
+      densities={[1, 2]}
+      loading="eager"
+      fetchpriority="high"
+      class="hero-mark"
+    />
+    <h1 id="hero-title">
+      Your trained model, <span class="accent">in one verifiable file.</span>
+    </h1>
+    <p class="lede">
+      MLbundle packs a scikit-learn, XGBoost, CatBoost or ONNX model with its manifest and input
+      schema. Loading recomputes what the file claims about the model from the model itself. No
+      pickle anywhere.
+    </p>
+    <div class="hero-actions">
+      <a class="button" href={links.docs}>
+        Read the docs <Icon name="arrow-up-right" size={14} />
+      </a>
+      <a class="button ghost" href={links.playground}>
+        Open the playground
+      </a>
+      <a class="button ghost" href={links.github}>
+        <Icon name="github" size={16} /> GitHub
+      </a>
+    </div>
+    <div class="install mono">
+      <span class="prompt" aria-hidden="true">
+        $
+      </span>
+      <code>{install}</code>
+      <button class="copy" type="button" data-copy={install} aria-label="Copy install command">
+        <Icon name="copy" size={15} />
+      </button>
+      <span class="copy-status" role="status"></span>
+    </div>
+  </div>
+  <figure class="stage wrap">
+    <div class="plate hero-plate">
+      <div class="hero-pair">
+        <div class="example window">
+          <div class="window-bar mono">
+            <span>train.py</span>
+            <span>excerpt</span>
+          </div>
+          <Code code={excerpt} lang="python" themes={themes} defaultColor="light" class="code" />
+          <div class="window-out mono">
+            <span class="prompt" aria-hidden="true">
+              $
+            </span>{" "}
+            python train.py
+            <br />
+            {example.printed}
+          </div>
+        </div>
+        <BundleCard />
+      </div>
+    </div>
+    <figcaption>
+      Real output of <code class="mono">examples/train.py</code> with MLbundle {example.version}.
+    </figcaption>
+  </figure>
+</section>
+<script>
+  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-copy]")) {
+    const status = button.parentElement!.querySelector(".copy-status")!;
+    button.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(button.dataset.copy!);
+        status.textContent = "Copied";
+      } catch {
+        status.textContent = "Select the command to copy it";
+      }
+      window.setTimeout(() => (status.textContent = ""), 2000);
+    });
+  }
+</script>

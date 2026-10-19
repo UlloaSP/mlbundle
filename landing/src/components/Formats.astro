@@ -1,0 +1,54 @@
+---
+import { docs } from "../data/site";
+
+// The four supported libraries and their native members, as in src/mlbundle/contract.py.
+const libraries = [
+  {
+    name: "scikit-learn",
+    member: "model.skops",
+    extra: "sklearn",
+    note: "skops, with types allowed by MLbundle",
+  },
+  { name: "XGBoost", member: "model.ubj", extra: "xgboost", note: "Native UBJSON" },
+  { name: "CatBoost", member: "model.cbm", extra: "catboost", note: "Native CBM" },
+  { name: "ONNX", member: "model.onnx", extra: "onnx", note: "Your file, byte for byte" },
+];
+---
+
+<section class="section formats" id="formats" aria-labelledby="formats-title">
+  <div class="wrap split">
+    <header class="section-head">
+      <h2 id="formats-title">Four libraries, each in its own format.</h2>
+      <p>
+        A closed adapter inside MLbundle loads each format. Nothing is imported from names written
+        in the bundle, and there is no pickle fallback. A model MLbundle cannot load safely is
+        rejected when you export it, on your machine, not after you share the file.
+      </p>
+      <a class="text-link" href={docs.adapters}>
+        Supported models <span aria-hidden="true">↗</span>
+      </a>
+    </header>
+    <table class="libraries">
+      <caption class="visually-hidden">Supported libraries, stored file and install extra</caption>
+      <thead>
+        <tr>
+          <th scope="col">Library</th>
+          <th scope="col">Stored as</th>
+          <th scope="col">Extra</th>
+        </tr>
+      </thead>
+      <tbody>
+        {libraries.map(({ name, member, extra, note }) => (
+          <tr>
+            <th scope="row">{name}</th>
+            <td>
+              <span class="mono">{member}</span>
+              <span class="note">{note}</span>
+            </td>
+            <td class="mono">{extra}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</section>

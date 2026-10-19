@@ -1,0 +1,36 @@
+---
+import { example, formatBytes } from "../data/example";
+
+// What each member of the example bundle holds; names and sizes come from the stored run.
+const roles: Record<string, string> = {
+  "manifest.json": "What the model claims to be",
+  "model.skops": "The fitted model, in skops format",
+  "schema.json": "Inputs and outputs, inferred locally",
+  "structure.json": "The decision tree, for review",
+};
+const [verdict] = example.verify.stdout.split(";");
+---
+
+<div class="example window bundle-card" role="group" aria-label="Contents of trained.mlbundle">
+  <div class="window-bar mono">
+    <span>trained.mlbundle</span>
+    <span>{formatBytes(example.bundleBytes)}</span>
+  </div>
+  <ul class="members">
+    {example.members.map(({ name, size }) => (
+      <li>
+        <span class="member-name mono">{name}</span>
+        <span class="member-role">{roles[name]}</span>
+        {size !== null && <span class="member-size mono">{formatBytes(size)}</span>}
+      </li>
+    ))}
+  </ul>
+  <div class="window-out mono">
+    <span class="prompt" aria-hidden="true">
+      $
+    </span>{" "}
+    mlbundle verify trained.mlbundle
+    <br />
+    <span class="ok">{verdict}</span>
+  </div>
+</div>

@@ -1,4 +1,4 @@
-"""Manual publish preflight rejects other refs, existing versions and outages."""
+"""Publish preflight gates version changes, duplicate releases and outages."""
 
 import runpy
 from contextlib import nullcontext
@@ -36,12 +36,32 @@ def test_exact_version_response(preflight, monkeypatch, capsys, code):
 
     monkeypatch.setitem(preflight.__globals__, "urlopen", response)
     if code == 404:
-        preflight("refs/heads/main", {"version": "0.1.0a3"})
+        assert preflight("refs/heads/main", {"version": "0.1.0a3"}) is True
         assert "HTTP 404" in capsys.readouterr().out
     else:
         message = "already exists" if code == 200 else f"HTTP {code}"
         with pytest.raises(SystemExit, match=message):
             preflight("refs/heads/main", {"version": "0.1.0a3"})
+
+
+def test_unchanged_version_skips_network(preflight, monkeypatch, capsys):
+    def unexpected(*args, **kwargs):
+        raise AssertionError("An unchanged version must not query PyPI")
+
+    monkeypatch.setitem(preflight.__globals__, "urlopen", unexpected)
+    assert (
+        preflight("refs/heads/main", {"version": "0.2.0"}, previous_version="0.2.0")
+        is False
+    )
+    assert "skipping" in capsys.readouterr().out
+
+
+def test_output_records_publish_decision(preflight, tmp_path):
+    write_output = preflight.__globals__["write_output"]
+    output = tmp_path / "github-output"
+    write_output(str(output), True)
+    write_output(str(output), False)
+    assert output.read_text(encoding="utf-8") == "publish=true\npublish=false\n"
 
 
 @pytest.mark.parametrize("error", [URLError("offline"), TimeoutError("timeout")])

@@ -1,0 +1,23 @@
+.code-output {
+  position: relative;
+}
+.output-json {
+  min-height: 6rem;
+  overflow: auto;
+}
+.code-output .output-note {
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+}
+.output-error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+/* Author display rules (flex, grid) must not override the hidden attribute. */
+[hidden] {
+  display: none !important;
+}
+.console-stderr {
+  color: var(--danger);
+}

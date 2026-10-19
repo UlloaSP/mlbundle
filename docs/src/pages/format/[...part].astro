@@ -1,0 +1,17 @@
+---
+import SpecPage from "../../components/SpecPage.astro";
+import { specPages } from "../../spec";
+
+export function getStaticPaths() {
+  return specPages
+    .filter(({ route }) => route.startsWith("/format/"))
+    .map(({ file, route }) => ({
+      params: { part: route.slice("/format/".length, -1) || undefined },
+      props: { file },
+    }));
+}
+
+const { file } = Astro.props;
+---
+
+<SpecPage file={file} />

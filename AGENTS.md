@@ -1,149 +1,179 @@
-# mlbundle
+# MLbundle
 
-mlbundle is the training-side companion to MLSuite: a Python library for putting
-a trained model, a rich manifest, a locally inferred schema and model structure
-in one compressed `.mlbundle` file. It owns both writing and validated reading
-so that the format is defined once.
+mlbundle is a Python library for packaging a trained model, a manifest, a locally
+inferred schema and model structure in one compressed `.mlbundle` file.
 
-The pre-release v0.1 library implements strict format 1 manifests, secure container
-I/O, inspect/export/load, sklearn/XGBoost/CatBoost/ONNX adapters, local schema, training
-dtypes, explicit samples and prediction-state verification. The CLI provides
-metadata-only `inspect` and full `verify`. Format 1 is not yet frozen.
-Implementation claims require code and test proof. `docs/format.md` owns the wire contract.
+It owns export, metadata-only inspection and validated loading. It is the
+training-side companion to MLSuite, whose runtime accepts `.mlbundle` uploads.
+MLSuite does not train models. The package version is 0.2.0; format 1 is not frozen.
+Implementation claims require code and test proof.
 
-## What makes mlbundle special?
+## What must remain true
 
-### 1. Reproducibility across the training/runtime boundary
+### 1. The format is one contract
 
-MLSuite turns trained models into reviewable applications; it does not train them.
-Its runtime accepts only `.mlbundle` uploads. Preserve the identity and meaning
-of the model, schema, features, classes and outputs across this boundary.
+`docs/format.md` owns the wire contract and links its normative sections.
+Writer, reader, adapters, schemas and visualizations must agree with it.
+Reject unknown format versions; change public contracts and versions deliberately.
 
-### 2. Metadata is a claim, even when it looks useful
+### 2. Metadata is a claim
 
-The author of a bundle may be an attacker. Everything derived from a model,
-including hyperparameters, feature/class/output counts, coefficients, feature
-importances and tree structure, is a claim. Writer and reader must use the same
-extraction code. The reader must recompute these claims from the loaded model
-and reject mismatches. A reviewer must never see a tree that differs from the
-model used for prediction.
+The author of a bundle may be an attacker. Model parameters, feature/class/output
+counts, coefficients, importances and tree structure are claims, even when useful.
+Writer and reader use the same extraction code. Load recomputes model-derived
+claims and structure and compares canonical JSON bytes, rejecting disagreement.
+A reviewer must see the model used for prediction.
 
-### 3. Training data stays on the training machine
+### 3. Training data stays local
 
-mlbundle depends on mlschema to call `mlschema.infer_schema` locally; mlschema
-does not depend on or know mlbundle. The bundle carries the resulting fields
-and report definitions. Do not include the training DataFrame. Include sample
-rows only when explicitly requested: samples are real user data.
+mlbundle calls `mlschema.infer_schema` locally. mlschema does not depend on or know
+mlbundle. Carry its fields and report definitions, never the training DataFrame.
+Include real rows only through explicit `sample_rows=N`; samples are user data.
+Names, categories, learned models and structure can still reveal training information.
 
-### 4. Native formats with a narrow support boundary
+### 4. Native models cross a closed boundary
 
-Version 0.1 supports four libraries: scikit-learn via `skops.io.dumps/loads`,
-XGBoost via native in-memory UBJSON, CatBoost via CBM, and the user's ONNX
-file unchanged. Do not convert models. Adapters import their library lazily;
-their dependencies belong in the optional extras `mlbundle[sklearn]`,
-`mlbundle[xgboost]`, `mlbundle[catboost]` and `mlbundle[onnx]`.
+Support scikit-learn through skops, XGBoost through in-memory UBJSON, CatBoost
+through CBM and existing ONNX bytes unchanged. Do not convert models.
+Adapters import their libraries lazily; model dependencies belong in optional
+`sklearn`, `xgboost`, `catboost` and `onnx` extras.
 
-The design takes ideas from MLflow's versioned manifest and native model
-storage, not its code. MLflow is Apache-2.0; mlbundle is MIT.
+### 5. Inspection and verification mean different things
 
-## A note from the maintainer
+`inspect` validates container, manifest, integrity and schema/sample declarations
+without importing model libraries or deserializing models. It cannot attest
+model-derived claims. `load` additionally verifies native claims and structure.
+The CLI exposes these as `inspect` and `verify`. Keep this distinction visible
+in APIs, docs and the playground.
 
-Pablo Ulloa Santín prefers ambitious ML workflows and simple systems. Find the
-owner of a rule, implement it once, and make the behavior obvious. Measure
-twice, cut once, and resist scope creep. The smallest complete change must
-still preserve validation, security and reproducibility.
+## Maintainer intent
 
-## A small glossary
+Pablo Ulloa Santín favors ambitious ML workflows built from simple systems.
+Find the owner of a rule, implement it once and make its behavior obvious.
+The smallest complete change preserves validation, security and reproducibility
+through every affected path.
 
-- **bundle** — the zip container with the `.mlbundle` extension.
-- **manifest** — the versioned JSON record of identity, model metadata,
-  environment, member hashes and sizes, and user metadata.
-- **member** — a named file inside the zip; only a closed set is permitted.
-- **adapter** — mlbundle-owned code for one supported model library, including
-  serialization, loading and shared extraction of model-derived claims.
-- **claim** — information asserted by the bundle's author; model-derived claims
-  require comparison with the loaded model using canonical JSON byte equality.
-- **predictor** — the adapter's uniform probability/regression interface; the
-  native model remains available separately for runtime explanations.
-- **schema** — locally inferred mlschema fields plus report definitions.
-- **structure** — model internals for visualisation, tied to the actual model.
-- **trusted types** — the mlbundle-owned allowlist used for skops loading.
-- **inspect** — metadata-only reading that never deserializes the model.
-- **runtime** — the consumer that validates a bundle before using its model.
+Remove complexity whose constraint no longer exists. Keep compatibility only
+when required by the public contract or the task. Avoid speculative flags,
+dead stubs and undocumented fallback behavior.
 
-## The three ways to hurt yourself
+## Vocabulary
 
-1. **Trusting the manifest.** Checksums and plausible metadata do not make an
-   attacker honest. Recompute model claims and reject disagreement.
-2. **Opening a convenience loading path.** Pickle fallbacks, dynamic imports and
-   author-supplied trusted types undo the security boundary. Reject unsupported
-   models on the training machine instead.
-3. **Defining the format twice.** Separate writer/reader extraction or schema
-   rules drift. Share the owning implementation and change every affected path.
+- **bundle**: the ZIP container with the `.mlbundle` extension
+- **manifest**: versioned identity, model metadata, environment, integrity records and user metadata
+- **member**: a named file from the container's closed allowed set
+- **adapter**: owned recognition, native I/O, shared extraction and prediction for one library
+- **claim**: information asserted by the author; model-derived claims require recomputation
+- **schema**: locally inferred mlschema fields and report definitions
+- **structure**: model internals for visualization, bound to the loaded model
+- **predictor**: uniform probability/regression interface, separate from the native model
+- **trusted types**: mlbundle-owned allowlists for skops loading
+- **runtime**: the consumer that validates a bundle before using its model
 
-## Hit every affected layer
+## Invariants
 
-- **Format.** Manifest validation, allowed members, version handling and
-  `docs/format.md` must agree. Reject unknown versions instead of guessing.
-- **Writer.** Compute the schema locally, record the environment and fail early
-  for unsupported model types. Samples require explicit user intent.
-- **Reader.** Validate the archive and manifest, verify hashes, load only through
-  closed adapters, and recompute model-derived claims.
-- **Structure.** Tree arrays, ensemble tree lists, XGBoost tree dumps, linear
-  coefficients and feature importances must describe the loaded model.
-- **Packaging.** Keep model libraries optional, imports lazy and the base
-  package usable without an adapter's dependencies.
-- **Tests.** Cover successful round trips and every rejection path together in
-  the feature's test file.
+- Source, test and documentation files stay at or below 300 lines. Split by responsibility.
+- Pydantic v2 is the sole core runtime dependency. New dependencies need a concrete reason; model libraries remain extras.
+- Keep `uv_build` as the Python build backend.
+- Avoid Python 3.14-only syntax so widening support can remain a metadata change.
+- Preserve model, feature, class, output and schema identity across export and load.
+- Safety ceilings may only be lowered by callers.
+- Tests for a feature keep successful round trips and rejection cases together in one file.
+- Verification claims describe commands actually run and their real results.
+- `C:\software\mlsuite`, `C:\software\mlschema`, `C:\software\mlform` and `C:\software\eshkra` are read-only references. Never modify, commit or run write commands in them.
+- sklearn-to-ONNX conversion, per-model environments, bundle signing and additional model libraries (including LightGBM and PyTorch) are outside scope.
 
-## Guardrails
+## Reader security
 
-### Reader security rules
+These rules apply to every loading and inspection path, including examples and UI:
 
 - Never use pickle, joblib or cloudpickle, even as an option or fallback.
-- Never import or instantiate from strings in the manifest. The class to
-  instantiate must come from a closed list inside mlbundle.
-- The skops trusted lists live in mlbundle; never read them from a bundle or add XGBoost/CatBoost types. Tree, optimizers, scalar dtypes and closed functions each admit only their owning loaders; see `docs/format-state.md`.
-- Export must fail on the user's machine when the model contains custom types,
-  listing unsupported types from `skops.io.get_untrusted_types`. Do not defer
-  discovery to upload time or offer to trust those types.
-- Read the zip in memory by allowed member names. Never extract it to disk.
-  Reject unknown or duplicate members, paths with separators or `..`, symlinks
-  and encrypted entries. Enforce limits on member count, compressed size,
-  uncompressed size and compression ratio before allocating or loading content.
-- Verify each member's SHA-256 against the manifest. Hashes detect corruption,
-  not deliberate tampering; signing is out of scope.
-- Validate the manifest strictly and reject an unknown format version.
-- Provide a metadata-only `inspect` read that does not deserialize the model.
-- Recompute all model-derived claims with the writer's extraction code and
-  reject a bundle when they differ from the loaded model.
+- Instantiate only from mlbundle's closed class lists. Never import or instantiate from manifest strings.
+- Own skops trusted lists in mlbundle; never accept them from a bundle or add XGBoost/CatBoost types. Trees, optimizers, scalar dtypes and closed functions admit only their owning loaders.
+- Reject custom types at export on the training machine. List unsupported types from `skops.io.get_untrusted_types`; never offer to trust them or defer rejection to upload.
+- Read ZIP members in memory by allowed names. Never extract the archive to disk.
+- Reject unknown/duplicate members, separators or `..` in names, symlinks and encrypted entries.
+- Enforce member count, compressed size, uncompressed size and compression ratio before allocation or loading.
+- Validate the manifest strictly and verify every non-manifest member's SHA-256 and size. Hashes detect corruption, not authenticity or deliberate tampering.
+- Recompute model-derived claims and structure using the writer's extraction code before returning a loaded model.
+- Keep errors bounded. Record-input errors name escaped keys without echoing values.
 
-### Repository rules
+Read `SECURITY.md` before changing trust boundaries. Read `docs/format-container.md`
+before changing archive parsing or limits, and `docs/format-state.md` before
+changing skops trust, fitted state or supported types.
 
-- No source, test or documentation file may exceed 300 lines. Split by responsibility before the limit.
-- Add no runtime dependency without a concrete reason. The sole core dependency
-  is Pydantic v2 for strict manifest validation; model libraries belong in extras.
-- Keep a feature's tests in one file covering its success case and every error
-  case. Test observable behavior and supported contracts.
-- Avoid Python 3.14-only syntax; widening the Python range should be a metadata
-  change rather than a source rewrite.
-- Preserve public contracts and change format versions deliberately. Leave no
-  dead stubs, speculative flags or undocumented fallback behavior.
-- Use Conventional Commits (`chore:`, `docs:`, `ci:`, `feat:`, `fix:`, `test:`).
-- Never add `Co-Authored-By`, AI attribution or "Generated with" lines to commits
-  or PR text.
-- `C:\software\mlsuite` and `C:\software\mlschema` are read-only references.
-  Never modify, commit or run write commands inside either checkout.
-- Publish only via manual `publish.yml` from `main`, through `pypi_env` with owner approval, on the owner's explicit request for that specific version.
-  Agents never run or approve it on their own initiative or add publish paths/tokens/secrets. No GitHub releases/version tags; "tags" means GitHub repository topics.
-- sklearn-to-ONNX conversion, per-model environments, bundle signing and additional
-  libraries (including LightGBM and PyTorch) are outside the project scope.
-- Never claim a verification that was not run; report its real output or blocker.
+## How MLbundle fits together
 
-## Development
+1. A closed adapter recognizes the model and prepares it without mutating the user's object.
+2. Shared extraction derives model claims and structure from native state.
+3. Native serialization and reload prove those claims before export publishes the bundle.
+4. Local mlschema inference supplies fields/reports; shared code resolves features, targets and environment.
+5. The writer computes integrity records, validates through the reader and writes a deterministic ZIP.
+6. Inspect validates bounded container/JSON data and declarations without adapter resolution.
+7. Load uses the closed adapter and compares recomputed claims and structure.
+8. The predictor and record APIs expose validated inputs and output-major report results.
 
-Work from the repository root using `uv` on Python 3.14. The optional `schema`
-extra admits mlschema >=0.2.1,<0.3 on 3.14 only. Keep `uv_build` as the build backend.
+The allowed members are manifest, required schema, one native member (or a declared
+skops + UBJSON/CBM pair), extractable structure and explicit samples: at most six.
+Publication uses atomic hard links or replacement and requires explicit overwrite.
+The exclusive-create fallback removes partial destinations on failure but exposes
+the file during copying. Preserve that behavior and document its limits honestly.
+
+## Ownership and contract references
+
+Use the entry points and linked contracts to find the owning implementation:
+
+- **Public I/O:** `model_io.py`, `inspection.py`, `results.py` and `cli.py`; `__init__.py` owns public exports.
+- **Container:** `container.py`, `writing.py`, `_container_rules.py`, `_zip_directory.py`, `_zip_members.py`, `limits.py` and `integrity.py`.
+- **Declarations:** `manifest.py`, `canonical.py`, `declarations.py`, `environment.py`, `training.py`, `schema.py` and `samples.py`.
+- **Adapters:** `adapters.py` and `registry.py` define closed lazy resolution; `_sklearn/`, `_xgboost/`, `_catboost/`, `_onnx/` and `_composite/` own native behavior.
+- **Claims and predictions:** `claims.py`, `records.py`, `_prediction_input.py`, `_prediction_decisions.py` and `_display.py`.
+- **Websites:** `landing/`, `docs/` and `playground/`; `brand/` owns the shared identity sourced from eshkra.
+
+Paths above are relative to `src/mlbundle/` unless they name a root directory.
+Use package configuration and source for detailed inventories and command options.
+
+When changing schema, mappings or samples, read `docs/format-schema.md`:
+
+- Every export needs the schema extra, including default inference from one float-1.0 row.
+- Schema v2 records source and separator (default `__`). Real frames exclude every declared target and record training dtypes; default dtypes are null.
+- Native model names map by name; other origins map by position, with generated names starting at `feature_0`.
+- Unique target names map by output position. Reports use string labels; manifest labels retain their types.
+- MLschema owns series columns and explicit conversion to positional mappings. Export/inspect/load share declaration validation without reader-side mlschema.
+
+When changing native I/O or extraction, read `docs/format-adapters.md` and the
+adapter-specific contracts it links:
+
+- `prepare_export` accepts strict `ExportDeclarations` and leaves the original model unchanged. Missing native names are null; shared code owns declared/generated names and environment.
+- Null native classifier labels permit count-checked declarations. Sklearn/CatBoost own `classes_` and reject `class_labels=`; XGBoost binds supplied output-major labels to a native copy and otherwise uses encoded indices.
+- XGBoost supports exact single-target tree wrappers with closed objectives. CatBoost supports exact numeric single-target symmetric models with complete native state/structure and in-memory CBM loading.
+- Read `docs/format-pipeline.md` for composites. Exact outer sklearn Pipelines ending in XGBoost/CatBoost use checked skops/native components; other native placements remain rejected. Composite trees address transformed inputs; all-sklearn Pipeline structure stays null.
+- Read `docs/format-onnx.md` before changing ONNX. Preserve path/bytes unchanged, serialize ModelProto once and validate once per export/load with bounded scalar scans before CPU sessions. Reject external tensors, custom domains/functions and runtime/training configuration. Verify signatures, metadata/environment claims and native labels; structure stays null.
+- Native errors become bounded `MLBundleError`s. Version hints diagnose failed manifests/skops loads without adding compatibility gates.
+
+When changing record prediction, preserve shared schema-key lookup, bounded
+numeric-string/bool conversion and schema-permitted None-to-NaN handling.
+Never iterate extra keys. Frozen output-major results use the native class
+decision's report label, never one inferred from probabilities.
+
+## Check every affected path
+
+Apply the entries relevant to the change:
+
+- **Format:** versions, manifest validation, allowed members and normative docs agree.
+- **Writer:** unsupported models fail early; local inference, environment and explicit samples remain correct.
+- **Reader:** archive bounds, hashes, closed loading and recomputed claims remain enforced.
+- **Structure:** visualized trees, coefficients and importances describe the loaded model.
+- **Schema:** fields, reports, names, dtypes, mappings and samples agree across export/inspect/load.
+- **Packaging:** base installs work without adapter libraries; imports remain lazy.
+- **Websites:** examples use actual APIs, inspection claims are accurate, controls work by keyboard and layouts remain usable on mobile.
+- **Tests:** success and affected rejection paths exercise observable contracts.
+
+A change is incomplete when it works only through the path used by its first test.
+
+## Development and testing
+
+Work from the repository root with `uv` on Python 3.14:
 
 ```shell
 uv python install 3.14
@@ -151,14 +181,16 @@ uv sync --locked --all-extras
 uv run pre-commit install
 ```
 
-After changing dependency metadata, use `uv sync` to regenerate `uv.lock` and
-commit the lockfile. CI and manual `publish.yml` use locked dev/all extras on 3.14.
-Default dev installs `mlbundle[all]`; base users can omit it. Publishing reuses CI.
-Ruff handles lint and formatting; Pyright uses the family's basic mode.
+The schema extra admits mlschema `>=0.3.0,<0.4` on Python 3.14 only. Default dev
+installs include `mlbundle[all]`; base users can omit them. Dependency metadata
+changes require `uv sync` to regenerate `uv.lock` and inclusion of the updated
+lockfile in the change. CI and publishing use locked dev/all extras on 3.14.
 
-## Verifying
+Start with the smallest proof of observable behavior. Cover success and affected
+errors together; use regression tests for bugs and integration tests for shared
+boundaries. Use browser checks when rendering, focus or keyboard behavior matters.
 
-Run these commands from the repository root:
+Before handing off Python source or package changes, run:
 
 ```shell
 uv run ruff check .
@@ -168,133 +200,49 @@ uv run pytest
 uv build
 ```
 
-The Ruff commands also work without the final `.` because the default is the
-current directory: `uv run ruff check` and `uv run ruff format --check`.
-`uv run pytest` runs `tests/`, measures branch coverage and enforces the family's
-80% minimum, writing terminal and XML reports. Tests use the installed package;
-its version comes from package metadata. CI checks lint/types and the built wheel
-on Ubuntu/Windows; manual `publish.yml` requires that CI. Build a wheel and sdist.
+Ruff owns lint/formatting; Pyright uses basic mode. Tests use the installed package,
+obtain its version from metadata and enforce 80% branch-inclusive coverage with
+terminal/XML reports. Build both wheel and sdist. CI tests the built wheel on
+Ubuntu/Windows, including base installs.
 
-Start with the smallest proof of a behavior change, then broaden when needed.
-If a check cannot run, report the exact command and blocker. Never claim a test,
-environment or behavior was verified when it was not.
+Use Vite+ (`vp`) for all three frontend projects: `vp install`, `vp run check`
+and `vp run build` at the root, or the site's `package.json` scripts via `vp run`.
+Astro commands go through `vp exec`; the playground uses Vite+ directly.
+A docs-only edit needs relevant examples/links/build checks, not every
+Python gate. If any check cannot run, report its exact command and blocker.
 
 ## Documentation
 
-- `README.md` owns purpose, honest implementation status and development setup.
-- `SECURITY.md` owns the threat model, guarantees, limits and private reporting.
-- `docs/format.md` owns the version 1 wire specification and verification rules.
-- Rewrite stale guidance instead of appending competing accounts.
+Keep README focused on identity, installation, primary usage, supported surfaces
+and links to detailed guides. `SECURITY.md` owns the threat model, guarantees,
+limits and private reporting. `docs/format.md` owns the wire specification;
+web docs must reuse the normative files instead of maintaining parallel copies.
 
-Keep agent policy in this root file. Do not add nested `AGENTS.md` files.
+Document user-visible contracts and durable cross-module decisions. Rewrite
+stale guidance rather than appending a competing account. Keep all agent policy
+in this root file; do not add nested AGENTS.md files.
 
-## Plans and work artifacts
+## Git, publishing and work artifacts
+
+Preserve unrelated working-tree changes. Do not commit, push, create branches
+or open pull requests unless explicitly requested. Use Conventional Commits
+(`chore:`, `docs:`, `ci:`, `feat:`, `fix:`, `test:`).
+Never add `Co-Authored-By`, AI attribution or "Generated with" lines to commits or PRs.
+
+PyPI publication is automatic when `project.version` changes in a push to `main`.
+`publish.yml` must run the full CI workflow first and publish only that new version
+through the `pypi_env` environment, whose branch policy is limited to `main` and
+whose `MLBUNDLE_API_TOKEN` secret is project-scoped. Never read or expose secret
+values, change versions just to trigger publication, or invoke uploads manually.
+No GitHub releases or version tags; "tags" means repository topics.
 
 Do not create plan, notes, TODO, lessons, scratch or tech-debt files in the repo.
-The conversation, issues, code, tests and final diff are the work record.
+Keep generated coverage and browser evidence out of changes. The conversation,
+issues, source, tests and final diff are the work record.
 
-## How it works
+## Done
 
-The writer accepts member bytes and manifest parts, computes integrity records,
-validates through the reader and produces a deterministic ZIP. Publication uses
-atomic hard links or replacement, requiring explicit overwrite. Exclusive-create
-fallback removes partial destinations on failure but exposes the file while copying.
-Sklearn/XGBoost/CatBoost exports verify shared claims/structure after a native
-skops/UBJSON/CBM round trip before publication. Safety ceilings may only be lowered.
-
-Every export requires the schema extra. mlschema infers from `training_data=` or
-one float-1.0 row, recording schema v2 source/separator (default `__`). Real frames
-exclude every declared target and record training dtypes; default dtypes are null.
-Only explicit `sample_rows=N` includes real rows. Model-origin mappings use names;
-others use positions; generated names start at `feature_0`. Unique `target_names`
-map by output position. Reports use string labels; manifest labels retain types.
-Series pairs are adapted once to MLForm columns until mlschema emits that shape.
-Export/inspect/load share schema/report/sample validation without reader-side mlschema.
-
-XGBoost supports exact single-target tree wrappers with closed objectives. Supplied
-output-major labels bind to a native copy via an owned booster attribute and are
-verified on load; omitted labels use encoded indices. Sklearn/CatBoost own classes_
-and reject `class_labels=`. CatBoost supports exact numeric single-target symmetric
-models, complete native state/structure and in-memory CBM loading. Exact outer
-sklearn Pipelines ending in XGBoost/CatBoost use checked skops/native components;
-other native placements remain rejected.
-
-ONNX preserves path/bytes unchanged (ModelProto serialized once), validates once
-per export/load with bounded scalar scans, and rejects external tensors, custom
-domains/functions and runtime/training configuration before a CPU session. It
-verifies signatures, metadata/environment claims and native labels; absent labels
-use count-checked declarations. OnnxModel retains bytes/session; structure is null.
-Read the normative ONNX section linked from `docs/format.md` for layouts and bounds.
-
-The closed member set is manifest, required schema, one native member (or declared
-skops + UBJSON/CBM pair), required extractable structure, and explicit samples:
-at most six members. The manifest records identity/time/writer, model metadata,
-ordered features/origin/dtypes, output-major targets/classes, training environment,
-member hashes/sizes and user metadata. Model-exposed dtypes are separately verified.
-Every declaration is untrusted; hashes do not establish authenticity.
-
-Inspect validates archive/JSON bounds, manifest, integrity and schema/samples
-without model imports/deserialization; it cannot attest model-derived claims.
-Load uses closed adapters and shared extraction to recompute claims and structure.
-`row_from_record`/`predict_record` share schema-key lookups, bounded numeric-string
-and bool conversion, optional None-to-NaN handling and escaped key errors without
-values. Extra keys are never iterated. Predictions are frozen output-major report
-results, including the native class decision's report label (never inferred from
-probabilities). Safe version hints diagnose failed manifests/skops loads without new gates.
-
-Adapters own recognition, preparation, serialization/loading, claims, structure
-and prediction; extraction uses only native state and is shared by export/load.
-`prepare_export` receives strict ExportDeclarations and leaves the user's object
-unchanged. Missing native names are null; shared code owns declared/generated names
-and environment. Null native classifier labels permit count-checked declarations,
-including ONNX without byte changes. Native errors become bounded MLBundleErrors.
-Keep native behavior in adapters; follow `adapters.py`.
-
-## Where code lives
-
-- `src/mlbundle/__init__.py` — public inspect/export/load, contract models, enums, errors and package version.
-- `src/mlbundle/cli.py` — argparse inspect/verify console entry with safe bounded display.
-- `src/mlbundle/_base.py` and `errors.py` — strict frozen model configuration, string bounds and bounded errors.
-- `src/mlbundle/contract.py` — closed identifiers and native member/format pairing.
-- `src/mlbundle/limits.py` — shared archive ceilings and specific member caps.
-- `src/mlbundle/canonical.py` and `_canonical_work.py` — deterministic JSON and bounded decoding/expansion.
-- `src/mlbundle/model_io.py`, `_native_io.py`, `_export_manifest.py` — public I/O, native round trips and manifest construction.
-- `src/mlbundle/_composite/`, `_pipeline_contract.py` — strict recipe, separate I/O, closed reconstruction/claims/prediction and input/inner boundaries. Read `docs/format-pipeline.md` when changing composites.
-- `src/mlbundle/training.py` — lazy local/default inference and feature origin/dtype resolution.
-- `src/mlbundle/schema.py` and `_schema_fields.py` — closed schema/report declarations and reader cross-checks without mlschema.
-- `src/mlbundle/_schema_inference.py` — temporary mlschema-to-MLForm series adaptation.
-- `src/mlbundle/samples.py` — explicit feature-row selection and bounded cell conversion.
-- `src/mlbundle/_sklearn/` — owned trust/skops/state/parameters/structure, transformer route and closed fitted-width/name proofs. Composite commitments/native structure bind the rebuilt Pipeline; all-sklearn structure stays null.
-- `src/mlbundle/_xgboost/` — closed wrappers/objectives, native UBJSON preflight/loading, label binding, recoverable config, complete tree structure and validated prediction.
-- `src/mlbundle/_catboost/` — closed numeric symmetric wrappers/losses, CBM preflight/in-memory loading, complete native state/structure and validated prediction.
-- `src/mlbundle/_onnx/` — bounded protobuf/graph validation, unchanged bytes, native signatures/labels, CPU sessions and tabular prediction.
-- `src/mlbundle/declarations.py` — class-label resolution and shared output-major target-name validation.
-- `src/mlbundle/claims.py` — shared extracted claims and exact claim/structure comparison.
-- `src/mlbundle/manifest.py` — manifest sections, cross-field validation and JSON boundaries.
-- `src/mlbundle/integrity.py` — member SHA-256/size records and verification.
-- `src/mlbundle/environment.py` — training declarations and distribution metadata capture.
-- `src/mlbundle/adapters.py`, `_prediction_input.py`, `_prediction_decisions.py` — adapter/predictor protocols, input checks and bounded native class mapping.
-- `src/mlbundle/registry.py` — closed lazy resolution of `_sklearn`, `_xgboost`, `_catboost` and `_onnx` adapters.
-- `src/mlbundle/_container_rules.py` — shared source type, closed member sets/order and ceilings.
-- `src/mlbundle/_zip_directory.py` — bounded ZIP/ZIP64 directory and extra-field validation.
-- `src/mlbundle/_zip_members.py` — local headers/descriptors and bounded decompression with CRC.
-- `src/mlbundle/container.py` — source bounds, validated in-memory reading and integrity checks.
-- `src/mlbundle/writing.py` — integrity ownership, deterministic ZIP and atomic publication.
-- `src/mlbundle/inspection.py`, `results.py` — metadata-only inspection and result records without adapter resolution.
-- `src/mlbundle/records.py`, `_display.py` — record input/output and shared safe display.
-- `src/mlbundle/_versions.py`, `_load_diagnostics.py` — bounded post-failure version hints.
-- `docs/format.md` — version 1 wire specification; linked container, adapter/structure, ONNX and schema/sample sections are normative.
-- `tests/` — one file per feature, with success and error cases together.
-- `scripts/package_smoke.py`, `publish_check.py` — artifact checks and publish preflight.
-- `pyproject.toml` and `uv.lock` — package metadata, tool configuration and lock.
-- `.github/workflows/ci.yml`, `publish.yml` — shared CI and owner-approved publishing.
-- `.pre-commit-config.yaml` — Ruff, Pyright and basic file hygiene.
-- `README.md`, `SECURITY.md` and this file — project and contributor context.
-
-## Taste
-
-- One format definition beats synchronized copies.
-- A closed adapter boundary beats dynamic loading.
-- Early export errors beat surprises after upload.
-- Honest metadata beats impressive but unverifiable visualisations.
-- Simplicity never excuses weak validation or data safety.
+Work is complete when every applicable path works, the owning layer contains
+the rule, contracts remain intentional, obsolete behavior is gone, useful
+regression coverage exists, relevant checks have run and documentation agrees.
+Simplicity never excuses weaker validation or data safety.

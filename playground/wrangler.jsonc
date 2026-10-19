@@ -1,0 +1,12 @@
+{
+  "name": "mlbundle-playground",
+  "compatibility_date": "2026-10-19",
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./dist",
+  },
+  "routes": [
+    { "pattern": "playground.mlbundle.eshkra.dev", "custom_domain": true },
+  ],
+}

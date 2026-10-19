@@ -1,0 +1,7 @@
+# The landing example and its capture script report to the console by design.
+extend = "../pyproject.toml"
+
+[lint]
+extend-ignore = [
+    "T201", # print() output is what the page shows and what the script reports.
+]

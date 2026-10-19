@@ -1,0 +1,19 @@
+---
+// A stored CLI run: the command, its real output and exit code.
+interface Props {
+  command: string;
+  output: string;
+  exit: number;
+}
+const { command, output, exit } = Astro.props;
+const ok = exit === 0;
+---
+
+<div class="example window terminal">
+  <div class="window-bar mono">
+    <span>{command.split(" ")[1]}</span>
+    <span class:list={["exit", { fail: !ok }]}>exit {exit}</span>
+  </div>
+  <pre class="terminal-body mono"><span class="prompt" aria-hidden="true">$ </span>{command}
+<span class:list={["out", { fail: !ok }]}>{output}</span></pre>
+</div>

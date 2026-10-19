@@ -1,7 +1,7 @@
 # Format 1 schema v2 and samples
 
 Normative section of [the format contract](format.md). Local inference uses
-mlschema >=0.2.1,<0.3, tested with 0.2.1. Fields, source and separator are untrusted
+mlschema >=0.3.0,<0.4, validated against local 0.3.0. Fields, source and separator are untrusted
 declarations; integrity cannot authenticate the training data or its history.
 
 ## Export inputs and defaults
@@ -35,8 +35,8 @@ without builders, overrides or custom kinds. The separator is stored and read
 from the schema; consumers must not assume the default.
 
 Model-origin fields retain name mappings. Dataframe/declared inference preserves
-named columns for grouping, then rewrites parent/one-hot `mappedTo` values
-to their zero-based feature position. Series columns have no mappings. Generated
+named columns for grouping, then calls `mlschema.with_positional_mappings(fields, names)` to convert
+parent/one-hot targets to their zero-based feature position. Series columns have no mappings. Generated
 origin is inferred on positional columns directly. Labels remain feature names.
 For models without native names, prediction accepts 2-D NumPy arrays or nested
 numeric rows in manifest feature order. Adapter-supported sparse arrays and
@@ -76,8 +76,8 @@ All five keys are required and unknown keys are forbidden. `source` is exactly
 and unknown versions raise bounded `InvalidSchemaError` requiring re-export.
 A missing schema member raises bounded `InvalidContainerError` saying the bundle
 predates the required schema and must be re-exported, through shared member rules.
-Thus 0.1.0a1 bundles without schema or with schema v1 are incompatible with 0.1.0a2.
-Format version remains `1`, whose pre-release wire contract is not frozen.
+Thus 0.1.0a1 bundles without schema or with schema v1 require re-export for 0.2.0.
+Format version remains `1`, whose wire contract is not frozen.
 
 Arrays preserve order. `fields` has 1–100,000 entries and `reports` 1–1,024.
 Typed records use strict types, finite numbers and no arbitrary extensibility.
@@ -99,12 +99,12 @@ a top-level ordinary label must equal the feature name at that index.
 | `series` | `columns`: exactly two scalar subfields, with `id` equal to `field1` then `field2`, and no `mappedTo`; no nested series/one-hot groups. Labels describe pair axes. |
 | `onehot-category` | Special shape below. |
 
-In 0.1.0a3 the `series` shape changed from `field1`/`field2` to MLForm's
+In 0.2.0 the `series` shape changed from `field1`/`field2` to MLForm's
 `columns` while format 1 is not frozen. Schema version stays `"2"`: no bundle
 written before this change contains a series field, so a version bump would
 invalidate every 0.1.0a2 bundle for a shape none uses. Readers reject the old shape.
-The exporter adapts mlschema's pairs in one small function until mlschema emits
-this shape. Parent `label`, `required` and `mappedTo` remain unchanged:
+MLschema emits this shape directly. Parent `label`, `required` and `mappedTo`
+remain unchanged:
 
 ```json
 {"kind":"series","label":"pair","mappedTo":0,"required":true,

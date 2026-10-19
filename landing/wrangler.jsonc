@@ -1,0 +1,12 @@
+{
+  "name": "mlbundle-landing",
+  "compatibility_date": "2026-10-19",
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "force-trailing-slash",
+    "not_found_handling": "404-page",
+  },
+  "routes": [{ "pattern": "mlbundle.eshkra.dev", "custom_domain": true }],
+}

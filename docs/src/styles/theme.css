@@ -1,0 +1,171 @@
+/*
+ * The eshkra palette shared with eshkra.dev, the MLForm and MLschema docs, mapped onto Starlight.
+ * `--mb-*` names the brand values; Starlight's grays are derived from them so its components agree.
+ */
+:root,
+::backdrop {
+  --mb-bg: #0a0a0d;
+  --mb-subtle: #111116;
+  --mb-surface: #131318;
+  --mb-code-bg: #0d0d11;
+  --mb-border: #24242c;
+  --mb-border-strong: #34343e;
+  --mb-text: #f4f4f6;
+  --mb-text-2: #b6b6c2;
+  --mb-text-3: #8e8e9b;
+  --mb-ember: #ff8a3d;
+  --mb-ember-ink: #ff9a55;
+  --mb-ember-soft: rgb(255 138 61 / 0.14);
+
+  --sl-color-accent-low: #3a1a08;
+  --sl-color-accent: #ff8a3d;
+  --sl-color-accent-high: #ffc49b;
+  --sl-color-white: var(--mb-text);
+  --sl-color-gray-1: #e4e4ea;
+  --sl-color-gray-2: var(--mb-text-2);
+  --sl-color-gray-3: var(--mb-text-3);
+  --sl-color-gray-4: #5c5c68;
+  --sl-color-gray-5: var(--mb-border);
+  --sl-color-gray-6: var(--mb-subtle);
+  --sl-color-black: var(--mb-bg);
+  --sl-color-text: #d9d9e0;
+  --sl-color-text-accent: var(--mb-ember-ink);
+  --sl-color-bg-nav: color-mix(in oklab, var(--mb-bg) 88%, transparent);
+  --sl-color-bg-sidebar: var(--mb-bg);
+  --sl-color-bg-inline-code: var(--mb-subtle);
+  --sl-color-hairline: var(--mb-border);
+  --sl-color-hairline-light: var(--mb-border);
+  --sl-color-hairline-shade: var(--mb-border);
+
+  --sl-font: var(--brand-font-sans);
+  --sl-font-mono: var(--brand-font-mono);
+  --sl-text-h1: clamp(2.125rem, 1.6rem + 1.8vw, 2.75rem);
+  --sl-text-h2: 1.75rem;
+  --sl-text-h3: 1.3125rem;
+  --sl-text-h4: 1.0625rem;
+  --sl-line-height: 1.7;
+  --sl-nav-height: 4rem;
+  --sl-content-width: 48rem;
+  --sl-sidebar-width: 17.5rem;
+}
+
+:root[data-theme="light"],
+[data-theme="light"] ::backdrop {
+  --mb-bg: #ffffff;
+  --mb-subtle: #f7f7f9;
+  --mb-surface: #ffffff;
+  --mb-code-bg: #fbfbfc;
+  --mb-border: #e7e7ee;
+  --mb-border-strong: #d2d2dc;
+  --mb-text: #0b0b10;
+  --mb-text-2: #474756;
+  --mb-text-3: #666675;
+  --mb-ember: #e8590c;
+  --mb-ember-ink: #c2410c;
+  --mb-ember-soft: rgb(232 89 12 / 0.09);
+
+  --sl-color-accent-low: #fff1e8;
+  --sl-color-accent: #c2410c;
+  --sl-color-accent-high: #8a2e07;
+  --sl-color-gray-1: #24242e;
+  --sl-color-gray-4: #9a9aa8;
+  --sl-color-gray-7: #fbfbfc;
+  --sl-color-text: #26262f;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--mb-ember) 28%, transparent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--mb-ember-ink);
+  outline-offset: 3px;
+}
+
+/* Header: the landing's thin sticky bar, blurred over the page. Starlight draws its one hairline. */
+header.header {
+  backdrop-filter: blur(14px);
+}
+
+.parent-brand {
+  padding-left: 0.9rem;
+  border-left: 1px solid var(--mb-border-strong);
+  color: var(--mb-text-3);
+  font-size: 0.8125rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.parent-brand:hover {
+  color: var(--mb-ember-ink);
+}
+
+/* Search reads as a quiet field rather than a second toolbar. */
+site-search button[data-open-modal] {
+  border-color: var(--mb-border);
+  border-radius: 999px;
+  background: var(--mb-subtle);
+}
+
+site-search button[data-open-modal]:hover {
+  border-color: var(--mb-border-strong);
+}
+
+/* Sidebar: subtle group headings, ember marker on the current page. */
+.sidebar-pane {
+  border-inline-end: 1px solid var(--mb-border);
+}
+
+.sidebar-content .top-level > li > details > summary .group-label > span,
+.sidebar-content .top-level > li > .group-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--mb-text);
+}
+
+.sidebar-content a {
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: var(--mb-text-2);
+}
+
+.sidebar-content a:hover {
+  color: var(--mb-text);
+  background: var(--mb-subtle);
+}
+
+.sidebar-content a[aria-current="page"],
+.sidebar-content a[aria-current="page"]:hover {
+  background: var(--mb-ember-soft);
+  color: var(--mb-ember-ink);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--mb-ember);
+}
+
+/* Table of contents mirrors the sidebar's current-page marker. */
+starlight-toc a {
+  color: var(--mb-text-3);
+}
+
+starlight-toc a[aria-current="true"] {
+  color: var(--mb-ember-ink);
+}
+
+/* Pagination cards use the landing's window surface. */
+.pagination-links a {
+  border-color: var(--mb-border);
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.pagination-links a:hover {
+  border-color: var(--mb-border-strong);
+  background: var(--mb-subtle);
+}
+
+@media (forced-colors: active) {
+  .sidebar-content a[aria-current="page"] {
+    box-shadow: none;
+    outline: 1px solid Highlight;
+  }
+}

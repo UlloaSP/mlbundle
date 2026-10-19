@@ -1,7 +1,9 @@
 name: Publish to PyPI
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [pyproject.toml]
 
 permissions:
   contents: read
@@ -11,26 +13,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  preflight:
+    name: Check version change
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.check.outputs.publish }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check version change and PyPI availability
+        id: check
+        env:
+          PREVIOUS_REF: ${{ github.event.before }}
+        run: python scripts/publish_check.py --previous-ref "$PREVIOUS_REF"
+
   build:
+    needs: preflight
+    if: needs.preflight.outputs.publish == 'true'
     uses: ./.github/workflows/ci.yml
     with:
       prepare-publish: true
 
   publish:
-    needs: build
+    needs: [preflight, build]
+    if: needs.preflight.outputs.publish == 'true' && needs.build.result == 'success'
     runs-on: ubuntu-latest
     environment:
       name: pypi_env
       url: https://pypi.org/p/mlbundle
-    permissions:
-      id-token: write
     steps:
       - name: Download CI-validated distributions
         uses: actions/download-artifact@v4
         with:
           name: distributions
           path: dist
-      - name: Publish to PyPI with Trusted Publishing
+      - name: Publish to PyPI with the project token
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
+          user: __token__
+          password: ${{ secrets.MLBUNDLE_API_TOKEN }}

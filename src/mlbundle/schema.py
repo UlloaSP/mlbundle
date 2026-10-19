@@ -76,21 +76,6 @@ def reports_for(claims: ModelClaims) -> list[dict[str, JsonValue]]:
     return reports
 
 
-def positional_fields(fields: list[dict], names: list[str]) -> None:
-    """Rewrite inferred name mappings, retaining mlschema's labels and grouping."""
-    positions = {name: index for index, name in enumerate(names)}
-
-    def rewrite(field: dict) -> None:
-        if "mappedTo" in field:
-            field["mappedTo"] = positions[field["mappedTo"]]
-        for option in field.get("options", []):
-            if isinstance(option, dict):
-                rewrite(option)
-
-    for field in fields:
-        rewrite(field)
-
-
 def _mapping_index(
     mapping: str | int, positions: dict[str, int], origin: FeatureOrigin
 ) -> int:

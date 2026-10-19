@@ -16,6 +16,12 @@ __pycache__/
 .cache/
 .tox/
 .nox/
+node_modules/
+.astro/
+.vite/
+.wrangler/
+playwright-report/
+test-results/
 
 # Build output
 build/

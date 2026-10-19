@@ -1,0 +1,236 @@
+/* Windows inside plates: the code excerpt, the bundle and the terminals. */
+.window {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.window-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-3);
+  font-size: 0.75rem;
+}
+.window .code {
+  flex: 1;
+  padding: 1.125rem 1.25rem;
+  font-size: 0.8125rem;
+}
+.window-out {
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-2);
+  font-size: 0.75rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.ok {
+  color: var(--ember-ink);
+}
+.fail {
+  color: var(--ember-ink);
+  font-weight: 650;
+}
+
+/* Hero stage: the excerpt beside the bundle it wrote, at equal height. */
+.hero .stage {
+  max-width: 64rem;
+}
+.hero-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: clamp(0.75rem, 2vw, 1.25rem);
+  text-align: left;
+}
+.members {
+  flex: 1;
+  margin: 0;
+  padding: 0.375rem 0;
+  list-style: none;
+}
+.members li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.125rem 1rem;
+  padding: 0.6875rem 1.25rem;
+}
+.members li + li {
+  border-top: 1px solid var(--border);
+}
+.member-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.member-size {
+  grid-row: 1;
+  grid-column: 2;
+  color: var(--text-3);
+  font-size: 0.75rem;
+}
+.member-role {
+  grid-column: 1 / -1;
+  color: var(--text-2);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+/* Editorial sections after the hero. */
+.inside,
+.verify,
+.formats,
+.schema {
+  border-top: 1px solid var(--border);
+}
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(2rem, 6vw, 5rem);
+  align-items: start;
+}
+.parts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(1.5rem, 4vw, 3rem);
+  margin: 3rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.parts li {
+  padding-top: 1.25rem;
+  border-top: 2px solid var(--ember);
+}
+.parts h3,
+.ledger h3 {
+  font-size: 1.25rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.parts p {
+  margin-top: 0.625rem;
+  color: var(--text-2);
+}
+.aside {
+  max-width: 50rem;
+  margin-top: 2.5rem;
+  color: var(--text-2);
+}
+.aside .text-link {
+  display: flex;
+  width: fit-content;
+  margin-top: 0.75rem;
+}
+.verify-plate {
+  --gx: 96%;
+  --gy: 100%;
+  margin-top: 2.5rem;
+}
+.terminal-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.terminal-body {
+  flex: 1;
+  margin: 0;
+  padding: 1rem 1.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.terminal-body .out {
+  color: var(--text-2);
+}
+.exit {
+  font-weight: 600;
+}
+.plate-note {
+  margin-top: 1rem;
+  color: rgb(255 255 255 / 0.78);
+  font-size: 0.875rem;
+}
+.plate-note code {
+  color: #fff;
+}
+.libraries {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+.libraries th,
+.libraries td {
+  padding: 1rem 1rem 1rem 0;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.libraries thead th {
+  padding-top: 0;
+  color: var(--text-3);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+.libraries tbody th {
+  white-space: nowrap;
+  font-size: 1.0625rem;
+  font-weight: 650;
+}
+.libraries td .mono {
+  display: block;
+  color: var(--ember-ink);
+  font-size: 0.8125rem;
+}
+.libraries .note {
+  color: var(--text-2);
+}
+.libraries td.mono {
+  color: var(--text-2);
+  font-size: 0.8125rem;
+}
+.ledger {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2rem;
+}
+.ledger ul {
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border);
+}
+.ledger li {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+}
+.ledger div:first-child h3 {
+  color: var(--ember-ink);
+}
+@media (max-width: 64rem) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 48rem) {
+  .hero-pair,
+  .terminal-pair,
+  .parts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 30rem) {
+  .ledger {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .window .code {
+    padding-inline: 1rem;
+    font-size: 0.6875rem;
+  }
+  .libraries thead th:last-child,
+  .libraries td:last-child {
+    display: none;
+  }
+}

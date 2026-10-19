@@ -1,0 +1,22 @@
+{
+  "name": "mlbundle-sites",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.14.0",
+  "engines": { "node": "^22.18.0 || ^24.11.0 || >=26.0.0" },
+  "scripts": {
+    "build": "vp run --filter './landing' --filter './docs' --filter './playground' build",
+    "typecheck": "vp run --filter './landing' --filter './docs' --filter './playground' typecheck",
+    "test": "vp run mlbundle-docs#test && vp run mlbundle-playground#test:unit",
+    "lint": "vp lint landing/src docs/src playground/src playground/tests --deny-warnings",
+    "check": "vp run lint && vp run mlbundle-landing#check:format && vp run typecheck && vp run test",
+    "check:deploy": "vp exec wrangler deploy --dry-run --config landing/wrangler.jsonc && vp exec wrangler deploy --dry-run --config docs/wrangler.jsonc && vp exec wrangler deploy --dry-run --config playground/wrangler.jsonc",
+    "dev:landing": "vp run mlbundle-landing#dev",
+    "dev:docs": "vp run mlbundle-docs#dev",
+    "dev:playground": "vp run mlbundle-playground#dev"
+  },
+  "devDependencies": {
+    "vite-plus": "1.3.0",
+    "wrangler": "4.151.1"
+  }
+}
