@@ -1,4 +1,4 @@
-"""Execute the README quick start and its mlbundle CLI commands."""
+"""Execute the README quick start and check the links PyPI renders."""
 
 import re
 import shlex
@@ -13,6 +13,17 @@ BLOCKS = re.findall(
     r"```(\w+)\n(.*?)\n```", README.read_text(encoding="utf-8"), re.DOTALL
 )
 PYTHON = [code for language, code in BLOCKS if language == "python"]
+LINKS = re.findall(
+    r"\]\(([^)\s]+)\)|(?:href|src|srcset)=\"([^\"]+)\"",
+    README.read_text(encoding="utf-8"),
+)
+
+
+def test_links_are_absolute():
+    # PyPI renders the README without the repository, so relative links break.
+    targets = [markdown or html for markdown, html in LINKS]
+    assert targets
+    assert [url for url in targets if not url.startswith("https://")] == []
 
 
 @pytest.mark.parametrize("code", PYTHON)
