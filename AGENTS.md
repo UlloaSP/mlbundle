@@ -5,7 +5,7 @@ inferred schema and model structure in one compressed `.mlbundle` file.
 
 It owns export, metadata-only inspection and validated loading. It is the
 training-side companion to MLSuite, whose runtime accepts `.mlbundle` uploads.
-MLSuite does not train models. The package version is 0.2.0; format 1 is not frozen.
+MLSuite does not train models. The package version is 0.2.1; format 1 is not frozen.
 Implementation claims require code and test proof.
 
 ## What must remain true

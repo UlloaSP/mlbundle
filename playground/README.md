@@ -8,7 +8,7 @@ Intended host: <https://playground.mlbundle.eshkra.dev/>. Documentation: <https:
 
 Python runs in your browser on [Pyodide](https://pyodide.org/), inside a dedicated Web Worker. There is no server that executes code, and neither your code nor your files are uploaded anywhere.
 
-- The build bundles this repository's `src/mlbundle` (every `.py` file plus the `state_fields.json` package data) into the worker, with distribution metadata whose version is read from `pyproject.toml`. The page always runs the mlbundle source it was built from, at version 0.2.0 today.
+- The build bundles this repository's `src/mlbundle` (every `.py` file plus the `state_fields.json` package data) into the worker, with distribution metadata whose version is read from `pyproject.toml`. The page always runs the mlbundle source it was built from, at version 0.2.1 today.
 - Each run executes your code as written, in a fresh namespace and an empty working directory. Every `*.mlbundle` the code writes into that directory (at most 8 per run) is passed to `mlbundle.inspect`, then to `mlbundle.load`, which deserializes it through the closed sklearn adapter and recomputes model claims and structure. Only then is it marked **Verified**. Loading is done automatically only for bundles your own code just wrote.
 - **Download .mlbundle** saves the exact bytes mlbundle wrote.
 - **Inspect a .mlbundle file** (the upload icon) reads a local file in the browser and runs `mlbundle.inspect` on it. It never calls `load` and never deserializes the model, so uploaded files show **Inspected only** and their structure is withheld: structure is only trustworthy once `load` has recomputed it. Files that mlbundle rejects show **Rejected** with mlbundle's error.

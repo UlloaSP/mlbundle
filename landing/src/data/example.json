@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.2.1",
   "code": "import pandas as pd\nfrom sklearn.tree import DecisionTreeClassifier\n\nfrom mlbundle import export, load\n\ntraining = pd.DataFrame(\n    [[0.0, 1.0, \"cold\"], [1.0, 0.0, \"warm\"]] * 2,\n    columns=[\"temperature\", \"humidity\", \"target\"],\n)\nfeatures = training.drop(columns=\"target\")\nmodel = DecisionTreeClassifier(random_state=7)\nmodel.fit(features, training[\"target\"])\n\nexport(\n    model,\n    \"trained.mlbundle\",\n    training_data=training,\n    target_names=[\"target\"],\n)\n\nbundle = load(\"trained.mlbundle\")\nrecord = {\"temperature\": 0.0, \"humidity\": 1.0}\nprediction = bundle.predict_record(record)[0]\nprint(prediction.predicted_label, prediction.probabilities)\n",
   "printed": "cold (1.0, 0.0)",
-  "bundleBytes": 9227,
+  "bundleBytes": 9233,
   "members": [
     {
       "name": "manifest.json",
@@ -12,7 +12,7 @@
     {
       "name": "model.skops",
       "size": 15011,
-      "sha256": "13257b547ae5a12c2bc5cea20afaf68d1a36d6073c8f77f1ae676979c40375d6"
+      "sha256": "b332c1e060939f16a2f300797c6ee1625e99d684f215e45ba8772fd7dfee5da2"
     },
     {
       "name": "schema.json",
@@ -28,9 +28,9 @@
   "manifest": {
     "format_name": "mlbundle",
     "format_version": "1",
-    "bundle_id": "a9e717a9-b071-4d23-bbd1-6deedc47e6b5",
-    "created_at": "2026-10-19T11:17:33.114088Z",
-    "writer_version": "0.2.0",
+    "bundle_id": "869eb397-2dce-44b4-b0d0-b6a85d757b0b",
+    "created_at": "2026-10-19T13:27:32.304933Z",
+    "writer_version": "0.2.1",
     "model": {
       "estimator_class": "DecisionTreeClassifier",
       "kind": "classifier",
@@ -90,7 +90,7 @@
       "architecture": "AMD64",
       "packages": {
         "catboost": "1.2.10",
-        "mlbundle": "0.2.0",
+        "mlbundle": "0.2.1",
         "mlschema": "0.3.0",
         "numpy": "2.5.4",
         "onnx": "1.23.0",
@@ -105,7 +105,7 @@
     },
     "integrity": {
       "model.skops": {
-        "sha256": "13257b547ae5a12c2bc5cea20afaf68d1a36d6073c8f77f1ae676979c40375d6",
+        "sha256": "b332c1e060939f16a2f300797c6ee1625e99d684f215e45ba8772fd7dfee5da2",
         "size": 15011
       },
       "schema.json": {
@@ -159,7 +159,7 @@
   },
   "inspect": {
     "exit": 0,
-    "stdout": "Metadata and integrity validated; model claims NOT verified.\nFormat: mlbundle 1\nBundle id: a9e717a9-b071-4d23-bbd1-6deedc47e6b5\nCreated: 2026-10-19T11:17:33.114088+00:00\nWriter: \"0.2.0\"\nModel: sklearn \"DecisionTreeClassifier\" (classifier)\nCounts: features=2, outputs=1, classes=[2]\nFeatures (model): [\"temperature\", \"humidity\"]\nClass labels (output-major): [[\"cold\", \"warm\"]]\nTarget names (output-major): [\"target\"]\nMembers:\n  manifest.json: validated (no self-integrity record)\n  model.skops: 15011 bytes sha256=13257b547ae5a12c2bc5cea20afaf68d1a36d6073c8f77f1ae676979c40375d6\n  schema.json: 388 bytes sha256=e770ad53af881faf368c686de86b2b00f0a64a1444e241985643349bf7b0bba4\n  structure.json: 511 bytes sha256=8cf658be94b826ba4f81f1a78ed2c8e5107fce656d212dc888bd8621a9068baa\nTraining: {\"python\": \"3.14.7\", \"implementation\": \"CPython\", \"os\": \"Windows\", \"os_version\": \"11\", \"architecture\": \"AMD64\"}\nPackages: {\"catboost\": \"1.2.10\", \"mlbundle\": \"0.2.0\", \"mlschema\": \"0.3.0\", \"numpy\": \"2.5.4\", \"onnx\": \"1.23.0\", \"onnxruntime\": \"1.30.0\", \"pandas\": \"3.0.6\", \"scikit-learn\": \"1.9.1\", \"scipy\": \"1.18.1\", \"skops\": \"0.16.0\", \"xgboost\": \"3.4.1\"}\nONNX environment: null\nPresent: schema=yes, structure=yes, samples=no\nUser metadata: {}",
+    "stdout": "Metadata and integrity validated; model claims NOT verified.\nFormat: mlbundle 1\nBundle id: 869eb397-2dce-44b4-b0d0-b6a85d757b0b\nCreated: 2026-10-19T13:27:32.304933+00:00\nWriter: \"0.2.1\"\nModel: sklearn \"DecisionTreeClassifier\" (classifier)\nCounts: features=2, outputs=1, classes=[2]\nFeatures (model): [\"temperature\", \"humidity\"]\nClass labels (output-major): [[\"cold\", \"warm\"]]\nTarget names (output-major): [\"target\"]\nMembers:\n  manifest.json: validated (no self-integrity record)\n  model.skops: 15011 bytes sha256=b332c1e060939f16a2f300797c6ee1625e99d684f215e45ba8772fd7dfee5da2\n  schema.json: 388 bytes sha256=e770ad53af881faf368c686de86b2b00f0a64a1444e241985643349bf7b0bba4\n  structure.json: 511 bytes sha256=8cf658be94b826ba4f81f1a78ed2c8e5107fce656d212dc888bd8621a9068baa\nTraining: {\"python\": \"3.14.7\", \"implementation\": \"CPython\", \"os\": \"Windows\", \"os_version\": \"11\", \"architecture\": \"AMD64\"}\nPackages: {\"catboost\": \"1.2.10\", \"mlbundle\": \"0.2.1\", \"mlschema\": \"0.3.0\", \"numpy\": \"2.5.4\", \"onnx\": \"1.23.0\", \"onnxruntime\": \"1.30.0\", \"pandas\": \"3.0.6\", \"scikit-learn\": \"1.9.1\", \"scipy\": \"1.18.1\", \"skops\": \"0.16.0\", \"xgboost\": \"3.4.1\"}\nONNX environment: null\nPresent: schema=yes, structure=yes, samples=no\nUser metadata: {}",
     "stderr": ""
   },
   "verify": {
@@ -169,7 +169,7 @@
   },
   "editedInspect": {
     "exit": 0,
-    "stdout": "Metadata and integrity validated; model claims NOT verified.\nFormat: mlbundle 1\nBundle id: a9e717a9-b071-4d23-bbd1-6deedc47e6b5\nCreated: 2026-10-19T11:17:33.114088+00:00\nWriter: \"0.2.0\"\nModel: sklearn \"DecisionTreeClassifier\" (classifier)\nCounts: features=2, outputs=1, classes=[2]\nFeatures (model): [\"temperature\", \"humidity\"]\nClass labels (output-major): [[\"cold\", \"warm\"]]\nTarget names (output-major): [\"target\"]\nMembers:\n  manifest.json: validated (no self-integrity record)\n  model.skops: 15011 bytes sha256=13257b547ae5a12c2bc5cea20afaf68d1a36d6073c8f77f1ae676979c40375d6\n  schema.json: 388 bytes sha256=e770ad53af881faf368c686de86b2b00f0a64a1444e241985643349bf7b0bba4\n  structure.json: 511 bytes sha256=8cf658be94b826ba4f81f1a78ed2c8e5107fce656d212dc888bd8621a9068baa\nTraining: {\"python\": \"3.14.7\", \"implementation\": \"CPython\", \"os\": \"Windows\", \"os_version\": \"11\", \"architecture\": \"AMD64\"}\nPackages: {\"catboost\": \"1.2.10\", \"mlbundle\": \"0.2.0\", \"mlschema\": \"0.3.0\", \"numpy\": \"2.5.4\", \"onnx\": \"1.23.0\", \"onnxruntime\": \"1.30.0\", \"pandas\": \"3.0.6\", \"scikit-learn\": \"1.9.1\", \"scipy\": \"1.18.1\", \"skops\": \"0.16.0\", \"xgboost\": \"3.4.1\"}\nONNX environment: null\nPresent: schema=yes, structure=yes, samples=no\nUser metadata: {}",
+    "stdout": "Metadata and integrity validated; model claims NOT verified.\nFormat: mlbundle 1\nBundle id: 869eb397-2dce-44b4-b0d0-b6a85d757b0b\nCreated: 2026-10-19T13:27:32.304933+00:00\nWriter: \"0.2.1\"\nModel: sklearn \"DecisionTreeClassifier\" (classifier)\nCounts: features=2, outputs=1, classes=[2]\nFeatures (model): [\"temperature\", \"humidity\"]\nClass labels (output-major): [[\"cold\", \"warm\"]]\nTarget names (output-major): [\"target\"]\nMembers:\n  manifest.json: validated (no self-integrity record)\n  model.skops: 15011 bytes sha256=b332c1e060939f16a2f300797c6ee1625e99d684f215e45ba8772fd7dfee5da2\n  schema.json: 388 bytes sha256=e770ad53af881faf368c686de86b2b00f0a64a1444e241985643349bf7b0bba4\n  structure.json: 511 bytes sha256=8cf658be94b826ba4f81f1a78ed2c8e5107fce656d212dc888bd8621a9068baa\nTraining: {\"python\": \"3.14.7\", \"implementation\": \"CPython\", \"os\": \"Windows\", \"os_version\": \"11\", \"architecture\": \"AMD64\"}\nPackages: {\"catboost\": \"1.2.10\", \"mlbundle\": \"0.2.1\", \"mlschema\": \"0.3.0\", \"numpy\": \"2.5.4\", \"onnx\": \"1.23.0\", \"onnxruntime\": \"1.30.0\", \"pandas\": \"3.0.6\", \"scikit-learn\": \"1.9.1\", \"scipy\": \"1.18.1\", \"skops\": \"0.16.0\", \"xgboost\": \"3.4.1\"}\nONNX environment: null\nPresent: schema=yes, structure=yes, samples=no\nUser metadata: {}",
     "stderr": ""
   },
   "editedVerify": {
