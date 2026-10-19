@@ -1,0 +1,54 @@
+---
+import { Icon } from "@astrojs/starlight/components";
+import { landingUrl, playgroundUrl } from "../sites";
+---
+
+<a class="nav-link" href={landingUrl}>Product</a>
+<a class="nav-link" href="https://pypi.org/project/mlbundle/">PyPI</a>
+<a href="https://github.com/UlloaSP/mlbundle" rel="me" class="icon-link sl-flex">
+  <span class="sr-only">mlbundle on GitHub</span>
+  <Icon name="github" />
+</a>
+<a class="playground" href={playgroundUrl}>
+  Playground <Icon name="external" size="0.9rem" />
+</a>
+
+<style>
+  .nav-link,
+  .icon-link {
+    color: var(--mb-text-2);
+    font-size: 0.875rem;
+    text-decoration: none;
+  }
+  .icon-link {
+    padding: 0.5em;
+    margin: -0.5em;
+  }
+  .nav-link:hover,
+  .icon-link:hover {
+    color: var(--mb-text);
+  }
+  .playground {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2.25rem;
+    padding: 0.45rem 0.95rem;
+    border-radius: 999px;
+    background: var(--mb-text);
+    color: var(--mb-bg);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .playground:hover {
+    background: var(--mb-ember-ink);
+    color: #fff;
+  }
+  @media (forced-colors: active) {
+    .playground {
+      border: 1px solid ButtonText;
+    }
+  }
+</style>

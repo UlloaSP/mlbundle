@@ -1,0 +1,27 @@
+{
+  "name": "mlbundle-docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vp exec astro dev --host 127.0.0.1 --port 4341",
+    "start": "vp run dev",
+    "build": "vp run typecheck && vp exec astro build",
+    "check": "vp run typecheck",
+    "preview": "vp exec astro preview --host 127.0.0.1 --port 4341",
+    "typecheck": "vp exec astro check",
+    "test": "vp exec node --test src/spec.test.ts"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.42.1",
+    "astro": "7.3.2",
+    "sharp": "0.35.5"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.10",
+    "typescript": "6.0.3"
+  },
+  "engines": {
+    "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
+  }
+}

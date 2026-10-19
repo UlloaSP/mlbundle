@@ -1,6 +1,6 @@
 # Security policy
 
-The v0.1.0a3 development pre-alpha has not had an independent security review;
+MLbundle 0.2.0 has not had an independent security review;
 do not accept bundles from untrusted parties. Format version 1 is not frozen.
 It implements strict manifest validation, secure container reading/writing, metadata-only
 `inspect`, export/load, sklearn, XGBoost, CatBoost and ONNX adapters, local schema inference,
@@ -291,5 +291,4 @@ behavior, and the impact. Share malicious bundles or sensitive details through
 that private report rather than a public issue or pull request. Remove personal
 or confidential training data from any reproducer you submit.
 
-Version 0.1.0a2 is published; 0.1.0a3 is not yet published. Report the affected
-version and commit you tested.
+Report the affected version and commit you tested.

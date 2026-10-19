@@ -1,0 +1,28 @@
+{
+  "name": "mlbundle-landing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vp exec astro dev --host 127.0.0.1 --port 4340",
+    "build": "vp run typecheck && vp exec astro build",
+    "typecheck": "vp exec astro check",
+    "example": "uv run --project .. python scripts/example.py",
+    "check:format": "vp exec prettier --check .",
+    "format": "vp exec prettier --write .",
+    "preview": "vp exec astro preview --host 127.0.0.1 --port 4340"
+  },
+  "dependencies": {
+    "astro": "7.3.2",
+    "sharp": "0.35.5"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.10",
+    "prettier": "3.9.10",
+    "prettier-plugin-astro": "1.1.1",
+    "typescript": "6.0.3"
+  },
+  "engines": {
+    "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
+  }
+}

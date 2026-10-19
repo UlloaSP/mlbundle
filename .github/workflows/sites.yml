@@ -1,0 +1,77 @@
+name: Check and build websites
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check-build:
+    name: Frontend lint, types, tests and builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1.21.2
+        with:
+          node-version: '24.14.1'
+          cache: true
+
+      - name: Install locked dependencies
+        run: vp install --frozen-lockfile
+
+      - name: Check lint, Astro formatting, types and unit tests
+        run: vp run check
+
+      - name: Test the Python browser runtime and all examples
+        run: vp run mlbundle-playground#test:runtime
+
+      - name: Build all three sites
+        run: vp run build
+
+      - name: Validate Cloudflare deployment configuration
+        run: vp run check:deploy
+
+      - name: Install Chromium
+        working-directory: playground
+        run: vp exec playwright install --with-deps chromium
+
+      - name: Test the built playground on desktop and mobile
+        run: vp run mlbundle-playground#test:e2e:built
+
+      - name: Keep browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playground-test-results
+          path: playground/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Only tested builds become deployable artifacts. Deployment never rebuilds them.
+      - name: Upload landing
+        uses: actions/upload-artifact@v4
+        with:
+          name: landing-build
+          path: landing/dist/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload documentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-build
+          path: docs/dist/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload playground
+        uses: actions/upload-artifact@v4
+        with:
+          name: playground-build
+          path: playground/dist/
+          if-no-files-found: error
+          retention-days: 7

@@ -1,0 +1,47 @@
+---
+import Terminal from "./Terminal.astro";
+import { example } from "../data/example";
+import { docs } from "../data/site";
+
+const firstLine = (text: string) => text.split("\n")[0];
+---
+
+<section class="section verify" id="verify" aria-labelledby="verify-title">
+  <div class="wrap">
+    <header class="section-head">
+      <h2 id="verify-title">Inspect reads it. Load checks it.</h2>
+      <p>
+        <code class="mono">inspect</code> validates the archive, manifest and hashes without
+        importing a model library. <code class="mono">load</code> also deserializes the model,
+        recomputes the claims derived from it, such as hyperparameters, counts, class labels and
+        tree structure, and rejects the file when they differ.
+      </p>
+    </header>
+    <figure class="plate verify-plate">
+      <div class="terminal-pair">
+        <Terminal
+          command="mlbundle inspect edited.mlbundle"
+          output={firstLine(example.editedInspect.stdout)}
+          exit={example.editedInspect.exit}
+        />
+        <Terminal
+          command="mlbundle verify edited.mlbundle"
+          output={example.editedVerify.stderr}
+          exit={example.editedVerify.exit}
+        />
+      </div>
+      <figcaption class="plate-note">
+        The example bundle with one edit: <code class="mono">max_depth</code> changed from{" "}
+        <code class="mono">null</code> to <code class="mono">3</code> in the manifest.
+      </figcaption>
+    </figure>
+    <p class="aside">
+      Hashes catch corrupted files, not deliberate edits, and bundles are not signed. The training
+      environment, schema and samples are validated but not authenticated. Treat a bundle from
+      someone else as untrusted input.
+      <a class="text-link" href={docs.trust}>
+        What MLbundle checks <span aria-hidden="true">↗</span>
+      </a>
+    </p>
+  </div>
+</section>

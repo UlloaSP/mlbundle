@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, cast
 
 from pydantic import ValidationError
 
-from ._schema_inference import mlform_fields
 from .canonical import canonical_dumps, canonical_value
 from .claims import ModelClaims
 from .contract import FeatureOrigin, MemberName
@@ -23,7 +22,7 @@ from .errors import (
 from .limits import ArchiveLimits
 from .manifest import FeatureInfo
 from .samples import sample_bytes
-from .schema import positional_fields, reports_for, validate_schema, validate_separator
+from .schema import reports_for, validate_schema, validate_separator
 
 if TYPE_CHECKING:
     from pandas import DataFrame
@@ -125,9 +124,9 @@ def prepare_training(
         dtypes = [None] * claims.n_features
     cap = limits.member_bytes(MemberName.SCHEMA)
     try:
-        fields = mlform_fields(mlschema.infer_schema(frame, onehot_separator=separator))
+        fields = mlschema.infer_schema(frame, onehot_separator=separator)
         if origin in (FeatureOrigin.DATAFRAME, FeatureOrigin.DECLARED):
-            positional_fields(fields, names)
+            fields = mlschema.with_positional_mappings(fields, names)
         schema = canonical_value(
             {
                 "schema_version": "2",

@@ -1,0 +1,41 @@
+---
+import Icon from "./Icon.astro";
+import Wordmark from "./Wordmark.astro";
+import { docs, family, links } from "../data/site";
+
+const resources = [
+  { title: "Documentation", text: "Guides and the format", href: links.docs },
+  { title: "Quick start", text: "Export and load a model", href: docs.quickStart },
+  { title: "Playground", text: "Try it in the browser", href: links.playground },
+  { title: "GitHub", text: "Source and issues", href: links.github },
+  { title: "Installation", text: "Extras and checkouts", href: docs.install },
+];
+---
+
+<section class="section start" id="start" aria-labelledby="start-title">
+  <div class="wrap">
+    <header class="section-head">
+      <h2 id="start-title">Start with one model.</h2>
+      <p>Export a model you already have, then load it the way your application will.</p>
+    </header>
+    <nav class="resources" aria-label="Resources">
+      {resources.map(({ title, text, href }) => (
+        <a href={href}>
+          <strong>{title}</strong>
+          <span>{text}</span>
+          <Icon name="arrow-up-right" size={16} />
+        </a>
+      ))}
+    </nav>
+    <ol class="path" aria-label="The eshkra path from a trained model to a reviewed prediction">
+      {family.map(({ name, stage, href }) => (
+        <li aria-current={name === "mlbundle" ? "step" : undefined}>
+          <span class="path-stage">{stage}</span>
+          <a href={href}>
+            <Wordmark name={name} />
+          </a>
+        </li>
+      ))}
+    </ol>
+  </div>
+</section>

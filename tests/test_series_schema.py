@@ -1,4 +1,4 @@
-"""The sole mlschema shape adaptation and its closed reader contract."""
+"""Native mlschema series output and its closed reader contract."""
 
 import copy
 from typing import get_args
@@ -15,7 +15,7 @@ from mlbundle.container import read_container
 from mlbundle.writing import write_container
 
 
-def test_field_vocabulary_matches_mlschema_except_series():
+def test_field_vocabulary_matches_mlschema():
     from mlschema.strategies.app import builtin_kinds
     from mlschema.strategies.domain.onehot_category_field import OneHotCategoryOption
 
@@ -27,12 +27,7 @@ def test_field_vocabulary_matches_mlschema_except_series():
     theirs = {item.name: set(item.model.model_fields) for item in builtin_kinds()}
     assert ours.keys() == theirs.keys()
     for kind, keys in ours.items():
-        if kind == "series":
-            # The MLForm columns adaptation is the only inferred shape difference.
-            assert keys - theirs[kind] == {"columns"}
-            assert {"field1", "field2"} <= theirs[kind] - keys
-        else:
-            assert keys <= theirs[kind], kind
+        assert keys <= theirs[kind], kind
     assert set(OneHotOption.model_fields) <= set(OneHotCategoryOption.model_fields)
 
 
@@ -45,25 +40,7 @@ def series_bundle(tmp_path):
     )
     original = infer_schema(frame)[0]
     field = view.schema["fields"][0]
-    assert field == {
-        **{
-            key: value
-            for key, value in original.items()
-            if key not in ("field1", "field2", "mappedTo")
-        },
-        "mappedTo": 0,
-        "columns": [
-            {
-                **{
-                    key: value
-                    for key, value in original[axis].items()
-                    if key != "mappedTo"
-                },
-                "id": axis,
-            }
-            for axis in ("field1", "field2")
-        ],
-    }
+    assert field == {**original, "mappedTo": 0}
     assert view.schema["schema_version"] == "2"
     assert mlbundle.inspect(path).schema == mlbundle.load(path).schema == view.schema
     return path, field
@@ -76,15 +53,9 @@ def test_series_export(series_bundle):
     ]
 
 
-def old_shape(field):
-    for column in field.pop("columns"):
-        field[column.pop("id")] = {**column, "mappedTo": field["mappedTo"]}
-
-
 @pytest.mark.parametrize(
     "change",
     [
-        old_shape,
         lambda f: f["columns"].reverse(),
         lambda f: f["columns"].pop(),
         lambda f: f["columns"].append(copy.deepcopy(f["columns"][0])),

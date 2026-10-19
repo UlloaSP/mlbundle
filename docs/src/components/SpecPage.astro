@@ -1,0 +1,31 @@
+---
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
+import { getEntry, render } from "astro:content";
+import { specPages } from "../spec";
+
+interface Props {
+  file: (typeof specPages)[number]["file"];
+}
+
+const { file } = Astro.props;
+const entry = await getEntry("spec", file);
+if (!entry) throw new Error(`Missing spec source ${file}`);
+const { Content, headings } = await render(entry);
+const page = specPages.find((spec) => spec.file === file)!;
+---
+
+<StarlightPage
+  frontmatter={{
+    title: entry.data.title,
+    description: `${page.label}: normative mlbundle contract, rendered from ${file} in the repository.`,
+    editUrl: `https://github.com/UlloaSP/mlbundle/edit/main/${file}`,
+  }}
+  headings={headings.filter(({ depth }) => depth > 1)}
+>
+  <p class="spec-source">
+    Normative source: <a href={`https://github.com/UlloaSP/mlbundle/blob/main/${file}`}
+      ><code>{file}</code></a
+    >. This page renders that file unchanged; the guides explain it, this text defines it.
+  </p>
+  <Content />
+</StarlightPage>

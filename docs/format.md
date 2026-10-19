@@ -2,10 +2,10 @@
 
 This document defines the wire contract for `format_name = "mlbundle"` and
 `format_version = "1"`. Format versions are independent of package versions.
-"Must" denotes a compatibility or security requirement. This pre-release
+"Must" denotes a compatibility or security requirement. This
 contract is implemented by the manifest, secure container, inspect/export/load,
 sklearn/XGBoost/CatBoost/ONNX adapters, local schema, samples and prediction-state checks.
-Version 1 is not frozen. Releases 0.1.0a2/a3 require schema v2; incompatible manifest/schema shapes require re-export. Valid a2 bundles without series remain compatible. The inspect/verify CLI uses these public APIs.
+Version 1 is not frozen. MLbundle 0.2.0 requires schema v2; incompatible manifest/schema shapes require re-export. Valid 0.1.0a2 bundles without series remain compatible. The inspect/verify CLI uses these public APIs.
 
 The normative container rules are in [Container and resource limits](format-container.md).
 The normative structure, adapter and result rules are in [Adapters and structure](format-adapters.md).

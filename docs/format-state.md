@@ -1,7 +1,7 @@
 # Version 1 prediction state and bounded native work
 
-Normative section of [the format contract](format.md). Version 1 is pre-release
-and not yet frozen. Bundles lacking the required prediction-state records
+Normative section of [the format contract](format.md). Version 1 is not frozen.
+Bundles lacking the required prediction-state records
 fail full claim comparison.
 
 ## Sklearn state ownership

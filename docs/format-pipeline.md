@@ -1,6 +1,6 @@
 # Version 1 composite pipelines
 
-Normative section of [the format contract](format.md). This pre-release format
+Normative section of [the format contract](format.md). This format
 extension preserves reading of standalone bundles. Older readers reject composites.
 
 ## Representation and declarations
