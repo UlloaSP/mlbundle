@@ -16,13 +16,27 @@ from mlbundle import (
     _lock_generation,
 )
 from mlbundle._wheel_tags import PLATFORMS, UV_PLATFORMS, normalize
-from mlbundle.contract import Library
+from mlbundle.contract import MODEL_MEMBERS, Library, ModelKind
 from mlbundle.lock import runtime_requirements
+from mlbundle.manifest import ModelInfo
 
 
 @pytest.fixture
 def offline_lock():
     """This module exercises the real resolver; the shared fixture replaces it."""
+
+
+def model_info(library: Library) -> ModelInfo:
+    return ModelInfo(
+        library=library,
+        serialization=MODEL_MEMBERS[library][0],
+        estimator_class="Model",
+        kind=ModelKind.REGRESSOR,
+        hyperparameters={},
+        n_features=1,
+        n_classes=None,
+        n_outputs=1,
+    )
 
 
 class Distribution:
@@ -64,7 +78,7 @@ def test_installed_distributions(monkeypatch):
 
 
 def test_roots_pick_one_installed_distribution_per_group():
-    groups = runtime_requirements(Library.XGBOOST)
+    groups = runtime_requirements(model_info(Library.XGBOOST))
     installed = {"pydantic": "2.14.1", "scikit-learn": "1.9.1", "xgboost-cpu": "3.4.1"}
     assert _lock_generation.roots(groups, installed) == installed
     for broken, message in [
@@ -74,13 +88,6 @@ def test_roots_pick_one_installed_distribution_per_group():
     ]:
         with pytest.raises(LockGenerationError, match=message):
             _lock_generation.roots(groups, broken)
-    composite = runtime_requirements(Library.SKLEARN, Library.CATBOOST)
-    assert [group[0] for group in composite] == [
-        "pydantic",
-        "scikit-learn",
-        "skops",
-        "catboost",
-    ]
 
 
 def test_runtime_groups_follow_the_package_extras():
@@ -91,7 +98,7 @@ def test_runtime_groups_follow_the_package_extras():
         assert name is not None
         extras.setdefault(extra and extra[1], set()).add(normalize(name[0]))
     for library in Library:
-        groups = runtime_requirements(library)
+        groups = runtime_requirements(model_info(library))
         assert {group[0] for group in groups} == extras[None] | extras[library.value]
 
 
@@ -228,7 +235,9 @@ def test_missing_uv(monkeypatch):
 @pytest.mark.network
 def test_generate_locks_the_installed_runtime_with_uv():
     """Resolve the sklearn runtime of this interpreter through the package index."""
-    lock = _lock_generation.generate_lock(runtime_requirements(Library.SKLEARN))
+    lock = _lock_generation.generate_lock(
+        runtime_requirements(model_info(Library.SKLEARN))
+    )
     installed = _lock_generation.installed_distributions()
     assert lock.python_version == platform.python_version()
     for name in ("pydantic", "scikit-learn", "skops", "numpy", "scipy"):

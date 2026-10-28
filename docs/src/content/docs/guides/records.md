@@ -120,7 +120,7 @@ print(regression.predict_record({"temperature": 0.5, "humidity": 0.5}))
 ## Pipelines that select columns by name
 
 scikit-learn pipelines whose fitted column selectors use names receive a one-row pandas DataFrame
-from `predict_record`; this needs pandas, which the `schema` extra installs. Other models receive a
+from `predict_record`; this needs pandas, which their lock pins and the `schema` extra installs. Other models receive a
 numeric row, preserving their native categorical handling.
 
 The normative record rules are in [Runtime record input](/format/schema/#runtime-record-input).

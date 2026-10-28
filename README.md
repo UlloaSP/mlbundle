@@ -15,7 +15,7 @@
   <a href="https://mlbundle.eshkra.dev"><img src="https://img.shields.io/badge/website-303039?style=flat&amp;logo=astro&amp;logoColor=ff6a1a" alt="Website" /></a>
   <a href="https://docs.mlbundle.eshkra.dev"><img src="https://img.shields.io/badge/docs-303039?style=flat&amp;logo=readthedocs&amp;logoColor=ff6a1a" alt="Documentation" /></a>
   <a href="https://playground.mlbundle.eshkra.dev"><img src="https://img.shields.io/badge/playground-303039?style=flat&amp;logo=stackblitz&amp;logoColor=ff6a1a" alt="Playground" /></a>
-  <a href="https://pypi.org/project/mlbundle/"><img src="https://img.shields.io/badge/version-0.3.0-b73d00?style=flat&amp;logo=pypi&amp;logoColor=white&amp;labelColor=303039" alt="Version 0.3.0" /></a>
+  <a href="https://pypi.org/project/mlbundle/"><img src="https://img.shields.io/badge/version-0.3.1-b73d00?style=flat&amp;logo=pypi&amp;logoColor=white&amp;labelColor=303039" alt="Version 0.3.1" /></a>
   <a href="https://github.com/UlloaSP/mlbundle"><img src="https://img.shields.io/badge/source-303039?style=flat&amp;logo=github&amp;logoColor=white" alt="Source on GitHub" /></a>
   <a href="https://github.com/UlloaSP/mlbundle/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/UlloaSP/mlbundle/ci.yml?branch=main&amp;style=flat&amp;label=CI&amp;labelColor=303039" alt="CI status" /></a>
   <a href="https://github.com/UlloaSP/mlbundle/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-b73d00?style=flat&amp;labelColor=303039" alt="MIT license" /></a>
@@ -45,11 +45,11 @@ pins the exact wheels a Linux or Windows runtime needs to serve it.
 
 ## Installation
 
-MLbundle **0.3.0** requires Python **3.14** for export with the schema extra.
+MLbundle **0.3.1** requires Python **3.14** for export with the schema extra.
 The installation command for this release is:
 
 ```bash
-python -m pip install "mlbundle[sklearn,schema,lock]==0.3.0"
+python -m pip install "mlbundle[sklearn,schema,lock]==0.3.1"
 ```
 
 To use a local checkout, run `python -m pip install -e ".[sklearn,schema,lock]"`
@@ -136,8 +136,8 @@ or training history.
 
 ## Runtime environment
 
-Export locks the installed versions of pydantic, the model libraries and their
-dependencies as `pylock.toml` for CPython with the GIL on Linux `x86_64` and
+Export locks the installed versions of pydantic, the model libraries (and pandas
+for scikit-learn pipelines that select columns by name) and their dependencies as `pylock.toml` for CPython with the GIL on Linux `x86_64` and
 `aarch64` and on Windows `amd64`. mlbundle itself is pinned by the manifest's
 `writer_version`.
 A runtime installs that lock plus `mlbundle==writer_version` in an isolated
@@ -164,7 +164,8 @@ structure, and all-sklearn Pipeline structure is null. The
 ## Some notes
 
 Package versions and wire-format versions are independent. Format 1 is not frozen;
-incompatible schema shapes and bundles without `pylock.toml` require re-export. The security design has not had an
+incompatible schema shapes, bundles without `pylock.toml` and 0.3.0 bundles of
+pipelines selecting columns by name whose lock lacks `pandas` require re-export. The security design has not had an
 independent review; do not accept bundles from untrusted parties.
 
 The reader bounds ZIP/JSON data, verifies integrity and uses closed native loaders.
