@@ -14,6 +14,7 @@ from .contract import MemberName
 from .errors import InvalidContainerError, LimitExceededError
 from .integrity import verify_integrity
 from .limits import ArchiveLimits
+from .lock import EnvironmentLock, check_bundle_lock
 from .manifest import Manifest
 
 
@@ -43,12 +44,13 @@ class ValidatedContainer:
     manifest: Manifest
     members: dict[MemberName, bytes]
     json: dict[MemberName, DecodedJSON]
+    lock: EnvironmentLock
 
 
 def read_validated_container(
     source: BundleSource, *, limits: ArchiveLimits | None = None
 ) -> ValidatedContainer:
-    """Validate ZIP records, bounded decompression, manifest and member integrity.
+    """Validate ZIP records, bounded decompression, manifest, integrity and lock.
 
     Streams are consumed from their current position and are never closed here.
     Model bytes remain opaque: this function does not verify model claims.
@@ -82,7 +84,9 @@ def read_validated_container(
                 members[entry.name] = value
     except (struct.error, zlib.error, OverflowError):
         raise InvalidContainerError("Corrupt ZIP container.") from None
-    return ValidatedContainer(manifest, members, decoded)
+    lock = EnvironmentLock.from_bytes(members[MemberName.LOCK])
+    check_bundle_lock(lock, manifest)
+    return ValidatedContainer(manifest, members, decoded, lock)
 
 
 def read_container(

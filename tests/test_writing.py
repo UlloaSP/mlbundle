@@ -9,6 +9,7 @@ import zipfile
 
 import pytest
 
+from lock_helpers import library_lock_bytes, sklearn_lock_bytes
 from mlbundle import (
     ArchiveLimits,
     InvalidContainerError,
@@ -22,6 +23,18 @@ from mlbundle.canonical import canonical_dumps
 from mlbundle.container import read_container
 from mlbundle.integrity import hash_member
 from mlbundle.writing import write_container
+
+LOCK = sklearn_lock_bytes()
+
+
+def members(model=b"model", extra=None):
+    """The required model, schema and lock members, plus optional ones."""
+    return {
+        MemberName.SKOPS: model,
+        MemberName.SCHEMA: b"{}",
+        MemberName.LOCK: LOCK,
+        **(extra or {}),
+    }
 
 
 @pytest.mark.parametrize(
@@ -44,7 +57,11 @@ def test_roundtrip_and_determinism(
             "producer_name": "",
             "producer_version": "",
         }
-    members = {member: b"dummy native bytes", MemberName.SCHEMA: b"{}"}
+    members = {
+        member: b"dummy native bytes",
+        MemberName.SCHEMA: b"{}",
+        MemberName.LOCK: library_lock_bytes(library),
+    }
     if optional:
         for name in (MemberName.SCHEMA, MemberName.STRUCTURE, MemberName.SAMPLES):
             members[name] = b"[]" if name == MemberName.SAMPLES else b"{}"
@@ -74,7 +91,7 @@ def test_atomic_write_and_failure(manifest_data, tmp_path, monkeypatch, overwrit
     target = tmp_path / "model.mlbundle"
     args = (
         Manifest.from_bytes(canonical_dumps(manifest_data)),
-        {MemberName.SKOPS: b"model", MemberName.SCHEMA: b"{}"},
+        members(),
     )
     first = write_container(*args, destination=target)
     assert read_container(str(target)) == read_container(io.BytesIO(first))
@@ -102,7 +119,10 @@ def test_atomic_write_and_failure(manifest_data, tmp_path, monkeypatch, overwrit
         ({"../model.skops": b"x"}, InvalidContainerError),
         ({"mödél.skops": b"x"}, InvalidContainerError),
         ({}, InvalidContainerError),
-        ({MemberName.SKOPS: "text", MemberName.SCHEMA: b"{}"}, TypeError),
+        (
+            members("text"),
+            TypeError,
+        ),
     ],
 )
 def test_invalid_writer_inputs(manifest_data, members, error):
@@ -129,7 +149,7 @@ def test_writer_limits_leave_destination_untouched(
     with pytest.raises(LimitExceededError):
         write_container(
             manifest_data,
-            {MemberName.SKOPS: data, MemberName.SCHEMA: b"{}"},
+            members(data),
             destination=target,
             overwrite=True,
             limits=limits,
@@ -147,11 +167,7 @@ def test_no_overwrite_publication_race(manifest_data, tmp_path, monkeypatch):
 
     monkeypatch.setattr("os.link", race)
     with pytest.raises(FileExistsError):
-        write_container(
-            manifest_data,
-            {MemberName.SKOPS: b"model", MemberName.SCHEMA: b"{}"},
-            destination=target,
-        )
+        write_container(manifest_data, members(), destination=target)
     assert target.read_bytes() == b"concurrent writer"
     assert list(tmp_path.glob(".mlbundle-*")) == []
 
@@ -159,7 +175,8 @@ def test_no_overwrite_publication_race(manifest_data, tmp_path, monkeypatch):
 def test_chunked_model_and_empty_model(manifest_data):
     for data in (b"", random.Random(0).randbytes(200_000)):
         bundle = write_container(
-            manifest_data, {MemberName.SKOPS: data, MemberName.SCHEMA: b"{}"}
+            manifest_data,
+            members(data),
         )
         assert read_container(bundle)[1][MemberName.SKOPS] == data
 
@@ -169,32 +186,32 @@ def test_chunked_model_and_empty_model(manifest_data):
     [
         (
             b"native model bytes",
-            "04135705c8b64e3a492fc543b0cb150a747cc2214533c9425ba93d61870b7494",
+            "40e99a2b18f553f472e80a927d9e91bc6a9dbc3898d74af77ad9c824b1607bf0",
         ),
         (
             random.Random(0).randbytes(200_000),
-            "af4a7e26486a59a105f9363c4b8d034172c27a7058d80635d2dadadf26b8ac05",
+            "d0b89eb6cf6bb8111c0092e82ff68ef6e7e3e4d0358ab80f8d39350471e36bd2",
         ),
         (
             b"hello world " * 10_000,
-            "a69ad3950fbf46b8524f38f65b92911215dc435060b4158b7be2c01adb6b79dc",
+            "6307dad280d669bdfde636ec9c28944ed846223ecf8d626324e7002252032ab9",
         ),
         (
             bytes(range(256)) * 500,
-            "605ab1cb22b719643413342f342258cb92d81be9aa65bbfe19ebeccc27a9b1f3",
+            "972bc3cdaab56f8a29a91d425db3763f1b4e03c13f5ada1aee04b469fd76f744",
         ),
         (
             b"0" * 1000,
-            "1f1facf21a7f91d32984764a4efb4c8b9bf9992aa4c639c0abe2cd3b943e14d9",
+            "a912f364d08d799a2a9eaf9b1bafcb459f2c9133c132891d95d2adfedee9b0a1",
         ),
     ],
     ids=["native", "noise", "text", "uniform", "runs"],
 )
 def test_fixed_archive_bytes_on_both_platforms(manifest_data, data, expected):
     manifest_data["writer_version"] = "0.1.0a3"
-    manifest_data["environment"]["packages"]["mlbundle"] = "0.1.0a3"
     bundle = write_container(
-        manifest_data, {MemberName.SKOPS: data, MemberName.SCHEMA: b"{}"}
+        manifest_data,
+        members(data),
     )
     assert hashlib.sha256(bundle).hexdigest() == expected
 
@@ -210,15 +227,13 @@ def test_writer_optional_member_errors(manifest_data, name):
     ]:
         with pytest.raises(error):
             write_container(
-                manifest_data,
-                {MemberName.SKOPS: b"model", MemberName.SCHEMA: b"{}", member: data},
-                limits=limits,
+                manifest_data, members(b"model", {member: data}), limits=limits
             )
     manifest_data["references"][name] = None
     with pytest.raises(InvalidManifestError):
         write_container(
             manifest_data,
-            {MemberName.SKOPS: b"model", MemberName.SCHEMA: b"{}", member: b"{}"},
+            members(b"model", {member: b"{}"}),
         )
 
 
@@ -236,10 +251,7 @@ def test_remaining_compression_budget(manifest_data, monkeypatch):
     with pytest.raises(LimitExceededError):
         write_container(
             manifest_data,
-            {
-                MemberName.SKOPS: random.Random(0).randbytes(2000),
-                MemberName.SCHEMA: b"{}",
-            },
+            members(random.Random(0).randbytes(2000)),
             limits=ArchiveLimits(max_archive_bytes=2048, max_compressed_bytes=1000),
         )
     assert len(caps) == 2 and 0 < caps[1] < caps[0] == 1000
@@ -272,25 +284,13 @@ def test_no_hard_links_fallback(manifest_data, tmp_path, monkeypatch, race, fail
         monkeypatch.setattr(os, "fsync", fail_second)
     if race or fail_copy:
         with pytest.raises(FileExistsError if race else OSError):
-            write_container(
-                manifest_data,
-                {MemberName.SKOPS: b"model", MemberName.SCHEMA: b"{}"},
-                destination=target,
-            )
+            write_container(manifest_data, members(), destination=target)
         assert target.read_bytes() == b"other writer" if race else not target.exists()
     else:
-        result = write_container(
-            manifest_data,
-            {MemberName.SKOPS: b"model", MemberName.SCHEMA: b"{}"},
-            destination=target,
-        )
+        result = write_container(manifest_data, members(), destination=target)
         assert target.read_bytes() == result
         if os.name != "nt":
             assert stat.S_IMODE(target.stat().st_mode) == 0o600
         with pytest.raises(FileExistsError):
-            write_container(
-                manifest_data,
-                {MemberName.SKOPS: b"model", MemberName.SCHEMA: b"{}"},
-                destination=target,
-            )
+            write_container(manifest_data, members(), destination=target)
     assert not list(tmp_path.glob(".mlbundle-*"))

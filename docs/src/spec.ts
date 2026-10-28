@@ -11,6 +11,7 @@ export const specPages = [
   { file: "docs/format-pipeline.md", route: "/format/pipeline/", label: "Composite pipelines" },
   { file: "docs/format-catboost.md", route: "/format/catboost/", label: "CatBoost mapping" },
   { file: "docs/format-onnx.md", route: "/format/onnx/", label: "ONNX mapping" },
+  { file: "docs/format-environment.md", route: "/format/environment/", label: "Environment lock" },
   { file: "SECURITY.md", route: "/security/", label: "Security policy" },
 ] as const;
 

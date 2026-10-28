@@ -2,6 +2,7 @@
 
 from importlib.metadata import version as _version
 
+from ._environment_check import check_environment
 from .claims import ModelClaims
 from .contract import (
     FORMAT_NAME,
@@ -19,12 +20,14 @@ from .errors import (
     EnvironmentMismatchError,
     IntegrityMismatchError,
     InvalidContainerError,
+    InvalidEnvironmentLockError,
     InvalidJSONError,
     InvalidManifestError,
     InvalidModelError,
     InvalidSamplesError,
     InvalidSchemaError,
     LimitExceededError,
+    LockGenerationError,
     MissingOptionalDependencyError,
     MLBundleError,
     PredictionInputError,
@@ -34,6 +37,7 @@ from .errors import (
 from .inspection import inspect
 from .integrity import IntegrityRecord
 from .limits import ArchiveLimits
+from .lock import EnvironmentLock, LockedPackage, LockedWheel
 from .manifest import FeatureInfo, Manifest, MemberReferences, ModelInfo, TargetInfo
 from .model_io import export, load
 from .records import OutputPrediction
@@ -47,12 +51,14 @@ __all__ = [
     "AdapterNotImplementedError",
     "ArchiveLimits",
     "ClaimMismatchError",
+    "EnvironmentLock",
     "EnvironmentMismatchError",
     "FeatureInfo",
     "FeatureOrigin",
     "IntegrityMismatchError",
     "IntegrityRecord",
     "InvalidContainerError",
+    "InvalidEnvironmentLockError",
     "InvalidJSONError",
     "InvalidManifestError",
     "InvalidModelError",
@@ -61,6 +67,9 @@ __all__ = [
     "Library",
     "LimitExceededError",
     "LoadedBundle",
+    "LockGenerationError",
+    "LockedPackage",
+    "LockedWheel",
     "MLBundleError",
     "Manifest",
     "MemberName",
@@ -80,6 +89,7 @@ __all__ = [
     "UnsupportedFormatVersionError",
     "UnsupportedModelError",
     "__version__",
+    "check_environment",
     "export",
     "inspect",
     "load",

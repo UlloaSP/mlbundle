@@ -1,5 +1,6 @@
 import type { SourceTree } from "./session.ts";
 import pyproject from "../../../pyproject.toml?raw";
+import lock from "./pylock.toml?raw";
 
 // The repository's real package source, bundled at build time. Never a copy.
 // state_fields.json is package data the sklearn adapter reads at import time.
@@ -13,3 +14,6 @@ export const MLBUNDLE_SOURCES: SourceTree = Object.fromEntries(
 );
 
 export const PYPROJECT = pyproject;
+
+// Written by scripts/lock.py for this session's exact versions; Pyodide cannot run uv.
+export const PLAYGROUND_LOCK = lock;

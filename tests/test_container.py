@@ -219,7 +219,7 @@ def test_optional_caps_count_and_json(parts, manifest_data, name):
 
 def test_honest_and_lying_bombs(parts):
     bundle = build_zip(
-        [parts[0], ("model.skops", b"0" * 4096), parts[2]], compression=8
+        [parts[0], ("model.skops", b"0" * 4096), *parts[2:]], compression=8
     )
     with pytest.raises(LimitExceededError):
         read_container(bundle, limits=ArchiveLimits(max_compression_ratio=10))
@@ -247,7 +247,7 @@ def test_descriptor_length_checked_before_copy(parts):
     with pytest.raises(InvalidContainerError):
         read_container(
             oversized_descriptor(parts),
-            limits=ArchiveLimits(max_member_bytes=2048, max_total_bytes=2048),
+            limits=ArchiveLimits(max_member_bytes=2048, max_total_bytes=3072),
         )
 
 

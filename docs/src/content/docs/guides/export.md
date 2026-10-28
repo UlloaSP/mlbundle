@@ -18,12 +18,14 @@ def export(
     sample_rows: int | None = None,
     onehot_separator: str = "__",
     metadata: Mapping[str, JsonValue] | None = None,
+    environment_lock: bytes | str | PathLike[str] | None = None,
     overwrite: bool = False,
     limits: ArchiveLimits | None = None,
 ) -> MetadataView
 ```
 
-Export always needs the `schema` extra, even without `training_data`.
+Export always needs the `schema` extra, even without `training_data`, and the `lock` extra unless
+you pass `environment_lock=`.
 
 ## Arguments
 
@@ -38,6 +40,7 @@ Export always needs the `schema` extra, even without `training_data`.
 | `sample_rows` | Positive integer: include the first N feature rows as `samples.json`. Requires a frame. See [samples](/guides/schema-and-samples/#explicit-samples). |
 | `onehot_separator` | Separator for one-hot groups, 1–16 characters, stored in the schema. |
 | `metadata` | Free JSON object recorded as `user_metadata`. |
+| `environment_lock` | Canonical `pylock.toml` bytes or a path to use instead of generating one, such as another bundle's `environment_lock.to_bytes()`. See [the runtime lock](#the-runtime-lock). |
 | `overwrite` | Replace an existing destination. Without it, an existing file raises `FileExistsError`. |
 | `limits` | Lower [`ArchiveLimits`](/reference/limits/) for this bundle. Ceilings cannot be raised. |
 
@@ -100,13 +103,13 @@ and with a training frame tells mlbundle which columns to exclude from inference
 - model: library, class, kind, hyperparameters, feature/output/class counts and serialization;
 - features: ordered names, origin, training dtypes and verified model dtypes;
 - target: output-major class labels and target names;
-- environment: Python version and implementation, OS and version, architecture and installed
-  package versions;
+- environment: Python version, implementation and free-threading, OS and version, and
+  architecture;
 - integrity: the SHA-256 and size of every other member;
 - `user_metadata`: your `metadata=`, at most 1,024 top-level keys, 64 KiB and depth 8.
 
 Model-derived values, including model-exposed `model_dtypes`, are claims that `load` recomputes.
-The environment, training `dtypes` and user metadata are declarations: recorded, never authenticated. The exact fields are in the
+The environment, the lock, training `dtypes` and user metadata are declarations: recorded, never authenticated. The exact fields are in the
 [format 1 manifest](/format/#manifest).
 
 ```python
@@ -119,6 +122,30 @@ view = export(
 )
 print(view.manifest.user_metadata["name"])  # weather
 ```
+
+## The runtime lock
+
+Every bundle contains `pylock.toml`, a PEP 751 lock of what serving the model needs: pydantic, the
+model libraries and their dependencies, for CPython with the GIL on Linux `x86_64` and `aarch64`
+(glibc 2.28 or newer) and on Windows `amd64`. The manifest's `writer_version` pins mlbundle itself.
+
+Export pins those distributions at their installed versions, constrains every other installed
+distribution to its installed version and asks uv for one wheel per package and target. Every
+locked package installed on the training machine must keep its installed version; packages needed
+on other targets, such as NCCL for XGBoost on Linux, come from uv's resolution. Export therefore needs uv (the
+`lock` extra) and access to the package index uv is configured to use.
+
+```python
+view = export(model, "locked.mlbundle", training_data=frame, overwrite=True)
+lock = view.environment_lock
+print(lock.python_version, lock.version("scikit-learn"))
+print(lock.environment_id)  # SHA-256 identity of Python and every wheel
+```
+
+Offline machines, or machines whose interpreter cannot run uv, can pass a lock generated for the same
+installed versions elsewhere: `export(..., environment_lock="pylock.toml")`. The lock fixes versions
+and wheel files, not the binaries that trained the model. The rules are in
+[the lock contract](/format/environment/).
 
 ## Publication
 
@@ -137,7 +164,9 @@ failed copy is removed but was briefly visible):
 | `UnsupportedModelError` | The model class, objective, layout or a contained type is outside the adapter's closed boundary. For scikit-learn the message lists the untrusted types. |
 | `InvalidSchemaError` | Frame columns do not match native names, a target column is missing, or report labels collide. |
 | `InvalidSamplesError` | `sample_rows` is zero, too large, not an integer, or a cell cannot be converted. |
-| `MissingOptionalDependencyError` | The `schema` extra or the model's extra is not installed. |
+| `MissingOptionalDependencyError` | The `schema` or `lock` extra, or the model's extra, is not installed. |
+| `LockGenerationError` | uv found no single wheel for a target and locked version, only an sdist, or could not reach the index. |
+| `InvalidEnvironmentLockError` | A supplied lock is not canonical or disagrees with the installed versions or Python. |
 | `LimitExceededError` | A member or the archive exceeds the selected limits. |
 | `FileExistsError` | The destination exists and `overwrite` is false. |
 

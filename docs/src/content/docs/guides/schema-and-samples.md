@@ -152,7 +152,8 @@ exactly once, mappings match the feature origin, and reports match the manifest'
 `load` additionally verifies those labels against the model. The schema's `source`, separator and
 nullability remain declarations; nothing can attest how the training data looked.
 
-Bundles written by 0.1.0a1 without a schema, or with schema version `1`, must be re-exported.
+Bundles written by 0.1.0a1 without a schema, with schema version `1` or, since 0.3.0, without
+`pylock.toml` must be re-exported.
 
 The full rules, including series fields and cell conversions, are in
 [Schema and samples](/format/schema/).

@@ -7,6 +7,7 @@ from pydantic import JsonValue
 from .adapters import Predictor, ProbabilityOutput, RegressionOutput
 from .claims import ClassLabels
 from .contract import FeatureOrigin, Library, MemberName, ModelKind
+from .lock import EnvironmentLock
 from .manifest import Manifest
 from .records import OutputPrediction, predict_record, row_from_record
 
@@ -17,6 +18,7 @@ class MetadataView:
 
     manifest: Manifest
     members: tuple[MemberName, ...]
+    environment_lock: EnvironmentLock
     schema: dict[str, JsonValue] | None = None
     samples: list[dict[str, JsonValue]] | None = None
 
@@ -27,6 +29,7 @@ class LoadedBundle:
 
     manifest: Manifest
     members: tuple[MemberName, ...]
+    environment_lock: EnvironmentLock
     native_model: object = field(repr=False)
     predictor: Predictor = field(repr=False)
     schema: dict[str, JsonValue] | None = None

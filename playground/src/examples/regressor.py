@@ -19,6 +19,13 @@ frame["price_k"] = (
 
 model = RandomForestRegressor(n_estimators=3, max_depth=3, random_state=0)
 model.fit(frame.drop(columns="price_k"), frame["price_k"])
-export(model, "regressor.mlbundle", training_data=frame, target_names=["price_k"])
+# The browser cannot run uv: pass the lock prepared for this page's versions.
+export(
+    model,
+    "regressor.mlbundle",
+    training_data=frame,
+    target_names=["price_k"],
+    environment_lock="pylock.toml",
+)
 
 model.feature_importances_.round(3).tolist()

@@ -16,6 +16,8 @@ from pyodide.code import eval_code_async  # pyright: ignore[reportMissingImports
 
 FILENAME = "<playground>"
 WORK_ROOT = Path("/playground")
+# session.ts writes the lock that scripts/lock.py generated for this runtime.
+LOCK = Path("/lock/pylock.toml")
 MAX_BUNDLES = 8
 MIB = 1024 * 1024
 # Lowered with mlbundle's own ArchiveLimits: a browser tab is not a model server.
@@ -65,11 +67,18 @@ def _metadata(view) -> dict:
     members = [
         {"name": str(name), **integrity.get(str(name), {})} for name in view.members
     ]
+    lock = view.environment_lock
     return {
         "manifest": manifest,
         "members": members,
         "schema": view.schema,
         "samples": view.samples,
+        "environment": {
+            "pythonVersion": lock.python_version,
+            "platforms": list(lock.platforms),
+            "environmentId": lock.environment_id,
+            "packages": [[p.name, p.version, list(p.platforms)] for p in lock.packages],
+        },
     }
 
 
@@ -157,6 +166,7 @@ async def run(code: str) -> str:
     shutil.rmtree(WORK_ROOT, ignore_errors=True)
     directory = WORK_ROOT / f"run-{_runs}"
     directory.mkdir(parents=True)
+    shutil.copyfile(LOCK, directory / "pylock.toml")
     os.chdir(directory)
     linecache.cache[FILENAME] = (len(code), None, code.splitlines(True), FILENAME)
     namespace = {"__name__": "__main__"}

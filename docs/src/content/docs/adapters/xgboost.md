@@ -3,8 +3,12 @@ title: XGBoost
 description: Bundle XGBClassifier and XGBRegressor as native UBJSON, bind original class labels and know which settings survive.
 ---
 
-Install `mlbundle[xgboost,schema]`. Models are stored as native in-memory UBJSON and loaded with
+Install `mlbundle[xgboost,schema,lock]`. Models are stored as native in-memory UBJSON and loaded with
 `load_model`, never pickled.
+
+On Linux, the `xgboost` distribution depends on NVIDIA NCCL, about 300 MB per architecture, so a
+bundle's runtime lock includes it. Training with the CPU-only `xgboost-cpu` distribution locks that
+distribution instead.
 
 ```python
 from xgboost import XGBClassifier

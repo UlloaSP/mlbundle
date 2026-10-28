@@ -21,6 +21,27 @@ test("pure-Python pins match the repository lock", () => {
   }
 });
 
+test("the runtime lock matches this Pyodide release and the PyPI pins", () => {
+  // Regenerate with scripts/lock.py whenever Pyodide or PYPI_PINS change.
+  const lock = read("../../src/runtime/pylock.toml");
+  const pyodide = JSON.parse(read("../../node_modules/pyodide/pyodide-lock.json")) as {
+    info: { python: string };
+    packages: Record<string, { version: string }>;
+  };
+  const locked = new Map(
+    [...lock.matchAll(/^name = "([^"]+)"\nversion = "([^"]+)"$/gm)].map((match) => [match[1]!, match[2]!]),
+  );
+  assert.match(lock, new RegExp(`^requires-python = "==${pyodide.info.python.replaceAll(".", "\\.")}"$`, "m"));
+  for (const name of ["numpy", "scipy", "scikit-learn", "joblib", "threadpoolctl"]) {
+    assert.equal(locked.get(name), pyodide.packages[name]!.version, name);
+  }
+  for (const pin of PYPI_PINS) {
+    const [name, version] = pin.split("==") as [string, string];
+    if (locked.has(name)) assert.equal(locked.get(name), version, pin);
+  }
+  assert.ok(!locked.has("mlbundle"));
+});
+
 test("the bundled package reports the version pyproject.toml declares", () => {
   const pyproject = read("../../../pyproject.toml");
   const declared = /^version = "([^"]+)"/m.exec(pyproject)![1];

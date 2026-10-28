@@ -105,6 +105,7 @@ class TargetInfo(ContractModel):
 
 class MemberReferences(ContractModel):
     schema_: Literal["schema.json"] = Field(alias="schema")
+    lock: Literal["pylock.toml"]
     structure: Literal["structure.json"] | None = None
     samples: Literal["samples.json"] | None = None
 
@@ -119,7 +120,7 @@ class Manifest(ContractModel):
     features: FeatureInfo
     target: TargetInfo
     environment: TrainingEnvironment
-    integrity: dict[MemberName, IntegrityRecord] = Field(min_length=1, max_length=5)
+    integrity: dict[MemberName, IntegrityRecord] = Field(min_length=1, max_length=6)
     references: MemberReferences
     user_metadata: dict[str, JsonValue] = Field(default_factory=dict, max_length=1024)
 
@@ -183,8 +184,6 @@ class Manifest(ContractModel):
             raise ValueError("A member exceeds its format size cap.")
         if (self.model.library == Library.ONNX) != (self.environment.onnx is not None):
             raise ValueError("ONNX graph metadata is required only for ONNX models.")
-        if self.environment.packages.get("mlbundle") != self.writer_version:
-            raise ValueError("Writer and environment mlbundle versions must agree.")
         return self
 
     def verified_claims(self) -> ModelClaims:

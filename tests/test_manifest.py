@@ -21,7 +21,6 @@ def read(data: dict) -> Manifest:
 @pytest.mark.parametrize("writer_version", ["0.1.0", "0.1.0a3"])
 def test_writer_version_is_independent_of_reader(manifest_data, writer_version):
     manifest_data["writer_version"] = writer_version
-    manifest_data["environment"]["packages"]["mlbundle"] = writer_version
     assert read(manifest_data).writer_version == writer_version
 
 
@@ -241,12 +240,15 @@ def test_member_cap_and_bad_integrity(manifest_data):
 
 
 def test_environment_invariants_and_onnx(manifest_data):
-    manifest_data["environment"]["packages"]["mlbundle"] = "different"
-    with pytest.raises(InvalidManifestError):
-        read(manifest_data)
-    manifest_data["environment"]["packages"]["mlbundle"] = manifest_data[
-        "writer_version"
-    ]
+    for key, value in [("free_threaded", 0), ("packages", {"mlbundle": "0.2.1"})]:
+        environment = dict(manifest_data["environment"])
+        environment[key] = value
+        with pytest.raises(InvalidManifestError):
+            read({**manifest_data, "environment": environment})
+    for lock in [None, "lock.toml"]:
+        references = {**manifest_data["references"], "lock": lock}
+        with pytest.raises(InvalidManifestError):
+            read({**manifest_data, "references": references})
     manifest_data["model"].update(library="onnx", serialization="onnx")
     manifest_data["integrity"].pop("model.skops")
     manifest_data["integrity"]["model.onnx"] = hash_member(b"onnx").model_dump()

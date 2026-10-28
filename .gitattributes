@@ -1,0 +1,2 @@
+# Canonical lock bytes are LF-only; any CRLF checkout would make them invalid.
+playground/src/runtime/pylock.toml text eol=lf

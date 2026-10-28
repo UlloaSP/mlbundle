@@ -40,8 +40,18 @@ export interface BundleReport {
   schema?: { [key: string]: Json } | null;
   samples?: { [key: string]: Json }[] | null;
   structure?: { [key: string]: Json } | null;
+  /** The validated pylock.toml: what a Linux runtime installs, besides mlbundle. */
+  environment?: EnvironmentLockReport;
   /** The exact bytes mlbundle wrote, for download. Generated bundles only. */
   bytes?: Uint8Array;
+}
+
+export interface EnvironmentLockReport {
+  pythonVersion: string;
+  platforms: string[];
+  environmentId: string;
+  /** Name, version and the Linux architectures that install it. */
+  packages: [string, string, string[]][];
 }
 
 export interface RunReport {

@@ -11,6 +11,7 @@ mlbundle has two readers with different guarantees. Choose by what you need to t
 | Strict manifest and format version | Validated | Validated |
 | SHA-256 and size of every non-manifest member | Verified | Verified |
 | Schema and samples against manifest claims | Validated | Validated |
+| `pylock.toml` canonical form and manifest binding | Validated | Validated |
 | Imports a model library | **Never** | The matching adapter only |
 | Deserializes the model | **Never** | Through the closed adapter |
 | Hyperparameters, counts, labels, dtypes, structure | Read as claims | **Recomputed and compared** |
@@ -27,15 +28,15 @@ from mlbundle import inspect
 
 view = inspect("trained.mlbundle")
 manifest = view.manifest
-print(manifest.format_version, manifest.writer_version)  # 1 0.2.1
+print(manifest.format_version, manifest.writer_version)  # 1 0.3.0
 print(manifest.model.n_features, manifest.model.n_outputs)  # 2 1
 print([member.value for member in view.members])
-# ['manifest.json', 'model.skops', 'schema.json', 'structure.json']
+# ['manifest.json', 'model.skops', 'schema.json', 'structure.json', 'pylock.toml']
 print(view.samples)  # None
 ```
 
-`MetadataView` has `manifest`, `members`, `schema` and `samples`. Use it to list, index or review
-bundles on a machine without model libraries.
+`MetadataView` has `manifest`, `members`, `environment_lock`, `schema` and `samples`. Use it to
+list, index or review bundles on a machine without model libraries.
 
 :::caution[Inspection does not verify the model]
 A bundle's author can write any manifest and recompute its hashes. `inspect` checks that the file is
@@ -72,7 +73,7 @@ print(bundle.structure["family"])  # decision_tree
 
 | Member | Contents |
 | --- | --- |
-| `manifest`, `members`, `schema`, `samples` | As in `MetadataView`, validated. |
+| `manifest`, `members`, `environment_lock`, `schema`, `samples` | As in `MetadataView`, validated. |
 | `structure` | Decoded `structure.json`, or `None` for families without extractable structure. |
 | `native_model` | The native object: estimator, `Pipeline`, XGBoost or CatBoost wrapper, or an ONNX model holding `data` and `session`. |
 | `kind`, `library`, `class_name` | From the verified manifest. |
@@ -94,16 +95,39 @@ required whenever the adapter can extract it and is compared on load, so a revie
 tree that differs from the model used for prediction. All-scikit-learn pipelines and ONNX have
 `None`. The families and fields are in [Adapters and structure](/format/adapters/#structurejson).
 
+## Serve in the locked environment
+
+`environment_lock` is the validated `pylock.toml`: Python version, targets, packages with their
+wheels, and an `environment_id` that ignores download URLs. A runtime builds one environment per
+lock, installing the lock plus mlbundle at `writer_version`, then calls `check_environment` in the
+process that loads the model:
+
+```python
+from mlbundle import check_environment, inspect, load
+
+view = inspect("trained.mlbundle")
+open("pylock.toml", "wb").write(view.environment_lock.to_bytes())
+# Elsewhere, in an isolated build step: uv pip install -r pylock.toml mlbundle==<writer_version>
+check_environment(view)  # EnvironmentMismatchError unless this interpreter matches
+bundle = load("trained.mlbundle")
+```
+
+`check_environment` requires CPython with the GIL at the locked Python version on Linux `x86_64` or
+`aarch64` (glibc 2.28 or newer) or Windows `amd64`, and exactly that target's locked distributions
+plus mlbundle. `load` does not
+call it. Installing a lock runs its packages' code, so the runtime applies its own allowlist and
+trusted indexes first; see [the lock contract](/format/environment/#consumers).
+
 ## Version diagnostics
 
 Some failures add a hint without adding a compatibility gate:
 
-- `EnvironmentMismatchError` when a skops load fails and the bundle declares a different
+- `EnvironmentMismatchError` when a skops load fails and the bundle's lock declares a different
   scikit-learn version than the one installed;
 - `InvalidManifestError` mentioning a different writer version when a manifest fails validation.
 
-Format 1 is not frozen; incompatible changes may require re-export. Bundles written by 0.1.0a1, or
-with schema version 1, must be re-exported.
+Format 1 is not frozen; incompatible changes may require re-export. Bundles without `pylock.toml`
+(written before 0.3.0), or with schema version 1, must be re-exported.
 
 ## Treat every bundle as untrusted
 

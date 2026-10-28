@@ -102,7 +102,8 @@ a top-level ordinary label must equal the feature name at that index.
 In 0.2.0 the `series` shape changed from `field1`/`field2` to MLForm's
 `columns` while format 1 is not frozen. Schema version stays `"2"`: no bundle
 written before this change contains a series field, so a version bump would
-invalidate every 0.1.0a2 bundle for a shape none uses. Readers reject the old shape.
+have invalidated every 0.1.0a2 bundle for a shape none used. Readers reject the old shape.
+Since 0.3.0, bundles without `pylock.toml` require re-export regardless.
 MLschema emits this shape directly. Parent `label`, `required` and `mappedTo`
 remain unchanged:
 

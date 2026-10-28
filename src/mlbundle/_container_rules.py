@@ -20,6 +20,7 @@ MEMBER_ORDER = (
     MemberName.SCHEMA,
     MemberName.STRUCTURE,
     MemberName.SAMPLES,
+    MemberName.LOCK,
 )
 
 
@@ -52,6 +53,10 @@ def check_members(
         {MemberName.SKOPS, MemberName.CBM},
     ):
         raise InvalidContainerError("Invalid model member combination.")
+    if MemberName.LOCK not in present:
+        raise InvalidContainerError(
+            "Bundle predates the required pylock.toml and must be re-exported."
+        )
     if manifest is not None and present != {MemberName.MANIFEST, *manifest.integrity}:
         raise InvalidContainerError("Members disagree with manifest references.")
 

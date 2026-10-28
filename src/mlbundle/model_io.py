@@ -3,10 +3,12 @@
 from collections.abc import Mapping, Sequence
 from contextlib import nullcontext
 from os import PathLike
+from pathlib import Path
 from typing import cast
 
 from pydantic import JsonValue
 
+from . import _lock_generation
 from ._container_rules import MEMBER_ORDER, BundleSource, effective_limits
 from ._export_manifest import manifest_parts
 from ._load_diagnostics import sklearn_environment
@@ -20,9 +22,10 @@ from .declarations import (
     export_target_names,
     resolve_labels,
 )
-from .errors import ClaimMismatchError
+from .errors import ClaimMismatchError, LimitExceededError
 from .inspection import metadata_view
 from .limits import ArchiveLimits
+from .lock import EnvironmentLock, runtime_requirements
 from .registry import find_adapter, get_adapter, is_composite
 from .results import LoadedBundle, MetadataView
 from .schema import read_declarations, validate_separator
@@ -41,6 +44,7 @@ def export(
     sample_rows: int | None = None,
     onehot_separator: str = "__",
     metadata: Mapping[str, JsonValue] | None = None,
+    environment_lock: bytes | str | PathLike[str] | None = None,
     overwrite: bool = False,
     limits: ArchiveLimits | None = None,
 ) -> MetadataView:
@@ -63,6 +67,12 @@ def export(
     user data. N must be a positive integer within the frame; target values and
     the index are excluded. Missing values become null, timestamps ISO strings,
     categorical/NumPy scalars JSON scalars and infinities canonical float tags.
+    Export locks the model's runtime as pylock.toml for Linux and Windows: the
+    installed versions of pydantic, the model libraries and their dependencies,
+    resolved by uv for CPython with the GIL. That requires mlbundle[lock] and
+    index access. environment_lock instead supplies canonical lock bytes or a
+    path, such as another bundle's EnvironmentLock.to_bytes(). Either way every
+    locked distribution installed here must have the installed version.
     """
     selected = effective_limits(limits)
     separator = validate_separator(onehot_separator)
@@ -87,6 +97,14 @@ def export(
     )
     members = prepared.members
     structure = prepared.structure
+    leaf = None if composite is None else composite.leaf.library
+    lock = (
+        _lock_generation.generate_lock(runtime_requirements(prepared.library, leaf))
+        if environment_lock is None
+        else _read_lock(environment_lock, selected.member_bytes(MemberName.LOCK))
+    )
+    _lock_generation.check_fidelity(lock)
+    members[MemberName.LOCK] = lock.to_bytes()
     members[MemberName.SCHEMA] = training.schema
     if training.samples is not None:
         members[MemberName.SAMPLES] = training.samples
@@ -110,12 +128,26 @@ def export(
     return metadata_view(validated, selected)
 
 
+def _read_lock(source: bytes | str | PathLike[str], cap: int) -> EnvironmentLock:
+    if isinstance(source, bytes):
+        data = source
+    else:
+        path = Path(source)
+        if path.stat().st_size > cap:
+            raise LimitExceededError("Member size limit exceeded: pylock.toml.")
+        data = path.read_bytes()
+    if len(data) > cap:
+        raise LimitExceededError("Member size limit exceeded: pylock.toml.")
+    return EnvironmentLock.from_bytes(data)
+
+
 def load(source: BundleSource, *, limits: ArchiveLimits | None = None) -> LoadedBundle:
     """Verify format, integrity and recomputed native claims before returning a model."""
     selected = effective_limits(limits)
     container = read_validated_container(source, limits=selected)
     manifest, members = container.manifest, container.members
     schema, samples = read_declarations(manifest, container.json, selected)
+    declared_sklearn = container.lock.version("scikit-learn")
     if manifest.model.pipeline is not None:
         get_adapter(Library.SKLEARN)
         from ._composite.io import load_components
@@ -125,13 +157,13 @@ def load(source: BundleSource, *, limits: ArchiveLimits | None = None) -> Loaded
             members,
             manifest.features.names,
             cast(bool, manifest.model.hyperparameters["verbose"]),
-            manifest.environment.packages.get("scikit-learn"),
+            declared_sklearn,
         )
         verify_claims(manifest.verified_claims(), actual)
     else:
         adapter = get_adapter(manifest.model.library)
         with (
-            sklearn_environment(manifest.environment.packages.get("scikit-learn"))
+            sklearn_environment(declared_sklearn)
             if adapter.model_member == MemberName.SKOPS
             else nullcontext()
         ):
@@ -162,6 +194,7 @@ def load(source: BundleSource, *, limits: ArchiveLimits | None = None) -> Loaded
     return LoadedBundle(
         manifest=manifest,
         members=tuple(name for name in MEMBER_ORDER if name in members),
+        environment_lock=container.lock,
         native_model=model,
         predictor=predictor,
         schema=schema,

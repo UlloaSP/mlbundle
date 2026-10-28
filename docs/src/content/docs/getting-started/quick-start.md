@@ -3,7 +3,7 @@ title: Quick start
 description: Export a scikit-learn classifier to a .mlbundle file, inspect its metadata, load the verified model and predict.
 ---
 
-This walkthrough uses scikit-learn. Install `mlbundle[sklearn,schema]` on Python 3.14 as described
+This walkthrough uses scikit-learn. Install `mlbundle[sklearn,schema,lock]` on Python 3.14 as described
 in [Installation](/getting-started/installation/).
 
 ## 1. Export on the training machine
@@ -18,12 +18,13 @@ model = DecisionTreeClassifier(random_state=7).fit(rows, ["cold", "warm"] * 2)
 
 view = export(model, "trained.mlbundle", feature_names=["temperature", "humidity"])
 print([member.value for member in view.members])
-# ['manifest.json', 'model.skops', 'schema.json', 'structure.json']
+# ['manifest.json', 'model.skops', 'schema.json', 'structure.json', 'pylock.toml']
 ```
 
 `export` serializes the model with skops, loads it back, recomputes its claims and structure, and
-only then publishes the file. A model with types outside mlbundle's allowlist fails here, on the
-training machine, not after upload. An existing destination needs `overwrite=True`.
+only then publishes the file. It also locks the installed scikit-learn runtime as `pylock.toml` for
+Linux and Windows serving, through uv and your package index. A model with types outside mlbundle's allowlist
+fails here, on the training machine, not after upload. An existing destination needs `overwrite=True`.
 
 The model was fitted on plain lists, so it has no native feature names: the names you pass are
 recorded as `declared`. No training data was given, so the schema comes from one synthetic row.
@@ -41,7 +42,7 @@ print(view.manifest.features.names, view.manifest.features.origin)
 print(view.schema["reports"][0]["labels"])  # ['cold', 'warm']
 ```
 
-`inspect` validates the archive, the manifest, every non-manifest member's hash and the schema, without importing
+`inspect` validates the archive, the manifest, every non-manifest member's hash, the lock and the schema, without importing
 scikit-learn or deserializing anything. It therefore **cannot** tell you whether the metadata
 describes the model. The command line does the same:
 

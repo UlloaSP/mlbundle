@@ -51,6 +51,7 @@ def manifest_parts(
         "references": {
             "structure": None if structure is None else MemberName.STRUCTURE.value,
             "schema": MemberName.SCHEMA.value,
+            "lock": MemberName.LOCK.value,
             "samples": None if training.samples is None else MemberName.SAMPLES.value,
         },
         "user_metadata": {} if metadata is None else dict(metadata),

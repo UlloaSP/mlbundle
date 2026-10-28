@@ -6,7 +6,7 @@ description: Bundle a fitted scikit-learn Pipeline that ends in XGBoost or CatBo
 A fitted `sklearn.pipeline.Pipeline` whose final step is an exact XGBoost or CatBoost wrapper is
 exported as it is. The transformer prefix is stored with skops, the final estimator with its native
 adapter, and load rebuilds a real `Pipeline` after verifying both parts. Install
-`mlbundle[sklearn,xgboost,schema]` or `mlbundle[sklearn,catboost,schema]`.
+`mlbundle[sklearn,xgboost,schema,lock]` or `mlbundle[sklearn,catboost,schema,lock]`.
 
 ```python
 from sklearn.pipeline import make_pipeline
@@ -24,7 +24,7 @@ bundle = load("pipeline.mlbundle")
 assert bundle.predict_proba(rows) == model.predict_proba(rows).tolist()
 assert bundle.native_model.predict(rows).tolist() == model.predict(rows).tolist()
 print([member.value for member in bundle.members])
-# ['manifest.json', 'model.skops', 'model.ubj', 'schema.json', 'structure.json']
+# ['manifest.json', 'model.skops', 'model.ubj', 'schema.json', 'structure.json', 'pylock.toml']
 ```
 
 ## How it is stored
@@ -47,7 +47,8 @@ they use one skops member and have no structure.
 - Manifest features, schema, training dtypes and samples describe the **original inputs**.
 - Trees address the **transformed features**, without attribution back to the original columns.
   `mlbundle inspect` prints the boundary's width and names.
-- Six members are enough for manifest, prefix, leaf, structure, schema and explicit samples.
+- Seven members are enough for manifest, prefix, leaf, structure, schema, explicit samples and the
+  lock, which pins both the sklearn prefix's and the leaf library's runtimes.
 
 ## Supported prefixes
 

@@ -3,7 +3,7 @@ title: scikit-learn
 description: Which scikit-learn estimators and transformers mlbundle can bundle with skops, what structure they carry and what is rejected.
 ---
 
-Install `mlbundle[sklearn,schema]`. Models are stored with `skops.io.dumps` and loaded with
+Install `mlbundle[sklearn,schema,lock]`. Models are stored with `skops.io.dumps` and loaded with
 `skops.io.loads` against a trusted-types allowlist that lives inside mlbundle. The allowlist is
 never read from a bundle, and you cannot extend it.
 

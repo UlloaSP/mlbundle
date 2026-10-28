@@ -37,17 +37,20 @@ const writeSources = (pyodide: PyodideAPI, sources: SourceTree, version: string)
 };
 
 const UPLOAD_PATH = "/uploads/upload.mlbundle";
+// harness.py copies it into each run directory as pylock.toml.
+const LOCK_PATH = "/lock/pylock.toml";
 
 /**
  * Prepare a loaded Pyodide instance: install the pinned wheels, write the real
- * mlbundle sources and load the execution harness. Shared by the browser worker
- * and the Node runtime tests so both exercise the same path.
+ * mlbundle sources and the session's runtime lock, and load the execution harness.
+ * Shared by the browser worker and the Node runtime tests so both exercise the same path.
  */
 export const startSession = async (
   pyodide: PyodideAPI,
   sources: SourceTree,
   pyproject: string,
   harness: string,
+  lock: string,
   onProgress: (message: string) => void = () => {},
 ): Promise<PythonSession> => {
   onProgress("Loading scikit-learn and pandas…");
@@ -61,6 +64,8 @@ export const startSession = async (
   }
   onProgress("Loading mlbundle…");
   writeSources(pyodide, sources, projectVersion(pyproject));
+  pyodide.FS.mkdirTree(LOCK_PATH.slice(0, LOCK_PATH.lastIndexOf("/")));
+  pyodide.FS.writeFile(LOCK_PATH, lock);
   const namespace = pyodide.toPy({});
   pyodide.runPython(harness, { globals: namespace, filename: "harness.py" });
   const versionsOf = namespace.get("runtime_versions");

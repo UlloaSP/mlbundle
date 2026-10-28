@@ -8,7 +8,8 @@ import zlib
 
 import pytest
 
-from mlbundle import MemberName, __version__
+from lock_helpers import sklearn_lock_bytes, synthetic_lock
+from mlbundle import MemberName, __version__, _lock_generation
 from mlbundle.canonical import canonical_dumps
 from mlbundle.integrity import hash_member
 
@@ -50,6 +51,16 @@ def align_schema(parts, members):
     members[MemberName.SCHEMA] = canonical_dumps(schema_for_manifest(parts))
 
 
+@pytest.fixture(autouse=True)
+def offline_lock(monkeypatch):
+    """Exports resolve their installed pins offline; uv has its own tests."""
+
+    def resolve(python_version, pins, constraints):
+        return synthetic_lock(python_version, dict(pins))
+
+    monkeypatch.setattr(_lock_generation, "resolve_lock", resolve)
+
+
 @pytest.fixture
 def manifest_data() -> dict:
     value = {
@@ -79,14 +90,22 @@ def manifest_data() -> dict:
         "environment": {
             "python_version": "3.14.0",
             "python_implementation": "CPython",
+            "free_threaded": False,
             "os": "Windows",
             "os_version": "11",
             "architecture": "AMD64",
-            "packages": {"mlbundle": __version__, "scikit-learn": "1.9.1"},
             "onnx": None,
         },
-        "integrity": {"model.skops": hash_member(b"native model bytes").model_dump()},
-        "references": {"schema": "schema.json", "structure": None, "samples": None},
+        "integrity": {
+            "model.skops": hash_member(b"native model bytes").model_dump(),
+            "pylock.toml": hash_member(sklearn_lock_bytes()).model_dump(),
+        },
+        "references": {
+            "schema": "schema.json",
+            "lock": "pylock.toml",
+            "structure": None,
+            "samples": None,
+        },
         "user_metadata": {"name": "example", "metrics": {"accuracy": 0.95}},
     }
     value["integrity"]["schema.json"] = hash_member(
@@ -115,6 +134,7 @@ def parts(manifest_data):
         ("manifest.json", canonical_dumps(manifest_data)),
         ("model.skops", b"native model bytes"),
         ("schema.json", canonical_dumps(schema_for_manifest(manifest_data))),
+        ("pylock.toml", sklearn_lock_bytes()),
     ]
 
 

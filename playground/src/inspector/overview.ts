@@ -47,6 +47,7 @@ export const overview = (bundle: BundleReport) => {
   const labels = asArray(target.class_labels);
   const targetNames = asArray(target.names);
   const metadata = asObject(manifest.user_metadata);
+  const lock = bundle.environment;
   return [
     facts("Model", [
       ["Estimator", model.estimator_class],
@@ -74,8 +75,15 @@ export const overview = (bundle: BundleReport) => {
     section(
       "Training environment",
       note(`Python ${display(environment.python_version)} on ${display(environment.os)} ${display(environment.os_version)} (${display(environment.architecture)}). Declared by the writer, not authenticated.`),
-      table("Package versions", ["Package", "Version"], Object.entries(asObject(environment.packages))),
     ),
+    lock
+      ? section(
+          "Runtime lock",
+          note(`pylock.toml for CPython ${lock.pythonVersion} with the GIL on ${lock.platforms.join(", ")}, plus mlbundle ${display(manifest.writer_version)}. Installing it runs these packages' code; a runtime decides which it trusts.`),
+          facts("Environment", [["Environment id", lock.environmentId]]),
+          table("Locked packages", ["Package", "Version", "Targets"], lock.packages.map(([name, version, platforms]) => [name, version, platforms.join(", ")])),
+        )
+      : null,
     Object.keys(metadata).length
       ? section("User metadata", table("Author metadata", ["Key", "Value"], Object.entries(metadata)))
       : null,

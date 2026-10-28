@@ -16,5 +16,12 @@ features = pd.DataFrame(
 churned = ["no", "yes", "no", "no", "yes", "no"]
 model = LogisticRegression(max_iter=500).fit(features, churned)
 
-view = export(model, "samples.mlbundle", training_data=features, sample_rows=3)
+# The browser cannot run uv: pass the lock prepared for this page's versions.
+view = export(
+    model,
+    "samples.mlbundle",
+    training_data=features,
+    sample_rows=3,
+    environment_lock="pylock.toml",
+)
 [field["kind"] for field in view.schema["fields"]]

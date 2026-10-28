@@ -5,7 +5,7 @@ This document defines the wire contract for `format_name = "mlbundle"` and
 "Must" denotes a compatibility or security requirement. This
 contract is implemented by the manifest, secure container, inspect/export/load,
 sklearn/XGBoost/CatBoost/ONNX adapters, local schema, samples and prediction-state checks.
-Version 1 is not frozen. MLbundle 0.2.0 requires schema v2; incompatible manifest/schema shapes require re-export. Valid 0.1.0a2 bundles without series remain compatible. The inspect/verify CLI uses these public APIs.
+Version 1 is not frozen. MLbundle 0.2.0 requires schema v2 and 0.3.0 requires `pylock.toml`; incompatible manifest/schema shapes and bundles without a lock require re-export. The inspect/verify CLI uses these public APIs.
 
 The normative container rules are in [Container and resource limits](format-container.md).
 The normative structure, adapter and result rules are in [Adapters and structure](format-adapters.md).
@@ -13,7 +13,7 @@ The implemented ONNX mapping and validation rules are in [ONNX](format-onnx.md).
 The implemented CBM mapping and validation rules are in [CatBoost](format-catboost.md).
 The normative schema/declaration rules are in [Schema and samples](format-schema.md).
 [Prediction state and bounded work](format-state.md) is also normative.
-[Composite pipelines](format-pipeline.md) is normative for the split representation.
+[Composite pipelines](format-pipeline.md) (the split representation) and [Runtime environment lock](format-environment.md) are normative too.
 
 ## Members
 
@@ -27,6 +27,7 @@ The normative schema/declaration rules are in [Schema and samples](format-schema
 | `schema.json` | Required; exact object with `schema_version: "2"`, `source`, `onehot_separator`, `fields` and `reports` from local/default inference. See [Schema and samples](format-schema.md). No training DataFrame. |
 | `structure.json` | Optional only for families without extractable structure; object as defined below. |
 | `samples.json` | Optional; array of row objects keyed by feature name, in declared feature order when consumed. Only explicit user intent may enable it. Values use the canonical JSON value rules. Samples are real user data. |
+| `pylock.toml` | Required; canonical PEP 751 lock of the model's runtime distributions except mlbundle, for CPython with the GIL on Linux `x86_64`/`aarch64` and Windows `amd64`. See [Runtime environment lock](format-environment.md). |
 
 Model members are one standalone member, or the declared skops/UBJSON or skops/CBM
 composite pair; single-step composites use only the leaf. See [pipelines](format-pipeline.md).
@@ -62,7 +63,7 @@ Optional fields can be omitted/null; writers emit defaults. `user_metadata` defa
 | `format_version` | literal string `"1"` | Wire version; unknown strings raise `UnsupportedFormatVersionError`. Wrong types are invalid manifests. |
 | `bundle_id` | UUID string | Author-assigned bundle identity; writers use lowercase, hyphenated UUIDs. Readers accept UUID spellings supported by UUID parsing and normalize on output. |
 | `created_at` | ISO 8601 UTC timestamp string | Creation declaration, spelled `YYYY-MM-DDTHH:MM:SS[.ffffff]Z` or with `+00:00` instead of `Z`; fractions have 1–6 digits. Writers emit `Z`. Reject epoch strings/numbers, naive timestamps, nonzero offsets and extra fractional precision. |
-| `writer_version` | nonempty string, at most 256 characters | mlbundle package version that wrote the bundle. Must equal `environment.packages.mlbundle`. |
+| `writer_version` | nonempty string, at most 256 characters | mlbundle package version that wrote the bundle. The lock omits mlbundle; runtimes install this version with it. |
 
 Identity fields are declarations, not proof of provenance.
 ### `model`
@@ -178,20 +179,18 @@ See [ONNX kind and labels](format-onnx.md#kind-and-labels).
 
 | Field | Type | Meaning / verification |
 | --- | --- | --- |
-| `python_version` | nonempty string, max 256 | Training Python version. |
-| `python_implementation` | nonempty string, max 256 | Implementation, e.g. `CPython`. |
+| `python_version` | nonempty string, max 256 | Training Python version; the lock's `requires-python` must be `==` this version. |
+| `python_implementation` | nonempty string, max 256 | Implementation; the lock requires `CPython`. |
+| `free_threaded` | boolean | Whether training ran on a free-threaded build. Locks always target the GIL build. |
 | `os` | nonempty string, max 256 | OS name. |
 | `os_version` | nonempty string, max 256 | OS release. |
 | `architecture` | nonempty string, max 256 | Machine architecture, e.g. `AMD64`. |
-| `packages` | object with only the keys listed below | Installed distribution versions, nonempty strings max 256. Uninstalled distributions are omitted. |
 | `onnx` | optional ONNX record | Required for ONNX, null/absent otherwise; verified from the graph. |
 
-Allowed package keys are `mlbundle`, `mlschema`, `numpy`, `pandas`, `scipy`,
-`scikit-learn`, `xgboost`, `catboost`, `onnx`, `onnxruntime` and `skops` (maximum eleven).
-Capture versions using distribution metadata, without importing the libraries.
-`mlbundle` is required by the writer-version consistency rule. Other environment
-fields are unverifiable declarations about the training machine, including the
-ONNX/ONNX Runtime package versions; they are not evidence of compatibility.
+Package versions are not manifest fields: `pylock.toml` records the model's
+runtime distributions. Environment fields and the lock are unverifiable
+declarations about the training machine, including ONNX Runtime versions;
+they are not evidence of compatibility.
 
 The ONNX record contains required fields: `opsets` (1–128 objects with `domain`,
 a string of 0–256 characters, and `version`, an integer 1–2^31−1), `ir_version`
@@ -205,11 +204,11 @@ file, not who produced or trained it.
 `integrity` is an object mapping **every other present member** to exactly
 `{"sha256":HEX,"size":BYTES}`. The digest is 64 lowercase hexadecimal characters;
 size is an integer 0–512 MiB, further bounded by the specific member cap.
-It has 2–5 keys: exactly the selected model member(s), schema and referenced optional members.
+It has 3–6 keys: exactly the selected model member(s), schema, lock and referenced optional members.
 There is no manifest hash, since the manifest cannot contain its own digest.
 Declared sizes must equal both actual uncompressed sizes and ZIP metadata.
 
-`references` requires `schema: "schema.json"`; optional `structure` and `samples`
+`references` requires `schema: "schema.json"` and `lock: "pylock.toml"`; optional `structure` and `samples`
 are null/absent or respectively `"structure.json"`, `"samples.json"`.
 There are no URLs or arbitrary paths.
 
@@ -274,7 +273,7 @@ metadata and the optional fitted-state commitment. Classifier extraction may lea
 carries none; the shared pipeline resolves the declaration as specified above.
 Library/serialization/member pairing is validated by the closed
 registry. Structure is compared separately using the same canonical encoding.
-Schema, training dtypes, frame/declared-origin names, target names, training environment,
+Schema, training dtypes, frame/declared-origin names, target names, training environment, lock,
 user metadata, identity and samples are not verified against the model; they must
 still pass their own validation and integrity checks. Inspection verifies format
 and integrity only, and must never attest that model claims match the model.
@@ -287,11 +286,12 @@ encoding or mandatory structure shapes requires a new format version and an
 explicit reader implementation. Before freeze, incompatible v1 revisions require re-export. Tightening caller-selected resource limits does
 not change the format. Corrections to documentation that preserve wire behavior
 and implementation changes behind these contracts do not require a version bump.
-The unfrozen version 1 includes required schema v2, positional mappings, `declared` origin,
+The unfrozen version 1 includes the required runtime lock, required schema v2, positional mappings, `declared` origin,
 prediction-state records, missing tree routing, native XGBoost routing/dropout
 and closed state/work rules, scalar dtype/type/function records and composition
-references. It remains subject to change before format freeze; schema v1/absent schemas and older sklearn
-pipeline parameter projections require re-export under this revised v1 contract.
+references. It remains subject to change before format freeze; schema v1/absent schemas, absent locks,
+`environment.packages` and older sklearn pipeline parameter projections require
+re-export under this revised v1 contract.
 
 Hashes detect corruption, not deliberate tampering: an attacker can replace a
 model and update every record. Claim recomputation prevents a bundle from showing

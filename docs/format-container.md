@@ -56,7 +56,7 @@ One MiB is 1,048,576 bytes. `ArchiveLimits` defines these defaults and ceilings:
 
 | Limit | Maximum |
 | --- | ---: |
-| Member count, including manifest | 6 (minimum configured value 2) |
+| Member count, including manifest | 7 (minimum configured value 2) |
 | Entire archive, including headers | 512 MiB |
 | Sum of compressed member sizes | 512 MiB |
 | Any uncompressed member | 512 MiB |
@@ -66,6 +66,7 @@ One MiB is 1,048,576 bytes. `ArchiveLimits` defines these defaults and ceilings:
 | `structure.json` | 256 MiB |
 | `schema.json` | 16 MiB |
 | `samples.json` | 16 MiB |
+| `pylock.toml` | 1 MiB |
 | JSON container nesting depth | 32 |
 
 The effective member cap is the smaller of its specific cap and the general
@@ -83,8 +84,10 @@ Before manifest parsing, admit one model member or the two candidates
 `model.skops` + `model.ubj`/`model.cbm`. Other combinations fail. After strict
 manifest parsing, the declared standalone/composite recipe and actual members
 must agree exactly; undeclared pairs fail. [Pipeline rules](format-pipeline.md)
-own the one-step exception and required structure. Six members accommodate
-manifest, two models, structure, schema and explicit samples.
+own the one-step exception and required structure. Every bundle also requires
+`pylock.toml`; a valid model set without it predates the lock and must be
+re-exported. Seven members accommodate manifest, two models, structure,
+schema, explicit samples and the lock.
 
 ### Container functions and inspection
 
@@ -110,7 +113,7 @@ proves canonical identity; other wire spellings encode the retained value once.
 There is no global cache or bundle-supplied validation record. Public export
 reuses the writer's complete container validation when returning metadata.
 
-The writer emits manifest, model, schema, structure, samples in that fixed order,
+The writer emits manifest, model, schema, structure, samples, lock in that fixed order,
 omitting absent members. ZIP timestamps are 1980-01-01 00:00:00, the creating
 platform is Unix, permissions are regular-file 0600, compression is deflate
 level 6 with the RLE strategy, memory level 8 and 64 KiB input chunks, and
