@@ -6,7 +6,13 @@ import hashlib
 import re
 from typing import Annotated
 
-from pydantic import Field, StringConstraints, ValidationError, model_validator
+from pydantic import (
+    Field,
+    JsonValue,
+    StringConstraints,
+    ValidationError,
+    model_validator,
+)
 
 from . import _lock_toml
 from ._base import ContractModel
@@ -14,7 +20,7 @@ from ._wheel_tags import GLIBC, PLATFORMS, Platform, select, wheel_identity
 from .canonical import canonical_dumps
 from .contract import Library
 from .errors import InvalidEnvironmentLockError
-from .manifest import Manifest
+from .manifest import Manifest, ModelInfo
 
 MAX_PACKAGES = 512
 # Normalized names and public versions: no local versions, which no index serves.
@@ -164,13 +170,43 @@ class EnvironmentLock(ContractModel):
         return lock
 
 
-def runtime_requirements(
-    library: Library, leaf: Library | None = None
-) -> tuple[tuple[str, ...], ...]:
-    """Distribution groups a loaded model needs: pydantic and the adapters' libraries."""
-    groups = [*_BASE, *_LIBRARY[library]]
-    if leaf is not None:
-        groups.extend(group for group in _LIBRARY[leaf] if group not in groups)
+def _selects_by_name(value: JsonValue) -> bool:
+    """Whether sklearn hyperparameters hold a ColumnTransformer selecting by name.
+
+    Such a model's records arrive as DataFrames (see _sklearn/record_input.py),
+    so it needs pandas to predict. Load recomputes these hyperparameters.
+    """
+    if isinstance(value, list):
+        return any(_selects_by_name(item) for item in value)
+    if not isinstance(value, dict):
+        return False
+    record = value.get("$estimator")
+    if isinstance(record, dict) and record.get("class") == "ColumnTransformer":
+        params = record.get("params")
+        entries = params.get("transformers") if isinstance(params, dict) else None
+        for entry in entries if isinstance(entries, list) else []:
+            columns = entry[2] if isinstance(entry, list) and len(entry) == 3 else None
+            if isinstance(columns, str) or (
+                isinstance(columns, list) and any(isinstance(c, str) for c in columns)
+            ):
+                return True
+    return any(_selects_by_name(item) for item in value.values())
+
+
+def runtime_requirements(model: ModelInfo) -> tuple[tuple[str, ...], ...]:
+    """Distribution groups a loaded model needs: pydantic, the adapters' libraries
+    and pandas when it predicts records from DataFrames."""
+    groups = [*_BASE, *_LIBRARY[model.library]]
+    pipeline = model.pipeline
+    if pipeline is not None:
+        leaf = _LIBRARY[pipeline.estimator.library]
+        groups.extend(group for group in leaf if group not in groups)
+    prefix = None if pipeline is None else pipeline.transformers
+    if model.library == Library.SKLEARN and (
+        _selects_by_name(model.hyperparameters)
+        or (prefix is not None and _selects_by_name(prefix.hyperparameters))
+    ):
+        groups.append(("pandas",))
     return tuple(groups)
 
 
@@ -183,10 +219,8 @@ def check_bundle_lock(lock: EnvironmentLock, manifest: Manifest) -> None:
         raise InvalidEnvironmentLockError(
             "The lock's Python differs from the training Python."
         )
-    pipeline = manifest.model.pipeline
-    leaf = None if pipeline is None else pipeline.estimator.library
     names = {package.name: package for package in lock.packages}
-    for group in runtime_requirements(manifest.model.library, leaf):
+    for group in runtime_requirements(manifest.model):
         present = [names[name] for name in group if name in names]
         if len(present) != 1 or present[0].platforms != PLATFORMS:
             raise InvalidEnvironmentLockError(

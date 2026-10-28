@@ -13,6 +13,7 @@ from mlbundle import (
     MemberName,
 )
 from mlbundle.container import read_container
+from mlbundle.lock import runtime_requirements
 from mlbundle.writing import write_container
 
 
@@ -137,3 +138,89 @@ def test_export_with_explicit_lock_and_fidelity(tmp_path):
             limits=mlbundle.ArchiveLimits(max_lock_bytes=16),
         )
     assert not (tmp_path / "c.mlbundle").exists()
+
+
+def _relocked(path, lock, change=lambda text: text):
+    """Rebuild a bundle around other lock bytes, as an older writer could have."""
+    from conftest import build_zip
+    from mlbundle._container_rules import MEMBER_ORDER
+    from mlbundle.canonical import canonical_dumps
+    from mlbundle.integrity import hash_member
+
+    manifest, members = read_container(path)
+    members[MemberName.LOCK] = lock
+    value = manifest.model_dump(mode="json", by_alias=True)
+    value["integrity"]["pylock.toml"] = hash_member(lock).model_dump()
+    members[MemberName.MANIFEST] = change(canonical_dumps(value))
+    return build_zip(
+        [(name, members[name]) for name in MEMBER_ORDER if name in members]
+    )
+
+
+@pytest.mark.parametrize("kind", ["classifier", "composite"])
+def test_by_name_selection_locks_pandas(kind, tmp_path):
+    from importlib import metadata
+
+    from record_helpers import named_pipeline
+
+    model, _ = named_pipeline(kind)
+    path = tmp_path / "named.mlbundle"
+    lock = mlbundle.export(model, path).environment_lock
+    assert lock.version("pandas") == metadata.version("pandas")
+    assert mlbundle.load(path).environment_lock == lock
+    lacking = synthetic_lock(
+        lock.python_version,
+        {p.name: p.version for p in lock.packages if p.name != "pandas"},
+    ).to_bytes()
+    with pytest.raises(InvalidEnvironmentLockError, match="exactly one of pandas"):
+        mlbundle.export(model, tmp_path / "x.mlbundle", environment_lock=lacking)
+    assert not (tmp_path / "x.mlbundle").exists()
+    stale = _relocked(path, lacking)
+    for reader in (mlbundle.inspect, mlbundle.load):
+        with pytest.raises(InvalidEnvironmentLockError, match="exactly one of pandas"):
+            reader(stale)
+
+
+def test_hidden_name_selection_fails_verification(tmp_path):
+    from record_helpers import named_pipeline
+
+    model, _ = named_pipeline("classifier")
+    path = tmp_path / "named.mlbundle"
+    lock = mlbundle.export(model, path).environment_lock
+    lacking = synthetic_lock(
+        lock.python_version,
+        {p.name: p.version for p in lock.packages if p.name != "pandas"},
+    ).to_bytes()
+    # The derivation reads hyperparameters, a claim that load recomputes.
+    hidden = _relocked(path, lacking, lambda text: text.replace(b'["a"]', b"[0]"))
+    assert mlbundle.inspect(hidden).environment_lock.version("pandas") is None
+    with pytest.raises(mlbundle.ClaimMismatchError, match="hyperparameters"):
+        mlbundle.load(hidden)
+
+
+def test_other_models_lock_no_pandas(tmp_path):
+    import pandas as pd
+    from sklearn.compose import ColumnTransformer
+    from sklearn.pipeline import make_pipeline
+
+    from pipeline_helpers import pipeline
+
+    frame = pd.DataFrame({"a": [0, 1], "b": [1, 0]})
+    positional = make_pipeline(
+        ColumnTransformer([("select", "passthrough", [0])]), DecisionTreeClassifier()
+    ).fit(frame, [0, 1])
+    for name, model in [
+        ("positional", positional),
+        ("tree", DecisionTreeClassifier().fit(frame, [0, 1])),
+        ("catboost", pipeline("catboost")[0]),
+    ]:
+        view = mlbundle.export(model, tmp_path / f"{name}.mlbundle")
+        groups = runtime_requirements(view.manifest.model)
+        assert ("pandas",) not in groups
+        assert view.environment_lock.version("pandas") is None
+    assert [group[0] for group in groups] == [
+        "pydantic",
+        "scikit-learn",
+        "skops",
+        "catboost",
+    ]

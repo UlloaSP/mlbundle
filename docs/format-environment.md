@@ -86,7 +86,11 @@ The same code validates the lock in the writer, `inspect` and `load`:
   lock contains pydantic and the model's library distributions on every target:
   `scikit-learn` and `skops`; `xgboost` or `xgboost-cpu` (not both) and
   `scikit-learn`; `catboost`; or `onnx` and `onnxruntime`. Composite pipelines
-  combine their sklearn and leaf requirements.
+  combine their sklearn and leaf requirements. A scikit-learn model whose
+  hyperparameters (or a composite's transformer hyperparameters) contain a
+  `ColumnTransformer` selecting any column by name also needs `pandas`, because
+  its records are predicted from a DataFrame. Inspection reads this from the
+  hyperparameter claim; `load` recomputes that claim from the model.
 - Bounds: the member cap is 1 MiB (`max_lock_bytes`). Invalid UTF-8, TOML
   errors, excessive nesting and non-canonical bytes raise
   `InvalidEnvironmentLockError` without echoing values.
@@ -100,9 +104,9 @@ trained with them.
 `export` locks the running interpreter with mlbundle's `lock` extra, which
 provides uv:
 
-1. Pin pydantic and the model's library distributions at their installed
-   versions. Exactly one distribution per requirement group must be installed;
-   `xgboost-cpu` satisfies XGBoost. Editable, directory, VCS and local-version
+1. Pin pydantic, the model's library distributions and, where binding requires
+   it, pandas at their installed versions. Exactly one distribution per
+   requirement group must be installed; `xgboost-cpu` satisfies XGBoost. Editable, directory, VCS and local-version
    installs cannot be pinned; wheels installed from a file or URL keep their version.
 2. Constrain every other installed distribution to its installed version.
 3. For each target, resolve wheels only with

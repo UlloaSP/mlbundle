@@ -136,8 +136,8 @@ or training history.
 
 ## Runtime environment
 
-Export locks the installed versions of pydantic, the model libraries and their
-dependencies as `pylock.toml` for CPython with the GIL on Linux `x86_64` and
+Export locks the installed versions of pydantic, the model libraries (and pandas
+for scikit-learn pipelines that select columns by name) and their dependencies as `pylock.toml` for CPython with the GIL on Linux `x86_64` and
 `aarch64` and on Windows `amd64`. mlbundle itself is pinned by the manifest's
 `writer_version`.
 A runtime installs that lock plus `mlbundle==writer_version` in an isolated
@@ -164,7 +164,8 @@ structure, and all-sklearn Pipeline structure is null. The
 ## Some notes
 
 Package versions and wire-format versions are independent. Format 1 is not frozen;
-incompatible schema shapes and bundles without `pylock.toml` require re-export. The security design has not had an
+incompatible schema shapes, bundles without `pylock.toml` and 0.3.0 bundles of
+pipelines selecting columns by name whose lock lacks `pandas` require re-export. The security design has not had an
 independent review; do not accept bundles from untrusted parties.
 
 The reader bounds ZIP/JSON data, verifies integrity and uses closed native loaders.
