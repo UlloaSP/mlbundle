@@ -52,7 +52,7 @@ def _base(path: Path) -> None:
 
     import mlbundle
 
-    assert mlbundle.__version__ == "0.3.0"
+    assert mlbundle.__version__ == "0.3.1"
     view = mlbundle.inspect(path)
     assert view.manifest.model.library == "sklearn"
     # The runtime lock parses with the standard library alone.

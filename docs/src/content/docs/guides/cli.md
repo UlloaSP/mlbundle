@@ -22,7 +22,7 @@ Metadata and integrity validated; model claims NOT verified.
 Format: mlbundle 1
 Bundle id: aa6f6b39-574a-499b-a0ff-de4cdd334050
 Created: 2026-10-19T11:17:51.949658+00:00
-Writer: "0.3.0"
+Writer: "0.3.1"
 Model: sklearn "DecisionTreeClassifier" (classifier)
 Counts: features=2, outputs=1, classes=[2]
 Features (declared): ["temperature", "humidity"]
@@ -35,7 +35,7 @@ Members:
   structure.json: 526 bytes sha256=66204da26781a4e2a800a1f3ed246ab1a43e8c97ced73d06a2640f897eeda03c
   pylock.toml: 8595 bytes sha256=b6eabc0870b4c313819d225f3be69fb320dcf0b338cb4d06b3cf24423d3af924
 Training: {"python": "3.14.7", "implementation": "CPython", "free_threaded": false, "os": "Windows", "os_version": "11", "architecture": "AMD64"}
-Environment lock: CPython 3.14.7 with the GIL, linux-x86_64, linux-aarch64, win-amd64 (Linux glibc 2.28+), 16 packages plus mlbundle "0.3.0"
+Environment lock: CPython 3.14.7 with the GIL, linux-x86_64, linux-aarch64, win-amd64 (Linux glibc 2.28+), 16 packages plus mlbundle "0.3.1"
 Environment id: b8a31c89e5ed683e2f214cc486b83dc49e5292175c57606b11b515d494e81b57
 Locked packages: {"annotated-types": "0.8.0", "cloudpickle": "3.1.2", "joblib": "1.6.0", "narwhals": "2.27.1", ...}
 ONNX environment: null
