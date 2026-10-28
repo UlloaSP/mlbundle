@@ -126,7 +126,8 @@ print(view.manifest.user_metadata["name"])  # weather
 ## The runtime lock
 
 Every bundle contains `pylock.toml`, a PEP 751 lock of what serving the model needs: pydantic, the
-model libraries and their dependencies, for CPython with the GIL on Linux `x86_64` and `aarch64`
+model libraries, pandas for scikit-learn pipelines whose `ColumnTransformer` selects columns by name,
+and their dependencies, for CPython with the GIL on Linux `x86_64` and `aarch64`
 (glibc 2.28 or newer) and on Windows `amd64`. The manifest's `writer_version` pins mlbundle itself.
 
 Export pins those distributions at their installed versions, constrains every other installed

@@ -1,15 +1,15 @@
 ---
 title: Installation
-description: Install mlbundle 0.3.0 with the extras for your model library, from PyPI or a local checkout, and check the Python and dependency ranges.
+description: Install mlbundle 0.3.1 with the extras for your model library, from PyPI or a local checkout, and check the Python and dependency ranges.
 ---
 
 mlbundle requires **Python 3.14 or newer**. Its only core dependency is Pydantic v2; every model
 library is an optional extra that is imported lazily, only when a bundle needs it.
 
-These pages document mlbundle 0.3.0.
+These pages document mlbundle 0.3.1.
 
 ```bash
-python -m pip install "mlbundle[sklearn,schema,lock]==0.3.0"
+python -m pip install "mlbundle[sklearn,schema,lock]==0.3.1"
 ```
 
 Replace `sklearn` with the extra for your model library; the extras are listed
@@ -17,7 +17,7 @@ Replace `sklearn` with the extra for your model library; the extras are listed
 
 ## From a local checkout
 
-To work from source, or before 0.3.0 is available from your package index, install a checkout of
+To work from source, or before 0.3.1 is available from your package index, install a checkout of
 the repository:
 
 ```bash
@@ -69,7 +69,7 @@ from importlib.metadata import version
 
 import mlbundle
 
-print(version("mlbundle"))  # 0.3.0
+print(version("mlbundle"))  # 0.3.1
 print(mlbundle.FORMAT_NAME, mlbundle.FORMAT_VERSION)  # mlbundle 1
 ```
 

@@ -13,6 +13,7 @@ from ._container_rules import MEMBER_ORDER, BundleSource, effective_limits
 from ._export_manifest import manifest_parts
 from ._load_diagnostics import sklearn_environment
 from ._native_io import prepare_native
+from .canonical import canonical_dumps
 from .claims import Label, verify_claims, verify_structure_bytes
 from .container import read_validated_container
 from .contract import Library, MemberName
@@ -26,6 +27,7 @@ from .errors import ClaimMismatchError, LimitExceededError
 from .inspection import metadata_view
 from .limits import ArchiveLimits
 from .lock import EnvironmentLock, runtime_requirements
+from .manifest import ModelInfo
 from .registry import find_adapter, get_adapter, is_composite
 from .results import LoadedBundle, MetadataView
 from .schema import read_declarations, validate_separator
@@ -68,10 +70,11 @@ def export(
     the index are excluded. Missing values become null, timestamps ISO strings,
     categorical/NumPy scalars JSON scalars and infinities canonical float tags.
     Export locks the model's runtime as pylock.toml for Linux and Windows: the
-    installed versions of pydantic, the model libraries and their dependencies,
-    resolved by uv for CPython with the GIL. That requires mlbundle[lock] and
-    index access. environment_lock instead supplies canonical lock bytes or a
-    path, such as another bundle's EnvironmentLock.to_bytes(). Either way every
+    installed versions of pydantic, the model libraries (and pandas when a
+    ColumnTransformer selects columns by name) and their dependencies, resolved
+    by uv for CPython with the GIL. That requires mlbundle[lock] and index access.
+    environment_lock instead supplies canonical lock bytes or a path, such as
+    another bundle's EnvironmentLock.to_bytes(). Either way every
     locked distribution installed here must have the installed version.
     """
     selected = effective_limits(limits)
@@ -97,14 +100,6 @@ def export(
     )
     members = prepared.members
     structure = prepared.structure
-    leaf = None if composite is None else composite.leaf.library
-    lock = (
-        _lock_generation.generate_lock(runtime_requirements(prepared.library, leaf))
-        if environment_lock is None
-        else _read_lock(environment_lock, selected.member_bytes(MemberName.LOCK))
-    )
-    _lock_generation.check_fidelity(lock)
-    members[MemberName.LOCK] = lock.to_bytes()
     members[MemberName.SCHEMA] = training.schema
     if training.samples is not None:
         members[MemberName.SAMPLES] = training.samples
@@ -122,6 +117,17 @@ def export(
             cast(list[str], cast(dict, parts["features"])["names"])
         )
         cast(dict, parts["model"])["pipeline"] = recipe.model_dump(mode="json")
+    lock = (
+        _lock_generation.generate_lock(
+            runtime_requirements(
+                ModelInfo.model_validate_json(canonical_dumps(parts["model"]))
+            )
+        )
+        if environment_lock is None
+        else _read_lock(environment_lock, selected.member_bytes(MemberName.LOCK))
+    )
+    _lock_generation.check_fidelity(lock)
+    members[MemberName.LOCK] = lock.to_bytes()
     _, validated = write_validated_container(
         parts, members, destination=destination, overwrite=overwrite, limits=selected
     )

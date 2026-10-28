@@ -166,7 +166,8 @@ fallback is computed. Decisions may disagree with probabilities and are never
 checked against them. There is no new public array-level class-decision method.
 The existing predictor validates the numeric row and its output as usual.
 Sklearn/composite predictors supply a one-row pandas DataFrame only when their
-fitted name-based column selectors require one; missing pandas raises
+fitted name-based column selectors require one, so their lock pins pandas
+([binding](format-environment.md#validation)); missing pandas raises
 `MissingOptionalDependencyError` naming the existing schema extra. Other models
 receive a nested numeric row, preserving native categorical behavior.
 This optional native-owned `record_input` hook does not change array/DataFrame

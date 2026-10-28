@@ -28,7 +28,7 @@ from mlbundle import inspect
 
 view = inspect("trained.mlbundle")
 manifest = view.manifest
-print(manifest.format_version, manifest.writer_version)  # 1 0.3.0
+print(manifest.format_version, manifest.writer_version)  # 1 0.3.1
 print(manifest.model.n_features, manifest.model.n_outputs)  # 2 1
 print([member.value for member in view.members])
 # ['manifest.json', 'model.skops', 'schema.json', 'structure.json', 'pylock.toml']
