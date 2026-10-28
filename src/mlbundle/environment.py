@@ -3,39 +3,12 @@
 from __future__ import annotations
 
 import platform
-from importlib import metadata
-from typing import Annotated, Literal
+import sysconfig
+from typing import Annotated
 
 from pydantic import Field, model_validator
 
 from ._base import ContractModel, ShortString
-
-PackageName = Literal[
-    "mlbundle",
-    "mlschema",
-    "numpy",
-    "pandas",
-    "scipy",
-    "scikit-learn",
-    "xgboost",
-    "catboost",
-    "onnx",
-    "onnxruntime",
-    "skops",
-]
-PACKAGE_NAMES: tuple[PackageName, ...] = (
-    "mlbundle",
-    "mlschema",
-    "numpy",
-    "pandas",
-    "scipy",
-    "scikit-learn",
-    "xgboost",
-    "catboost",
-    "onnx",
-    "onnxruntime",
-    "skops",
-)
 
 
 class Opset(ContractModel):
@@ -58,28 +31,24 @@ class OnnxInfo(ContractModel):
 
 
 class TrainingEnvironment(ContractModel):
+    """The training machine; package versions live in the bundle's pylock.toml."""
+
     python_version: ShortString
     python_implementation: ShortString
+    free_threaded: bool
     os: ShortString
     os_version: ShortString
     architecture: ShortString
-    packages: dict[PackageName, ShortString] = Field(max_length=len(PACKAGE_NAMES))
     onnx: OnnxInfo | None = None
 
 
 def capture_environment(*, onnx: OnnxInfo | None = None) -> TrainingEnvironment:
-    packages: dict[PackageName, str] = {}
-    for name in PACKAGE_NAMES:
-        try:
-            packages[name] = metadata.version(name)
-        except metadata.PackageNotFoundError:
-            continue
     return TrainingEnvironment(
         python_version=platform.python_version(),
         python_implementation=platform.python_implementation(),
+        free_threaded=bool(sysconfig.get_config_var("Py_GIL_DISABLED")),
         os=platform.system(),
         os_version=platform.release(),
         architecture=platform.machine(),
-        packages=packages,
         onnx=onnx,
     )

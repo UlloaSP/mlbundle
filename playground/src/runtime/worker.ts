@@ -1,7 +1,7 @@
 import type { FromWorker, ToWorker } from "./protocol.ts";
 import harness from "./harness.py?raw";
 import { startSession, type PythonSession } from "./session.ts";
-import { MLBUNDLE_SOURCES, PYPROJECT } from "./sources.ts";
+import { MLBUNDLE_SOURCES, PLAYGROUND_LOCK, PYPROJECT } from "./sources.ts";
 import { OUTPUT_LIMIT_CHARS, PYODIDE_INDEX_URL } from "./versions.ts";
 
 // The DOM and WebWorker libs conflict in one program; type only what is used.
@@ -33,7 +33,7 @@ const boot = async (): Promise<PythonSession> => {
     stdout: forward("stdout"),
     stderr: forward("stderr"),
   });
-  return startSession(pyodide, MLBUNDLE_SOURCES, PYPROJECT, harness, (message) =>
+  return startSession(pyodide, MLBUNDLE_SOURCES, PYPROJECT, harness, PLAYGROUND_LOCK, (message) =>
     post({ type: "progress", message }),
   );
 };

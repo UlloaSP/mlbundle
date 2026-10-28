@@ -22,7 +22,7 @@ Metadata and integrity validated; model claims NOT verified.
 Format: mlbundle 1
 Bundle id: aa6f6b39-574a-499b-a0ff-de4cdd334050
 Created: 2026-10-19T11:17:51.949658+00:00
-Writer: "0.2.1"
+Writer: "0.3.0"
 Model: sklearn "DecisionTreeClassifier" (classifier)
 Counts: features=2, outputs=1, classes=[2]
 Features (declared): ["temperature", "humidity"]
@@ -33,8 +33,11 @@ Members:
   model.skops: 13065 bytes sha256=24d7cbab1d775ab279dc8ebc3c762b551b397ebf9b4917ac3c4474ff611b8813
   schema.json: 361 bytes sha256=ea62a6a7502ae8ea30b45b61bb18d8e31bd2ec55f026d9fbf0c05ef42d01ff25
   structure.json: 526 bytes sha256=66204da26781a4e2a800a1f3ed246ab1a43e8c97ced73d06a2640f897eeda03c
-Training: {"python": "3.14.7", "implementation": "CPython", "os": "Windows", "os_version": "11", "architecture": "AMD64"}
-Packages: {"catboost": "1.2.10", "mlbundle": "0.2.1", "mlschema": "0.3.0", ...}
+  pylock.toml: 8595 bytes sha256=b6eabc0870b4c313819d225f3be69fb320dcf0b338cb4d06b3cf24423d3af924
+Training: {"python": "3.14.7", "implementation": "CPython", "free_threaded": false, "os": "Windows", "os_version": "11", "architecture": "AMD64"}
+Environment lock: CPython 3.14.7 with the GIL, linux-x86_64, linux-aarch64, win-amd64 (Linux glibc 2.28+), 16 packages plus mlbundle "0.3.0"
+Environment id: b8a31c89e5ed683e2f214cc486b83dc49e5292175c57606b11b515d494e81b57
+Locked packages: {"annotated-types": "0.8.0", "cloudpickle": "3.1.2", "joblib": "1.6.0", "narwhals": "2.27.1", ...}
 ONNX environment: null
 Present: schema=yes, structure=yes, samples=no
 User metadata: {}

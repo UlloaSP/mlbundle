@@ -4,7 +4,9 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
+from lock_helpers import sklearn_lock_bytes
 from mlbundle import (
+    EnvironmentLock,
     FeatureOrigin,
     Library,
     LoadedBundle,
@@ -14,6 +16,8 @@ from mlbundle import (
     ModelKind,
 )
 from mlbundle.canonical import canonical_dumps
+
+LOCK = EnvironmentLock.from_bytes(sklearn_lock_bytes())
 
 
 class Predictor:
@@ -28,7 +32,9 @@ def test_metadata_view(manifest_data):
     view = MetadataView(
         Manifest.from_bytes(canonical_dumps(manifest_data)),
         (MemberName.MANIFEST, MemberName.SKOPS),
+        LOCK,
     )
+    assert view.environment_lock.version("skops") == "0.16.0"
     assert not hasattr(view, "native_model")
     with pytest.raises(FrozenInstanceError):
         view.members = ()
@@ -39,6 +45,7 @@ def test_loaded_classifier(manifest_data):
     bundle = LoadedBundle(
         Manifest.from_bytes(canonical_dumps(manifest_data)),
         (MemberName.MANIFEST, MemberName.SKOPS),
+        LOCK,
         native,
         Predictor(),
     )
@@ -60,7 +67,11 @@ def test_loaded_regressor(manifest_data):
     manifest_data["model"].update(kind="regressor", n_classes=None)
     manifest_data["target"]["class_labels"] = None
     bundle = LoadedBundle(
-        Manifest.from_bytes(canonical_dumps(manifest_data)), (), object(), Predictor()
+        Manifest.from_bytes(canonical_dumps(manifest_data)),
+        (),
+        LOCK,
+        object(),
+        Predictor(),
     )
     assert bundle.class_labels is None
     assert bundle.predict([[2]]) == [2.0]

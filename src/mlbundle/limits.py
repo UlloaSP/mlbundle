@@ -8,6 +8,7 @@ from .contract import MemberName
 MIB = 1024 * 1024
 MANIFEST_BYTES = 8 * MIB
 STRUCTURE_BYTES = 256 * MIB
+LOCK_BYTES = MIB
 METADATA_BYTES = 64 * 1024
 HYPERPARAMETER_BYTES = MIB
 JSON_DEPTH = 32
@@ -17,7 +18,7 @@ MAX_OUTPUTS = 1024
 
 
 class ArchiveLimits(ContractModel):
-    max_members: int = Field(default=6, ge=2, le=6)
+    max_members: int = Field(default=7, ge=2, le=7)
     max_archive_bytes: int = Field(default=512 * MIB, gt=0, le=512 * MIB)
     max_compressed_bytes: int = Field(default=512 * MIB, gt=0, le=512 * MIB)
     max_member_bytes: int = Field(default=512 * MIB, gt=0, le=512 * MIB)
@@ -27,6 +28,7 @@ class ArchiveLimits(ContractModel):
     max_structure_bytes: int = Field(default=STRUCTURE_BYTES, gt=0, le=STRUCTURE_BYTES)
     max_schema_bytes: int = Field(default=16 * MIB, gt=0, le=16 * MIB)
     max_samples_bytes: int = Field(default=16 * MIB, gt=0, le=16 * MIB)
+    max_lock_bytes: int = Field(default=LOCK_BYTES, gt=0, le=LOCK_BYTES)
 
     def member_bytes(self, member: MemberName) -> int:
         cap = {
@@ -34,5 +36,6 @@ class ArchiveLimits(ContractModel):
             MemberName.STRUCTURE: self.max_structure_bytes,
             MemberName.SCHEMA: self.max_schema_bytes,
             MemberName.SAMPLES: self.max_samples_bytes,
+            MemberName.LOCK: self.max_lock_bytes,
         }.get(member, self.max_member_bytes)
         return min(cap, self.max_member_bytes)

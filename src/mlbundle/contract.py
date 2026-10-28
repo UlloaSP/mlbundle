@@ -43,6 +43,7 @@ class MemberName(StrEnum):
     SCHEMA = "schema.json"
     STRUCTURE = "structure.json"
     SAMPLES = "samples.json"
+    LOCK = "pylock.toml"
 
 
 MODEL_MEMBERS = MappingProxyType(

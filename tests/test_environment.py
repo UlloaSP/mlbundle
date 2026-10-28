@@ -1,6 +1,6 @@
-"""Environment declarations use installed distribution metadata."""
+"""Training environment declarations; package versions live in the lock."""
 
-from importlib import metadata
+import sysconfig
 
 import pytest
 from pydantic import ValidationError
@@ -10,20 +10,17 @@ from mlbundle import OnnxInfo, Opset, environment as module
 
 def test_installed_environment():
     environment = module.capture_environment()
-    assert environment.packages["mlbundle"] == metadata.version("mlbundle")
+    assert environment.free_threaded is bool(
+        sysconfig.get_config_var("Py_GIL_DISABLED")
+    )
     assert environment.python_version.startswith("3.14")
     assert environment.python_implementation
     assert environment.os and environment.os_version and environment.architecture
     assert environment.onnx is None
 
 
-def test_missing_distributions_and_onnx(monkeypatch):
-    def version(name):
-        if name == "mlbundle":
-            return "0.1.0a3"
-        raise metadata.PackageNotFoundError(name)
-
-    monkeypatch.setattr(module.metadata, "version", version)
+def test_free_threaded_build_and_onnx(monkeypatch):
+    monkeypatch.setattr(module.sysconfig, "get_config_var", lambda name: 1)
     graph = OnnxInfo(
         opsets=[Opset(domain="", version=21)],
         ir_version=10,
@@ -31,7 +28,7 @@ def test_missing_distributions_and_onnx(monkeypatch):
         producer_version="",
     )
     environment = module.capture_environment(onnx=graph)
-    assert environment.packages == {"mlbundle": "0.1.0a3"}
+    assert environment.free_threaded is True
     assert environment.onnx == graph
 
 

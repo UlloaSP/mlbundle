@@ -129,6 +129,7 @@ def test_exact_sample_selection_and_conversion(data, model, tmp_path):
         MemberName.SKOPS,
         MemberName.SCHEMA,
         MemberName.SAMPLES,
+        MemberName.LOCK,
     }
     # Include the final row only when the explicitly selected count is three.
     full = mlbundle.export(
@@ -153,7 +154,7 @@ def test_schema_structure_samples_coexist(tmp_path):
         target_names=["target"],
         sample_rows=1,
     )
-    assert len(view.members) == 5
+    assert len(view.members) == 6
     assert view.samples == [{"a": 0}]
     assert mlbundle.load(tmp_path / "all.mlbundle").structure is not None
 

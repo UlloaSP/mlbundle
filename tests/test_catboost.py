@@ -30,7 +30,7 @@ def test_classifier_roundtrip(labels, tmp_path):
     assert model._serialize_model() == before
     assert loaded.library == "catboost"
     assert view.manifest.model.serialization == "cbm"
-    assert view.manifest.environment.packages["catboost"] == cb.__version__
+    assert view.environment_lock.version("catboost") == cb.__version__
     assert loaded.class_labels == [labels]
     assert list(loaded.feature_names) == list("abc")
     assert loaded.feature_origin == "model"
@@ -129,6 +129,7 @@ def test_schema_samples_and_lowered_limits(tmp_path):
         mlbundle.MemberName.STRUCTURE,
         mlbundle.MemberName.SCHEMA,
         mlbundle.MemberName.SAMPLES,
+        mlbundle.MemberName.LOCK,
     }
     for limits in [
         mlbundle.ArchiveLimits(max_member_bytes=1),

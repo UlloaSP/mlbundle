@@ -36,5 +36,6 @@ export const bootNodeSession = async (): Promise<PythonSession> => {
     readSources(),
     readFileSync(join(repoRoot, "pyproject.toml"), "utf8"),
     readFileSync(join(here, "../../src/runtime/harness.py"), "utf8"),
+    readFileSync(join(here, "../../src/runtime/pylock.toml"), "utf8"),
   );
 };

@@ -34,6 +34,8 @@ MLBundleError
 │   └── PredictionInputError   (also a ValueError)
 ├── InvalidSchemaError
 ├── InvalidSamplesError
+├── InvalidEnvironmentLockError
+├── LockGenerationError
 ├── MissingOptionalDependencyError
 └── AdapterNotImplementedError
 ```
@@ -42,7 +44,7 @@ MLBundleError
 
 | Error | Raised when | Attributes |
 | --- | --- | --- |
-| `InvalidContainerError` | The ZIP violates the container rules: unknown, duplicate or missing members, unsafe names, bad records or CRCs, a missing schema in an old bundle. | |
+| `InvalidContainerError` | The ZIP violates the container rules: unknown, duplicate or missing members, unsafe names, bad records or CRCs, a missing schema or `pylock.toml` in an old bundle. | |
 | `LimitExceededError` | An input exceeds an [archive or member limit](/reference/limits/). | |
 | `UnsupportedFormatVersionError` | The manifest declares a format version other than `1`. | |
 | `InvalidManifestError` | The manifest fails strict validation; may hint at a different writer version. | |
@@ -51,10 +53,12 @@ MLBundleError
 | `ClaimMismatchError` | A recomputed model claim or the structure differs from the bundle. | `claim` |
 | `UnsupportedModelError` | Export of a model outside the adapter boundary. | `untrusted_types` |
 | `InvalidModelError` | Native model content is malformed or violates the adapter contract. | |
-| `EnvironmentMismatchError` | A skops load failed and the bundle declares a different scikit-learn version. | |
+| `EnvironmentMismatchError` | A skops load failed and the bundle locks a different scikit-learn version, or `check_environment` found the interpreter, platform or installed distributions differ from the lock. | |
 | `PredictionInputError` | Invalid prediction input or record. | |
 | `InvalidSchemaError` | Training inputs or `schema.json` violate the schema contract. | |
 | `InvalidSamplesError` | Invalid `sample_rows`, cell conversion or sample keys. | |
+| `InvalidEnvironmentLockError` | `pylock.toml` is not canonical, violates the lock contract or disagrees with the manifest; on export, a lock disagrees with the installed versions or Python. | |
+| `LockGenerationError` | Export could not lock the installed runtime: a required distribution is missing or local, uv failed, or a target has no single wheel. | |
 | `MissingOptionalDependencyError` | A needed extra is not installed. | `extra` |
 | `AdapterNotImplementedError` | A library has no implemented adapter. | `library` |
 

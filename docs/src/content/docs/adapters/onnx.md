@@ -3,7 +3,7 @@ title: ONNX
 description: Bundle an existing self-contained tabular ONNX file unchanged, with verified signatures, labels and a CPU session on load.
 ---
 
-Install `mlbundle[onnx,schema]`. mlbundle does not convert models to ONNX. It bundles an ONNX file
+Install `mlbundle[onnx,schema,lock]`. mlbundle does not convert models to ONNX. It bundles an ONNX file
 you already have, byte for byte, after validating that it is a self-contained tabular model.
 
 This example assumes `trained.onnx` is a classifier with two numeric features and two probability

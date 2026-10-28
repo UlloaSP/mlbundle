@@ -31,7 +31,7 @@ mlbundle does not support:
 
 - other libraries, including LightGBM and PyTorch;
 - converting scikit-learn models to ONNX, or any other format conversion;
-- per-model environments and bundle signing;
+- provisioning per-model environments (bundles describe them in `pylock.toml`) and bundle signing;
 - pickle, joblib or cloudpickle, even as an option.
 
 The normative mappings are in [Adapters and structure](/format/adapters/),

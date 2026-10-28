@@ -5,7 +5,7 @@ inferred schema and model structure in one compressed `.mlbundle` file.
 
 It owns export, metadata-only inspection and validated loading. It is the
 training-side companion to MLSuite, whose runtime accepts `.mlbundle` uploads.
-MLSuite does not train models. The package version is 0.2.1; format 1 is not frozen.
+MLSuite does not train models. The package version is 0.3.0; format 1 is not frozen.
 Implementation claims require code and test proof.
 
 ## What must remain true
@@ -36,7 +36,9 @@ Names, categories, learned models and structure can still reveal training inform
 Support scikit-learn through skops, XGBoost through in-memory UBJSON, CatBoost
 through CBM and existing ONNX bytes unchanged. Do not convert models.
 Adapters import their libraries lazily; model dependencies belong in optional
-`sklearn`, `xgboost`, `catboost` and `onnx` extras.
+`sklearn`, `xgboost`, `catboost` and `onnx` extras. Every bundle's `pylock.toml`
+locks those runtimes for Linux and Windows through uv (`lock` extra); it is a claim that
+mlbundle validates and never installs. Runtimes own installation policy.
 
 ### 5. Inspection and verification mean different things
 
@@ -81,7 +83,7 @@ dead stubs and undocumented fallback behavior.
 - Tests for a feature keep successful round trips and rejection cases together in one file.
 - Verification claims describe commands actually run and their real results.
 - `C:\software\mlsuite`, `C:\software\mlschema`, `C:\software\mlform` and `C:\software\eshkra` are read-only references. Never modify, commit or run write commands in them.
-- sklearn-to-ONNX conversion, per-model environments, bundle signing and additional model libraries (including LightGBM and PyTorch) are outside scope.
+- sklearn-to-ONNX conversion, provisioning per-model environments (bundles only describe them), bundle signing and additional model libraries (including LightGBM and PyTorch) are outside scope.
 
 ## Reader security
 
@@ -107,14 +109,15 @@ changing skops trust, fitted state or supported types.
 1. A closed adapter recognizes the model and prepares it without mutating the user's object.
 2. Shared extraction derives model claims and structure from native state.
 3. Native serialization and reload prove those claims before export publishes the bundle.
-4. Local mlschema inference supplies fields/reports; shared code resolves features, targets and environment.
+4. Local mlschema inference supplies fields/reports; shared code resolves features, targets, environment and the runtime lock.
 5. The writer computes integrity records, validates through the reader and writes a deterministic ZIP.
-6. Inspect validates bounded container/JSON data and declarations without adapter resolution.
+6. Inspect validates bounded container/JSON/lock data and declarations without adapter resolution.
 7. Load uses the closed adapter and compares recomputed claims and structure.
 8. The predictor and record APIs expose validated inputs and output-major report results.
 
 The allowed members are manifest, required schema, one native member (or a declared
-skops + UBJSON/CBM pair), extractable structure and explicit samples: at most six.
+skops + UBJSON/CBM pair), extractable structure, explicit samples and the required
+lock: at most seven.
 Publication uses atomic hard links or replacement and requires explicit overwrite.
 The exclusive-create fallback removes partial destinations on failure but exposes
 the file during copying. Preserve that behavior and document its limits honestly.
@@ -126,6 +129,7 @@ Use the entry points and linked contracts to find the owning implementation:
 - **Public I/O:** `model_io.py`, `inspection.py`, `results.py` and `cli.py`; `__init__.py` owns public exports.
 - **Container:** `container.py`, `writing.py`, `_container_rules.py`, `_zip_directory.py`, `_zip_members.py`, `limits.py` and `integrity.py`.
 - **Declarations:** `manifest.py`, `canonical.py`, `declarations.py`, `environment.py`, `training.py`, `schema.py` and `samples.py`.
+- **Runtime lock:** `lock.py`, `_lock_toml.py`, `_wheel_tags.py`, `_lock_generation.py` and `_environment_check.py`; read `docs/format-environment.md` before changing them.
 - **Adapters:** `adapters.py` and `registry.py` define closed lazy resolution; `_sklearn/`, `_xgboost/`, `_catboost/`, `_onnx/` and `_composite/` own native behavior.
 - **Claims and predictions:** `claims.py`, `records.py`, `_prediction_input.py`, `_prediction_decisions.py` and `_display.py`.
 - **Websites:** `landing/`, `docs/` and `playground/`; `brand/` owns the shared identity sourced from eshkra.

@@ -69,7 +69,7 @@ def test_schema_samples_lowered_limits_and_labels(tmp_path):
         class_labels=[["no", "yes"]],
     )
     bundle = mlbundle.load(destination)
-    assert len(bundle.members) == 6
+    assert len(bundle.members) == 7
     assert bundle.samples == frame.head(2).to_dict("records")
     assert bundle.class_labels == [["no", "yes"]]
     assert list(bundle.native_model.classes_) == [0, 1]

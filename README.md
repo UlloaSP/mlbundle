@@ -15,15 +15,16 @@
   <a href="https://mlbundle.eshkra.dev"><img src="https://img.shields.io/badge/website-303039?style=flat&amp;logo=astro&amp;logoColor=ff6a1a" alt="Website" /></a>
   <a href="https://docs.mlbundle.eshkra.dev"><img src="https://img.shields.io/badge/docs-303039?style=flat&amp;logo=readthedocs&amp;logoColor=ff6a1a" alt="Documentation" /></a>
   <a href="https://playground.mlbundle.eshkra.dev"><img src="https://img.shields.io/badge/playground-303039?style=flat&amp;logo=stackblitz&amp;logoColor=ff6a1a" alt="Playground" /></a>
-  <a href="https://pypi.org/project/mlbundle/"><img src="https://img.shields.io/badge/version-0.2.1-b73d00?style=flat&amp;logo=pypi&amp;logoColor=white&amp;labelColor=303039" alt="Version 0.2.1" /></a>
+  <a href="https://pypi.org/project/mlbundle/"><img src="https://img.shields.io/badge/version-0.3.0-b73d00?style=flat&amp;logo=pypi&amp;logoColor=white&amp;labelColor=303039" alt="Version 0.3.0" /></a>
   <a href="https://github.com/UlloaSP/mlbundle"><img src="https://img.shields.io/badge/source-303039?style=flat&amp;logo=github&amp;logoColor=white" alt="Source on GitHub" /></a>
   <a href="https://github.com/UlloaSP/mlbundle/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/UlloaSP/mlbundle/ci.yml?branch=main&amp;style=flat&amp;label=CI&amp;labelColor=303039" alt="CI status" /></a>
   <a href="https://github.com/UlloaSP/mlbundle/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-b73d00?style=flat&amp;labelColor=303039" alt="MIT license" /></a>
   <a href="https://eshkra.dev"><img src="https://img.shields.io/badge/part_of-eshkra-b73d00?style=flat&amp;labelColor=303039" alt="Part of eshkra" /></a>
 </p>
 
-MLbundle packages a trained model with its manifest, locally inferred input schema
-and extractable structure in one compressed `.mlbundle` file. The same library
+MLbundle packages a trained model with its manifest, locally inferred input schema,
+extractable structure and a lock of its runtime environment in one compressed
+`.mlbundle` file. The same library
 writes the bundle and validates it when loaded, preserving feature order, class
 labels and output meaning across the training/runtime boundary.
 
@@ -39,24 +40,27 @@ model they are supposed to describe.
 MLbundle keeps them together and checks model-derived claims against the loaded
 model. Schema inference runs locally through [MLschema](https://github.com/UlloaSP/mlschema);
 real training rows are included only when explicitly requested. Native formats
-preserve the supported model without conversion.
+preserve the supported model without conversion, and a PEP 751 `pylock.toml`
+pins the exact wheels a Linux or Windows runtime needs to serve it.
 
 ## Installation
 
-MLbundle **0.2.1** requires Python **3.14** for export with the schema extra.
+MLbundle **0.3.0** requires Python **3.14** for export with the schema extra.
 The installation command for this release is:
 
 ```bash
-python -m pip install "mlbundle[sklearn,schema]==0.2.1"
+python -m pip install "mlbundle[sklearn,schema,lock]==0.3.0"
 ```
 
-To use a local checkout, run `python -m pip install -e ".[sklearn,schema]"`
+To use a local checkout, run `python -m pip install -e ".[sklearn,schema,lock]"`
 from its root. The base library requires Python >=3.14; schema inference uses
 mlschema `>=0.3.0,<0.4` on Python 3.14 only.
 
 Choose `xgboost`, `catboost` or `onnx` instead of `sklearn`, or install `[all]`.
-Export always needs `schema`. Metadata-only inspection needs only the base
-package; load and CLI verification need the matching model extra.
+Export always needs `schema`; `lock` provides uv, which resolves the runtime lock
+through your package index unless you pass `environment_lock=`. Metadata-only
+inspection needs only the base package; load and CLI verification need the
+matching model extra.
 
 ## Quick start
 
@@ -116,6 +120,7 @@ accept paths, bytes or streams. The native model remains available as
 | `bundle.predict(data)` | Regressor predictions as plain lists. |
 | `bundle.predict_record(record)` | Map one record through the schema and return frozen output-major results. |
 | `bundle.row_from_record(record)` | Validate and order record values for native inference or explanations. |
+| `check_environment(view)` | In the serving process, require exactly the bundle's lock plus mlbundle. |
 
 The CLI exposes metadata inspection and full verification:
 
@@ -128,6 +133,18 @@ mlbundle verify trained.mlbundle
 Inspection does not prove that metadata describes the model. Full verification
 loads the model and compares its claims. Neither operation establishes authorship
 or training history.
+
+## Runtime environment
+
+Export locks the installed versions of pydantic, the model libraries and their
+dependencies as `pylock.toml` for CPython with the GIL on Linux `x86_64` and
+`aarch64` and on Windows `amd64`. mlbundle itself is pinned by the manifest's
+`writer_version`.
+A runtime installs that lock plus `mlbundle==writer_version` in an isolated
+environment, for example `uv pip install -r pylock.toml`, and calls
+`check_environment` before loading. Installing a lock runs its packages' code:
+the runtime decides which packages and indexes it trusts. See
+[the lock contract](https://docs.mlbundle.eshkra.dev/format/environment/).
 
 ## Supported models
 
@@ -147,7 +164,7 @@ structure, and all-sklearn Pipeline structure is null. The
 ## Some notes
 
 Package versions and wire-format versions are independent. Format 1 is not frozen;
-incompatible schema shapes require re-export. The security design has not had an
+incompatible schema shapes and bundles without `pylock.toml` require re-export. The security design has not had an
 independent review; do not accept bundles from untrusted parties.
 
 The reader bounds ZIP/JSON data, verifies integrity and uses closed native loaders.
@@ -156,8 +173,8 @@ still need process isolation and application-owned resource limits.
 Read [SECURITY.md](https://docs.mlbundle.eshkra.dev/security/) for guarantees, limits and private reporting.
 
 Training rows stay local by default, but feature names, categories, labels and
-learned structure can reveal information. Schemas and environment records remain
-author declarations. Model training, hosting, signing and conversion are outside
+learned structure can reveal information. Schemas, environment records and locks
+remain author declarations. Model training, hosting, signing and conversion are outside
 the library's scope.
 
 ## Documentation
@@ -171,6 +188,7 @@ repository unchanged:
 - [Supported adapters and structure](https://docs.mlbundle.eshkra.dev/format/adapters/)
 - [Sklearn state and trusted types](https://docs.mlbundle.eshkra.dev/format/state/)
 - [Composite pipelines](https://docs.mlbundle.eshkra.dev/format/pipeline/)
+- [Runtime environment lock](https://docs.mlbundle.eshkra.dev/format/environment/)
 - [ONNX layouts and bounds](https://docs.mlbundle.eshkra.dev/format/onnx/)
 
 The [playground](https://playground.mlbundle.eshkra.dev) provides editable examples and inspection of the

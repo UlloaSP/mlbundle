@@ -1,6 +1,6 @@
 [project]
 name = "mlbundle"
-version = "0.2.1"
+version = "0.3.0"
 description = "Pickle-free, verifiable model bundles with a manifest, schema and structure."
 readme = "README.md"
 license = "MIT"
@@ -47,10 +47,12 @@ catboost = ["catboost>=1.2.10"]
 onnx = ["onnx>=1.23.0", "onnxruntime>=1.30.0"]
 # The reader validates the 0.3 vocabulary; schema inference requires Python 3.14.
 schema = ["mlschema>=0.3.0,<0.4; python_version == '3.14'"]
+# Export resolves pylock.toml with uv's per-platform pylock output.
+lock = ["uv>=0.13.5"]
 all = [
     "scikit-learn>=1.6", "skops>=0.16.0", "xgboost>=3.4.1", "catboost>=1.2.10",
     "onnx>=1.23.0", "onnxruntime>=1.30.0",
-    "mlschema>=0.3.0,<0.4; python_version == '3.14'",
+    "mlschema>=0.3.0,<0.4; python_version == '3.14'", "uv>=0.13.5",
 ]
 
 [project.urls]
@@ -78,6 +80,7 @@ build-backend = "uv_build"
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
+markers = ["network: resolves real locks through the package index"]
 addopts = [
     "-ra",
     "--strict-markers",

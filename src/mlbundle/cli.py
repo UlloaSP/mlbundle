@@ -36,6 +36,7 @@ def _summary(view: MetadataView) -> str:
     manifest = view.manifest
     model = manifest.model
     environment = manifest.environment
+    lock = view.environment_lock
     lines = [
         "Metadata and integrity validated; model claims NOT verified.",
         f"Format: mlbundle {manifest.format_version}",
@@ -65,12 +66,18 @@ def _summary(view: MetadataView) -> str:
                 {
                     "python": environment.python_version,
                     "implementation": environment.python_implementation,
+                    "free_threaded": environment.free_threaded,
                     "os": environment.os,
                     "os_version": environment.os_version,
                     "architecture": environment.architecture,
                 }
             ),
-            f"Packages: {_display(environment.packages)}",
+            f"Environment lock: CPython {lock.python_version} with the GIL, "
+            f"{', '.join(lock.platforms)} (Linux glibc {lock.glibc[0]}.{lock.glibc[1]}+), "
+            f"{len(lock.packages)} packages plus mlbundle {_display(manifest.writer_version)}",
+            f"Environment id: {lock.environment_id}",
+            "Locked packages: "
+            + _display({package.name: package.version for package in lock.packages}),
             f"ONNX environment: {_display(None if environment.onnx is None else environment.onnx.model_dump(mode='json'))}",
             "Present: "
             + ", ".join(

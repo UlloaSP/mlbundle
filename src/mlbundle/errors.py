@@ -69,7 +69,7 @@ class InvalidModelError(MLBundleError):
 
 
 class EnvironmentMismatchError(InvalidModelError):
-    """A sklearn load failed under a different declared package version."""
+    """The running environment differs from the one the bundle declares."""
 
 
 class PredictionInputError(InvalidModelError, ValueError):
@@ -82,6 +82,14 @@ class InvalidSchemaError(MLBundleError):
 
 class InvalidSamplesError(MLBundleError):
     """Sample selection or row declarations violate the samples contract."""
+
+
+class InvalidEnvironmentLockError(MLBundleError):
+    """The lock violates its contract or disagrees with its bundle or training."""
+
+
+class LockGenerationError(MLBundleError):
+    """The training environment could not be resolved into a lock."""
 
 
 class MissingOptionalDependencyError(MLBundleError):

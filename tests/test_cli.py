@@ -53,7 +53,9 @@ def test_inspect_and_verify(bundle_path, capsys):
         "Features (generated):",
         "Class labels (output-major):",
         "Training:",
-        "Packages:",
+        "Environment lock: CPython",
+        "Environment id: ",
+        "Locked packages: ",
         "schema=yes",
         "samples=no",
     ):

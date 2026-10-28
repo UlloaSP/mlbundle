@@ -1,7 +1,7 @@
 ---
 import { docs } from "../data/site";
 
-// Three things every bundle carries; samples are the one optional addition.
+// Four things every bundle carries; samples are the one optional addition.
 const parts = [
   {
     title: "The model, in its own format",
@@ -9,11 +9,15 @@ const parts = [
   },
   {
     title: "A manifest of what it claims",
-    text: "Class, hyperparameters, feature names and order, class labels, the Python and package versions it was trained with, and a SHA-256 hash for each of the other files.",
+    text: "Class, hyperparameters, feature names and order, class labels, the Python it was trained with, and a SHA-256 hash for each of the other files.",
   },
   {
     title: "A schema made on your machine",
     text: "MLschema describes each input from the training DataFrame locally. The DataFrame itself is not written to the bundle.",
+  },
+  {
+    title: "A lock of what serving needs",
+    text: "A pylock.toml with the exact Python and the Linux and Windows wheels for the versions you trained with. MLbundle records it and never installs it; your server decides what to trust.",
   },
 ];
 ---
@@ -21,7 +25,7 @@ const parts = [
 <section class="section inside" id="inside" aria-labelledby="inside-title">
   <div class="wrap">
     <header class="section-head">
-      <h2 id="inside-title">One file, three parts.</h2>
+      <h2 id="inside-title">One file, four parts.</h2>
       <p>
         A <code class="mono">.mlbundle</code> is a ZIP with a closed list of files. Anything else
         inside it is rejected before the model is read.

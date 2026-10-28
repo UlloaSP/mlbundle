@@ -1,10 +1,10 @@
 # Publishing to PyPI
 
-Version `0.2.1` is prepared by this checkout. Merging a version change into
+Version `0.3.0` is prepared by this checkout. Merging a version change into
 `main` automatically starts the PyPI workflow; no one needs to start a release
 run manually. Format version 1 is not frozen, so incompatible manifest/schema
-shapes require re-export. Valid a2 bundles remain compatible, as documented in
-[the schema contract](format-schema.md). The security design has not had an
+shapes require re-export; 0.3.0 requires every bundle to carry `pylock.toml`, as
+documented in [the environment lock contract](format-environment.md). The security design has not had an
 independent review; do not accept bundles from untrusted parties.
 
 ## Release flow
@@ -19,7 +19,7 @@ independent review; do not accept bundles from untrusted parties.
    tests on Ubuntu and Windows, and all frontend checks, tests and builds.
 4. If every check passes, Actions uploads the exact CI-built wheel and source
    archive to [mlbundle on PyPI](https://pypi.org/project/mlbundle/).
-   Install with `python -m pip install "mlbundle[sklearn,schema]==0.2.1"` on
+   Install with `python -m pip install "mlbundle[sklearn,schema,lock]==0.3.0"` on
    Python 3.14, replacing the example version as needed.
 
 The GitHub `pypi_env` environment contains the project-scoped

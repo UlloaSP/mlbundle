@@ -52,9 +52,12 @@ def _base(path: Path) -> None:
 
     import mlbundle
 
-    assert mlbundle.__version__ == "0.2.1"
+    assert mlbundle.__version__ == "0.3.0"
     view = mlbundle.inspect(path)
     assert view.manifest.model.library == "sklearn"
+    # The runtime lock parses with the standard library alone.
+    assert view.environment_lock.version("scikit-learn")
+    assert "Environment id: " in _console("inspect", str(path))
     assert "cannot attest" in _console("--help")
     assert "model claims NOT verified" in _console("inspect", str(path))
     assert json.loads(

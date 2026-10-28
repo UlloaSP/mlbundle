@@ -9,6 +9,7 @@ from sklearn.tree import DecisionTreeClassifier
 from xgboost import XGBClassifier
 
 import mlbundle
+from lock_helpers import pure_wheel, sklearn_lock_bytes
 from mlbundle import _load_diagnostics
 from mlbundle._sklearn import Adapter, transformers
 from mlbundle.canonical import canonical_dumps
@@ -30,14 +31,25 @@ def path(tmp_path):
 
 
 def declared_package(path, declared):
+    """Rewrite the locked scikit-learn version, the declaration diagnostics read."""
     manifest, members = read_container(path)
-    parts = manifest.model_dump(mode="json", by_alias=True)
-    if declared is None:
-        parts["environment"]["packages"].pop("scikit-learn", None)
-    else:
-        parts["environment"]["packages"]["scikit-learn"] = declared
+    lock = mlbundle.EnvironmentLock.from_bytes(members[mlbundle.MemberName.LOCK])
+    packages = tuple(
+        package.model_copy(
+            update={
+                "version": declared,
+                "wheels": (pure_wheel(package.name, declared),),
+            }
+        )
+        if package.name == "scikit-learn"
+        else package
+        for package in lock.packages
+    )
+    members[mlbundle.MemberName.LOCK] = lock.model_copy(
+        update={"packages": packages}
+    ).to_bytes()
     del members[mlbundle.MemberName.MANIFEST]
-    return write_container(parts, members)
+    return write_container(manifest, members)
 
 
 def test_environment_mismatch_after_failure(path, monkeypatch):
@@ -55,18 +67,24 @@ def test_environment_mismatch_after_failure(path, monkeypatch):
     )
 
 
-@pytest.mark.parametrize(
-    "declared",
-    [None, "1.9.0", "private\n\x1b", "1.9.1 ", "9" * 65, "v1.9.1", "1.9.1;evil"],
-)
-def test_invalid_or_equal_environment_keeps_original(path, monkeypatch, declared):
-    data = declared_package(path, declared)
+def test_equal_environment_keeps_original(path, monkeypatch):
+    data = declared_package(path, "1.9.0")
     monkeypatch.setattr(_load_diagnostics, "version", lambda _: "1.9.0")
     monkeypatch.setattr(Adapter, "deserialize", failed_load)
     with pytest.raises(mlbundle.InvalidModelError) as error:
         mlbundle.load(data)
     assert type(error.value) is mlbundle.InvalidModelError
     assert str(error.value) == "Skops state does not survive native construction."
+
+
+@pytest.mark.parametrize(
+    "declared", ["private\\n", "1.9.1 ", "9" * 65, "v1.9.1", "1.9.1;evil", "1.9+x"]
+)
+def test_unsafe_declared_versions_never_reach_diagnostics(declared):
+    # The lock rejects such versions before any reader can display them.
+    data = sklearn_lock_bytes().replace(b'"1.9.1"', f'"{declared}"'.encode())
+    with pytest.raises(mlbundle.InvalidEnvironmentLockError):
+        mlbundle.EnvironmentLock.from_bytes(data)
 
 
 def test_unavailable_installed_metadata_keeps_original(path, monkeypatch):
@@ -124,13 +142,13 @@ def test_old_manifest_diagnosis_shared_by_inspect_and_load(manifest_data, writer
     from conftest import build_zip, schema_for_manifest
 
     manifest_data["writer_version"] = writer
-    manifest_data["environment"]["packages"]["mlbundle"] = writer
     manifest_data["target"]["name"] = manifest_data["target"].pop("names")
     data = build_zip(
         [
             ("manifest.json", canonical_dumps(manifest_data)),
             ("model.skops", b"native model bytes"),
             ("schema.json", canonical_dumps(schema_for_manifest(manifest_data))),
+            ("pylock.toml", sklearn_lock_bytes()),
         ]
     )
     expected = (

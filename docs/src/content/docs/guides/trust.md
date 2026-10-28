@@ -32,6 +32,7 @@ These checks need no model library:
   duplicates, encryption or bytes outside the archive layout;
 - member count, sizes, compression ratio and JSON depth within [limits](/reference/limits/);
 - a strict manifest with exact types and a known format version;
+- a canonical `pylock.toml` whose targets, wheel choices and Python agree with the manifest;
 - SHA-256 and size of every member except the manifest, which cannot contain its own hash;
 - schema coverage, mappings by feature origin and report shape; sample keys.
 
@@ -39,7 +40,7 @@ These checks need no model library:
 
 | Declaration | Why it cannot be checked |
 | --- | --- |
-| Training environment and package versions | Recorded by the writer; any author can edit them. |
+| Training environment and the runtime lock | Recorded by the writer; any author can edit them. Installing a lock runs its packages' code. |
 | Training dtypes | Describe a frame that is not in the bundle. |
 | Schema `source`, separator and nullability | Inference history is not reproducible from the bundle. |
 | Declared or frame feature names | Labels for a model without native names; count and alignment are checked. |

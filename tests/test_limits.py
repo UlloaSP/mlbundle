@@ -8,8 +8,9 @@ from mlbundle import ArchiveLimits, MemberName
 
 def test_limits():
     limits = ArchiveLimits()
-    assert limits.max_members == 6
+    assert limits.max_members == 7
     assert limits.member_bytes(MemberName.SKOPS) == 512 * 1024**2
+    assert limits.member_bytes(MemberName.LOCK) == 1024**2
     assert limits.member_bytes(MemberName.STRUCTURE) == 256 * 1024**2
     assert (
         ArchiveLimits(max_member_bytes=1024).member_bytes(MemberName.MANIFEST) == 1024
@@ -19,7 +20,8 @@ def test_limits():
 @pytest.mark.parametrize(
     "fields",
     [
-        {"max_members": 7},
+        {"max_members": 8},
+        {"max_lock_bytes": 1024**2 + 1},
         {"max_compression_ratio": 201},
         {"max_total_bytes": 0},
         {"max_structure_bytes": "10"},

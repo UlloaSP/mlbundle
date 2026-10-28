@@ -56,7 +56,15 @@ test("the classifier example writes a verified bundle with a tree", async () => 
   assert.deepEqual(value(report), [["cold", "warm"]]);
   assert.equal(model(bundle).estimator_class, "DecisionTreeClassifier");
   assert.equal(model(bundle).kind, "classifier");
-  assert.deepEqual(names(bundle), ["manifest.json", "model.skops", "schema.json", "structure.json"]);
+  assert.deepEqual(names(bundle), [
+    "manifest.json",
+    "model.skops",
+    "schema.json",
+    "structure.json",
+    "pylock.toml",
+  ]);
+  assert.equal(bundle.environment?.pythonVersion, session.versions.python);
+  assert.ok(bundle.environment?.packages.some(([name, version]) => name === "scikit-learn" && version === session.versions["scikit-learn"]));
   for (const member of bundle.members!.slice(1)) assert.match(member.sha256 ?? "", /^[0-9a-f]{64}$/);
   assert.equal(bundle.structure!.family, "decision_tree");
   assert.equal(bundle.samples, null);
@@ -65,7 +73,7 @@ test("the classifier example writes a verified bundle with a tree", async () => 
   assert.deepEqual([...bundle.bytes!.subarray(0, 4)], [0x50, 0x4b, 0x03, 0x04]);
   const environment = bundle.manifest!.environment as Obj;
   assert.equal(environment.os, "Emscripten");
-  assert.equal((environment.packages as Obj)["scikit-learn"], session.versions["scikit-learn"]);
+  assert.equal(environment.packages, undefined);
 });
 
 test("the regressor example records one tree per estimator", async () => {
@@ -143,8 +151,9 @@ test("user edits run as written in a fresh namespace and directory", async () =>
   const stray = await session.run("open('stray.mlbundle', 'wb').write(b'not a zip')\nleftover = 1");
   assert.equal(stray.bundles[0]!.status, "rejected");
   assert.equal(stray.bundles[0]!.bytes, undefined);
+  // A fresh directory holds only the session's runtime lock, never earlier files.
   const next = await session.run("import os\nsorted(os.listdir('.'))");
-  assert.deepEqual(next.outcome, { kind: "json", text: "[]" });
+  assert.deepEqual(JSON.parse((next.outcome as { text: string }).text), ["pylock.toml"]);
   assert.deepEqual(next.bundles, []);
   const name = await session.run("leftover");
   assert.match((name.outcome as { text: string }).text, /NameError/);

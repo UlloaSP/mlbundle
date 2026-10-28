@@ -24,10 +24,12 @@ There is no version whitelist. Other versions can introduce unknown classes or
 state fields and fail export/load. `_sklearn_version` also participates in the
 commitment: a different installed sklearn version changes reserialized state,
 so loading may reject it as `InvalidModelError`. After a sklearn/skops
-`InvalidModelError`, safe differing declared/installed versions produce
-`EnvironmentMismatchError`
+`InvalidModelError`, a differing installed version and the scikit-learn version
+declared by the bundle's validated lock produce `EnvironmentMismatchError`
 with both versions and re-export/load guidance. Declarations must match a strict
 version pattern of at most 64 characters; otherwise the original error remains.
+The lock records the exact versions to install: see
+[the runtime environment lock](format-environment.md) and `check_environment`.
 Successful loads remain successful: this is diagnosis, not a compatibility gate.
 It also covers a composite's skops prefix, without relabeling native leaf failures.
 Export and load should use

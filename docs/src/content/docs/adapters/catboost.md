@@ -3,7 +3,7 @@ title: CatBoost
 description: Bundle numeric, single-target symmetric CatBoost models as native CBM with complete, verified tree structure.
 ---
 
-Install `mlbundle[catboost,schema]` (CatBoost 1.2.10 or newer; it brings matplotlib and plotly).
+Install `mlbundle[catboost,schema,lock]` (CatBoost 1.2.10 or newer; it brings matplotlib and plotly).
 Models are stored as native CBM and loaded in memory.
 
 ```python

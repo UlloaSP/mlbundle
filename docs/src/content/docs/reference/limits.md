@@ -10,7 +10,7 @@ safety maxima: you can lower them for a call, never raise them.
 
 | Field | Default and maximum |
 | --- | --- |
-| `max_members` | 6 (minimum 2) |
+| `max_members` | 7 (minimum 2) |
 | `max_archive_bytes` | 512 MiB |
 | `max_compressed_bytes` | 512 MiB |
 | `max_member_bytes` | 512 MiB |
@@ -20,6 +20,7 @@ safety maxima: you can lower them for a call, never raise them.
 | `max_structure_bytes` | 256 MiB |
 | `max_schema_bytes` | 16 MiB |
 | `max_samples_bytes` | 16 MiB |
+| `max_lock_bytes` | 1 MiB, the `pylock.toml` member and `environment_lock=` input |
 
 A specific member cap never exceeds `max_member_bytes`.
 

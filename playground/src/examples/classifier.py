@@ -17,11 +17,14 @@ model.fit(features, training["weather"])
 
 # Writes classifier.mlbundle into this run's working directory. The playground then
 # inspects it and verifies it with mlbundle.load before showing it on the right.
+# On your machine, export locks the runtime with uv; this browser cannot run uv, so
+# it passes the pylock.toml prepared for this page's exact package versions.
 view = export(
     model,
     "classifier.mlbundle",
     training_data=training,
     target_names=["weather"],
     metadata={"purpose": "playground example"},
+    environment_lock="pylock.toml",
 )
 view.manifest.target.class_labels

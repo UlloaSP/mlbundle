@@ -1,16 +1,16 @@
 # Security policy
 
-MLbundle 0.2.1 has not had an independent security review;
-do not accept bundles from untrusted parties. Format version 1 is not frozen.
-It implements strict manifest validation, secure container reading/writing, metadata-only
-`inspect`, export/load, sklearn, XGBoost, CatBoost and ONNX adapters, local schema inference,
-explicit samples, prediction-state verification and the inspect/verify CLI.
-The container validates ZIP/ZIP64 layout, bounds sources and actual decompression,
-checks CRC and member integrity, and rejects unsafe members and polyglot wrappers.
-The writer publishes complete validated files atomically where hard links work;
-the exclusive-creation fallback cleans up on failure but exposes the destination
-while copying and cannot guarantee crash-atomic publication. The version 1 contract
-is defined in [docs/format.md](docs/format.md).
+MLbundle 0.3.0 has not had an independent security review; do not accept bundles
+from untrusted parties. Format version 1 is not frozen. It implements strict
+manifest validation, secure container reading/writing, metadata-only `inspect`,
+export/load, sklearn, XGBoost, CatBoost and ONNX adapters, local schema inference,
+explicit samples, prediction-state verification, the runtime environment lock and
+the inspect/verify CLI. The container validates ZIP/ZIP64 layout, bounds sources and
+actual decompression, checks CRC and member integrity, and rejects unsafe members
+and polyglot wrappers. The writer publishes complete validated files atomically
+where hard links work; the exclusive-creation fallback cleans up on failure but
+exposes the destination while copying and cannot guarantee crash-atomic publication.
+The version 1 contract is defined in [docs/format.md](docs/format.md).
 
 ## Threat model
 
@@ -44,7 +44,8 @@ make a received file trustworthy.
   outside the contiguous ZIP layout. ZIP64 and validated streaming descriptors
   are accepted within the same resource ceilings.
 - Verify each member's SHA-256 against the manifest and validate member sizes.
-- Validate the manifest strictly and reject unknown format versions.
+- Validate the manifest and canonical `pylock.toml` strictly, reject unknown format
+  versions and never install, import or execute anything a lock names.
 - Provide a metadata-only `inspect` operation that does not deserialize a model.
   It must not present model-derived claims as verified against the model.
 - Treat every model-derived value as a claim. Recompute it from the loaded model
@@ -108,10 +109,9 @@ wrapper split transformer skops bytes from UBJSON/CBM, retaining each adapter's
 preflight, trust, state/claims and structure checks; no booster type enters skops.
 Closed fitted-state width proofs never use data. Shared bounded names/parameters/
 commitments and inner tree coordinates are recomputed before closed Pipeline
-reconstruction is returned. Cache/metadata routing/unknown outer state fail;
-step names and outer options are declarations, not authenticated training history.
-See [the composite contract](docs/format-pipeline.md).
-HistGradientBoosting's separate
+reconstruction is returned. Cache/metadata routing/unknown outer state fail; step
+names and outer options are declarations, not authenticated training history. See
+[the composite contract](docs/format-pipeline.md). HistGradientBoosting's separate
 `TreePredictor` storage is also excluded. Broadening the supplemental list requires
 source review and hostile-payload tests, never author approval or bundle metadata.
 
@@ -141,20 +141,19 @@ native tree/routing/category/dropout state alongside dumps/importances.
 Label agreement proves consistency with the native file, not the historical
 truth of a user-supplied label mapping.
 
-The adapter rejects oversized bytes and non-UBJSON before XGBoost sees them.
-A bounded Python preflight checks document layout, feature/class/target counts,
-tree counts, node arrays, output groups, iteration pointers, indices, reachability
-and dump-compatible depth, keeping
-numeric arrays as byte views. Native errors are translated to bounded mlbundle
-errors without third-party exception text. These checks reduce cheap malformed
-inputs; they are not a complete validation of XGBoost's internal model schema.
-XGBoost's native parser and native inference remain a dependency boundary:
-mlbundle cannot guarantee their memory safety or bound their internal memory/CPU
-use. Native tree dump generation also allocates inside XGBoost before mlbundle
-can inspect its returned byte size. Server consumers must isolate loading and
-prediction and enforce process resource limits. All predictors reject invalid inputs and wrap remaining native failures
-without echoing data cells. See the exact support and
-resource boundaries in [docs/format.md](docs/format.md).
+The adapter rejects oversized bytes and non-UBJSON before XGBoost sees them. A
+bounded Python preflight checks document layout, feature/class/target counts, tree
+counts, node arrays, output groups, iteration pointers, indices, reachability and
+dump-compatible depth, keeping numeric arrays as byte views. Native errors are
+translated to bounded mlbundle errors without third-party exception text. These
+checks reduce cheap malformed inputs; they are not a complete validation of
+XGBoost's internal model schema. XGBoost's native parser and native inference remain
+a dependency boundary: mlbundle cannot guarantee their memory safety or bound their
+internal memory/CPU use. Native tree dump generation also allocates inside XGBoost
+before mlbundle can inspect its returned byte size. Server consumers must isolate
+loading and prediction and enforce process resource limits. All predictors reject
+invalid inputs and wrap remaining native failures without echoing data cells. See
+the exact support and resource boundaries in [docs/format.md](docs/format.md).
 
 ## Implemented CatBoost dependency boundary
 
@@ -231,19 +230,25 @@ boundary: importing mlbundle or inspecting any bundle imports no model library.
 The native result contains the exact bytes and CPU session needed for inference;
 mutating a session invalidates its verified relationship with metadata.
 
+## Runtime environment lock
+
+`pylock.toml` is an author claim that mlbundle validates and never installs.
+Installing it executes the named packages' code: runtimes own the allowlist over
+the whole locked set, trusted indexes, isolated builds and networkless loading
+after `check_environment`, as described in [the lock contract](docs/format-environment.md#consumers).
+
 ## Limits of these guarantees
 
 SHA-256 hashes detect corruption, not deliberate tampering: an attacker can
 replace a member and update its hash in the manifest. They do not prove who
 trained the model or authenticate its provenance. Bundle signing is out of
-scope. Training-environment records and free-form user metadata are assertions
-by the author; checking model-derived claims does not authenticate those records.
+scope. Training-environment records, the runtime lock and free-form user metadata
+are assertions by the author; checking model-derived claims does not authenticate those records.
 
-Validation does not prove model quality, fairness, training history or the
-truth of user metadata. Pickle-free formats do not sandbox model execution or
-eliminate vulnerabilities in native parsers and dependencies. A consuming
-runtime still owns authentication, authorization, process isolation and
-execution resource limits.
+Validation does not prove model quality, fairness, training history or the truth of
+user metadata. Pickle-free formats do not sandbox model execution or eliminate
+vulnerabilities in native parsers and dependencies. A consuming runtime still owns
+authentication, authorization, process isolation and execution resource limits.
 
 Training frames are never serialized. Schema inference runs locally and includes
 column names, dtype strings, inferred kinds, nullability, categorical values

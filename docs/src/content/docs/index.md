@@ -4,7 +4,7 @@ description: Package a trained model, its manifest, a locally inferred schema an
 tableOfContents: false
 hero:
   title: One verifiable file for a trained model.
-  tagline: mlbundle puts the model in its native format, a manifest of model and training-environment metadata, a locally inferred input schema and the model's structure into one .mlbundle file. Before it hands you the model, the reader recomputes every model-derived claim and rejects disagreement.
+  tagline: mlbundle puts the model in its native format, a manifest of model and training-environment metadata, a locally inferred input schema, the model's structure and a lock of its runtime into one .mlbundle file. Before it hands you the model, the reader recomputes every model-derived claim and rejects disagreement.
   actions:
     - text: Quick start
       link: /getting-started/quick-start/

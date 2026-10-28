@@ -5,6 +5,7 @@ import sys
 
 import pytest
 
+from lock_helpers import sklearn_lock_bytes
 from mlbundle import (
     ArchiveLimits,
     InvalidContainerError,
@@ -41,11 +42,21 @@ def test_inspect_and_optional_json(manifest_data):
     }
     bundle = write_container(
         manifest_data,
-        {MemberName.SKOPS: b"model", MemberName.SCHEMA: canonical_dumps(schema)},
+        {
+            MemberName.SKOPS: b"model",
+            MemberName.SCHEMA: canonical_dumps(schema),
+            MemberName.LOCK: sklearn_lock_bytes(),
+        },
     )
     view = inspect(bundle)
     assert isinstance(view, MetadataView)
-    assert view.members == (MemberName.MANIFEST, MemberName.SKOPS, MemberName.SCHEMA)
+    assert view.members == (
+        MemberName.MANIFEST,
+        MemberName.SKOPS,
+        MemberName.SCHEMA,
+        MemberName.LOCK,
+    )
+    assert view.environment_lock.to_bytes() == sklearn_lock_bytes()
     assert view.manifest.integrity[MemberName.SKOPS].size == 5
     assert not hasattr(view, "native_model")
     assert view.schema == schema and view.samples is None
@@ -61,6 +72,7 @@ def test_inspect_no_model_imports(manifest_data, tmp_path):
         {
             MemberName.SKOPS: b"model",
             MemberName.SCHEMA: canonical_dumps(schema_for_manifest(manifest_data)),
+            MemberName.LOCK: sklearn_lock_bytes(),
         },
         destination=target,
     )

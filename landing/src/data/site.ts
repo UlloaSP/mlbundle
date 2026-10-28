@@ -33,7 +33,7 @@ export const description =
   "Package a trained model, a verifiable manifest and a locally inferred schema in one .mlbundle file. Native formats for scikit-learn, XGBoost, CatBoost and ONNX, never pickle.";
 
 // The release install from the docs; checkout installs live on the docs installation page.
-export const install = 'pip install "mlbundle[sklearn,schema]"';
+export const install = 'pip install "mlbundle[sklearn,schema,lock]"';
 
 // The eshkra path from a trained model to a reviewed prediction, as on eshkra.dev.
 export const family = [

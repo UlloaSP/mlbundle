@@ -7,6 +7,7 @@ const roles: Record<string, string> = {
   "model.skops": "The fitted model, in skops format",
   "schema.json": "Inputs and outputs, inferred locally",
   "structure.json": "The decision tree, for review",
+  "pylock.toml": "The runtime it needs, for Linux and Windows",
 };
 const [verdict] = example.verify.stdout.split(";");
 ---

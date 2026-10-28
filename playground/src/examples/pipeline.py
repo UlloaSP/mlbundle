@@ -11,5 +11,11 @@ target = [1.2, 2.1, 2.9, 4.2, 5.1]
 model = make_pipeline(StandardScaler(), SVR(C=3.0)).fit(rows, target)
 
 # Without a frame, names are declared and the schema comes from one default row.
-view = export(model, "pipeline.mlbundle", feature_names=["dose_mg", "weight_kg"])
+# The browser cannot run uv: pass the lock prepared for this page's versions.
+view = export(
+    model,
+    "pipeline.mlbundle",
+    feature_names=["dose_mg", "weight_kg"],
+    environment_lock="pylock.toml",
+)
 {"source": view.schema["source"], "dtypes": view.manifest.features.dtypes}
